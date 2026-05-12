@@ -1,0 +1,15 @@
+{
+  "name": "qa-core-example-e2e",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Canonical self-contained exemplar for fluent-OOP Playwright automation",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep SMOKE",
+    "test:headed": "playwright test --headed",
+    "debug": "PWDEBUG=1 playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

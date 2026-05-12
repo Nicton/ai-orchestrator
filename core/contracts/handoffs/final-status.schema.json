@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "final-status.schema.json",
+  "title": "Final Readiness Status",
+  "type": "object",
+  "required": ["version", "status", "summary"],
+  "properties": {
+    "version": { "type": "string" },
+    "status": { "type": "string", "enum": ["ready", "partial", "blocked"] },
+    "summary": { "type": "string" },
+    "covered": { "type": "array", "items": { "type": "string" } },
+    "not_covered": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "artifact_refs": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

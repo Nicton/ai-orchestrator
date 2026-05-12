@@ -1,0 +1,109 @@
+version: 1
+name: qa-core-mvp
+mode: synchronous_with_future_parallel_lanes
+stages:
+  - id: manager_triage
+    role: 00-manager
+    outputs:
+      - status_summary
+    gates: []
+
+  - id: repo_intake
+    skill: 10-repo-intake
+    depends_on: [manager_triage]
+    outputs:
+      - architecture_summary
+      - existing_patterns
+      - anti_patterns
+      - recommended_entrypoints
+    gates: []
+
+  - id: requirements_structuring
+    role: 01-analyst
+    depends_on: [repo_intake]
+    outputs:
+      - requirements_baseline
+      - assumptions
+    gates: []
+
+  - id: traceability
+    skill: 11-test-traceability-mapper
+    depends_on: [requirements_structuring]
+    outputs:
+      - traceability_matrix
+      - coverage_gaps
+    gates: []
+
+  - id: atomic_tests
+    skill: 12-test-case-splitter
+    depends_on: [traceability]
+    outputs:
+      - atomic_test_cases
+    gates: []
+
+  - id: approval_gate
+    role: 00-manager
+    depends_on: [atomic_tests]
+    outputs:
+      - approved_scope
+    gates:
+      - explicit_human_approval_required_for_implementation
+
+  - id: implementation
+    skill: 13-playwright-writer
+    depends_on: [approval_gate]
+    outputs:
+      - code_changes
+      - assumptions_list
+    gates:
+      - approved_scope_present
+
+  - id: assertion_hardening
+    skill: 14-assertion-injector
+    depends_on: [implementation]
+    outputs:
+      - hardened_assertions
+    gates: []
+
+  - id: optional_refactor
+    skill: 15-refactor-to-shared-helper
+    depends_on: [assertion_hardening]
+    optional: true
+    outputs:
+      - shared_helpers
+    gates: []
+
+  - id: stabilization
+    skill: 16-flake-reviewer
+    depends_on: [assertion_hardening]
+    outputs:
+      - flake_findings
+      - stabilization_actions
+    gates: []
+
+  - id: critic_review
+    role: 06-critic
+    depends_on: [stabilization]
+    outputs:
+      - gap_analysis
+    gates: []
+
+  - id: final_status
+    role: 00-manager
+    depends_on: [critic_review]
+    outputs:
+      - final_readiness_status
+    gates:
+      - artifacts_present
+future_parallel_lanes:
+  - after: traceability
+    lanes:
+      - role: 03-frontend-tagger
+      - role: 04-manual-tester
+  - after: approval_gate
+    lanes:
+      - role: 05-automation
+      - role: 06-critic
+notes:
+  - this file defines execution intent, not runtime implementation details
+  - runtime should preserve gates even if provider/model changes

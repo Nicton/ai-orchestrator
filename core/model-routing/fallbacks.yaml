@@ -1,0 +1,24 @@
+version: 1
+fallback_policy:
+  on_provider_failure:
+    - retry_same_provider_once_if_transient
+    - switch_to_declared_fallback
+    - reduce_output_scope_if_needed
+  on_poor_structure_fidelity:
+    - restate_output_contract
+    - require_json_or_yaml_only
+    - reduce task breadth
+  on_context_window_pressure:
+    - summarize prior artifacts
+    - pass structured artifacts instead of prose
+    - split into narrower skills
+  on_code_patch_instability:
+    - switch to code-specialized fallback
+    - reduce file batch size
+    - request diff-oriented output
+  on_high_cost_low_value_loop:
+    - downgrade to cheaper model for repetitive extraction/classification
+constraints:
+  - never silently change workflow gates during fallback
+  - fallback must preserve required output contract
+  - provider switch must be noted in runtime/reporting layer if execution is audited

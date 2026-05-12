@@ -1,0 +1,72 @@
+version: 1
+principles:
+  - route by task capability, not provider preference alone
+  - always define primary and fallback
+  - keep local/cheap models for low-risk repetitive work only
+roles:
+  manager:
+    primary: gpt
+    fallback: gemini-pro
+    needs:
+      reasoning: high
+      long_context: medium
+      code_editing: low
+      structured_output: high
+  analyst:
+    primary: gpt
+    fallback: gemini-pro
+    needs:
+      reasoning: high
+      long_context: high
+      code_editing: low
+      structured_output: high
+  qa_architect:
+    primary: gpt
+    fallback: gemini-pro
+    needs:
+      reasoning: high
+      long_context: high
+      consistency: high
+      structured_output: high
+  frontend_tagger:
+    primary: claude-code
+    fallback: gpt-codex
+    needs:
+      code_editing: medium
+      ui_reasoning: medium
+      structured_output: medium
+  manual_tester:
+    primary: gemini-pro
+    fallback: gpt
+    needs:
+      reasoning: medium
+      breadth: high
+      cost_efficiency: medium
+  automation:
+    primary: claude-code
+    fallback: gpt-codex
+    needs:
+      code_editing: high
+      patch_precision: high
+      repo_adherence: high
+      structured_output: medium
+  critic:
+    primary: gpt
+    fallback: gemini-pro
+    needs:
+      reasoning: high
+      consistency: high
+      gap_detection: high
+      structured_output: high
+aliases:
+  gpt:
+    description: strongest general planning/reasoning model available in environment
+  gpt-codex:
+    description: strongest code-oriented GPT/Codex-style model available in environment
+  gemini-pro:
+    description: strong long-context general reasoning fallback
+  claude-code:
+    description: strongest coding-agent style model available in environment
+notes:
+  - aliases are logical, not provider-locked deployment IDs
+  - final provider/model mapping should be resolved by runtime config

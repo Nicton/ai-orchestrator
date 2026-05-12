@@ -1,0 +1,33 @@
+{
+  "runId": "ui-run-20260324T120000Z",
+  "startedAt": "2026-03-24T12:00:00Z",
+  "finishedAt": "2026-03-24T12:00:04Z",
+  "step": {
+    "stepId": "checkout.submit_order",
+    "intent": "submit_order",
+    "targetSemantic": { "role": "button", "nameLike": ["Submit", "Place order"] },
+    "scope": { "activeModal": true, "nearestHeading": "Checkout" },
+    "preconditions": ["button_visible", "button_enabled"],
+    "postconditions": ["url_contains('/success') OR success_toast_visible"],
+    "alternatives": ["wait_for_overlay", "scroll_into_view"]
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "chosenLocator": { "strategy": "aria", "value": "getByRole('button',{name:/Submit/i})" },
+      "candidates": [
+        { "strategy": "aria", "value": "...", "score": 0.92 },
+        { "strategy": "text", "value": "...", "score": 0.41 }
+      ],
+      "preSnapshot": "artifacts/ui-runs/ui-run-20260324T120000Z/step-1/pre.json",
+      "postSnapshot": "artifacts/ui-runs/ui-run-20260324T120000Z/step-1/post.json",
+      "postconditionVerdict": { "ok": true, "matched_oracle": "url_contains('/success')", "details": "navigated to /success" },
+      "failure": null
+    }
+  ],
+  "success": true,
+  "artifacts": {
+    "dir": "artifacts/ui-runs/ui-run-20260324T120000Z",
+    "summary": "artifacts/ui-runs/ui-run-20260324T120000Z/summary.md"
+  }
+}

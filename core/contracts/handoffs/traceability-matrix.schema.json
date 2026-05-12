@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "traceability-matrix.schema.json",
+  "title": "Traceability Matrix",
+  "type": "object",
+  "required": ["version", "items"],
+  "properties": {
+    "version": { "type": "string" },
+    "source": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["screen", "action", "expected", "test_type", "priority"],
+        "properties": {
+          "screen": { "type": "string" },
+          "action": { "type": "string" },
+          "expected": { "type": "string" },
+          "test_type": { "type": "string", "enum": ["smoke", "regression", "edge", "negative", "integration"] },
+          "priority": { "type": "string", "enum": ["P1", "P2", "P3"] },
+          "requirement_refs": { "type": "array", "items": { "type": "string" } },
+          "assumptions": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "coverage_gaps": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

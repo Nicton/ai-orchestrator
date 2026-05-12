@@ -1,0 +1,29 @@
+version: 1
+name: docgen-v1
+mode: sequential
+stages:
+  - id: manager_triage
+    role: 00-manager
+    outputs: [scope]
+
+  - id: requirements_structuring
+    role: 01-analyst
+    depends_on: [manager_triage]
+    outputs: [requirements]
+
+  - id: critic_review
+    role: 06-critic
+    depends_on: [requirements_structuring]
+    outputs: [gaps, improvements]
+
+  - id: docgen_writer
+    role: docgen-writer
+    depends_on: [critic_review]
+    outputs: [writerside_topic_xml]
+
+  - id: final_status
+    role: 00-manager
+    depends_on: [docgen_writer]
+    outputs: [final]
+notes:
+  - MVP docgen pipeline: produce Writerside .topic XML as final artifact.

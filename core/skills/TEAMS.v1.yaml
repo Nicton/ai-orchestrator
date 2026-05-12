@@ -1,0 +1,38 @@
+version: 1
+teams:
+  qa_automation:
+    title: QA Automation / Testing agents
+    match:
+      - prefix: "00-"
+      - prefix: "01-"
+      - prefix: "02-"
+      - prefix: "03-"
+      - prefix: "04-"
+      - prefix: "05-"
+      - prefix: "06-"
+      - prefix: "10-"
+      - prefix: "11-"
+      - prefix: "12-"
+      - prefix: "13-"
+      - prefix: "14-"
+      - prefix: "15-"
+      - prefix: "16-"
+      - prefix: "20-"
+      - prefix: "21-"
+      - prefix: "22-"
+      - prefix: "23-"
+      - prefix: "24-"
+      - prefix: "25-"
+      - prefix: "26-"
+      - prefix: "27-"
+
+  docs:
+    title: Documentation agents
+    match:
+      - prefix: "doc-"
+      - prefix: "glossary-"
+      - prefix: "quickstart-"
+
+  unknown:
+    title: Uncategorized
+    match: []

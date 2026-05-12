@@ -1,0 +1,15 @@
+{
+  "stepId": "checkout.submit_order",
+  "intent": "submit_order",
+  "targetSemantic": {
+    "role": "button",
+    "nameLike": ["Submit", "Place order", "Pay"]
+  },
+  "scope": {
+    "activeModal": true,
+    "nearestHeading": "Checkout"
+  },
+  "preconditions": ["form_valid", "button_visible", "button_enabled"],
+  "postconditions": ["success_toast_visible OR url_contains('/success') OR order_row_created"],
+  "alternatives": ["scroll_into_view", "wait_for_network_idle", "retry_after_overlay_disappears"]
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atomic-test-cases.schema.json",
+  "title": "Atomic Test Cases",
+  "type": "object",
+  "required": ["version", "cases"],
+  "properties": {
+    "version": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "type", "priority", "steps", "expected"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "type": { "type": "string", "enum": ["happy", "negative", "boundary", "integration", "smoke", "regression"] },
+          "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+          "automation_value": { "type": "string", "enum": ["high", "medium", "low"] },
+          "steps": { "type": "array", "items": { "type": "string" } },
+          "expected": { "type": "array", "items": { "type": "string" } },
+          "trace_refs": { "type": "array", "items": { "type": "string" } },
+          "assumptions": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "approved-scope.schema.json",
+  "title": "Approved Scope",
+  "type": "object",
+  "required": ["version", "status", "approved_items"],
+  "properties": {
+    "version": { "type": "string" },
+    "status": { "type": "string", "enum": ["approved", "partial", "blocked"] },
+    "approved_items": { "type": "array", "items": { "type": "string" } },
+    "deferred_items": { "type": "array", "items": { "type": "string" } },
+    "constraints": { "type": "array", "items": { "type": "string" } },
+    "decision_owner": { "type": "string" },
+    "decision_time": { "type": "string" }
+  },
+  "additionalProperties": false
+}

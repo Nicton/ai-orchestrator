@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gap-analysis.schema.json",
+  "title": "Gap Analysis",
+  "type": "object",
+  "required": ["version", "findings"],
+  "properties": {
+    "version": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "summary", "recommendation"],
+        "properties": {
+          "id": { "type": "string" },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+          "summary": { "type": "string" },
+          "recommendation": { "type": "string" },
+          "evidence_refs": { "type": "array", "items": { "type": "string" } },
+          "related_cases": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

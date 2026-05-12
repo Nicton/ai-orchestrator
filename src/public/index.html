@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Orchestrator (agentic QA)</title>
+  <style>
+    body { font-family: Inter, system-ui, Arial, sans-serif; margin: 0; background:#0b1020; color:#eaf0ff; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 12px; font-size: 26px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    .card { background:#141b34; border:1px solid #23305f; border-radius:14px; padding:16px; }
+    input, textarea { width:100%; box-sizing:border-box; margin-top:6px; margin-bottom:12px; background:#0b1020; color:#eaf0ff; border:1px solid #314275; border-radius:10px; padding:10px; }
+    button { background:#5f7cff; border:none; color:white; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
+    table { width:100%; border-collapse: collapse; font-size:14px; }
+    th, td { text-align:left; padding:8px; border-bottom:1px solid #24325f; vertical-align: top; }
+    .pill { padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .PENDING{ background:#545f89; } .RUNNING{ background:#776300; } .DONE{ background:#0a6a44; } .FAILED{ background:#7a2030; } .SKIPPED{ background:#4f4f4f; }
+    .muted { color:#9fb0e6; font-size:13px; }
+    pre { white-space: pre-wrap; background:#0b1020; border:1px solid #273467; border-radius:10px; padding:10px; max-height:320px; overflow:auto; }
+    code { color:#cfe1ff; }
+    @media (max-width: 950px){ .grid{ grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>AI Orchestrator</h1>
+    <div class="muted">Prototype: pipeline runs (multi-agent) + workflow tasks (long-running) + legacy single tasks</div>
+
+    <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <button id="tabBtn-dashboard" onclick="setTab('dashboard')">Dashboard</button>
+      <button id="tabBtn-workflow" onclick="setTab('workflow')">Workflow tasks</button>
+      <span class="muted">Tab:</span>
+      <code id="activeTabLabel">dashboard</code>
+    </div>
+
+    <!-- DASHBOARD TAB -->
+    <div id="tab-dashboard">
+      <div class="grid" style="margin-top:16px;">
+        <div class="card">
+          <h3>Create pipeline run</h3>
+        <label>Title (optional)</label>
+        <input id="runTitle" placeholder="YouTrack: PROJ-123" />
+        <label>Pipeline path (optional)</label>
+        <input id="pipelinePath" value="core/orchestration/pipeline.v1.yaml" />
+        <label>Input text (ticket context / request)</label>
+        <textarea id="runInput" rows="7" placeholder="Describe what to test / context..."></textarea>
+        <label>External ref (optional)</label>
+        <input id="externalRef" placeholder="YouTrack:PROJ-123" />
+        <div style="display:flex; gap:10px;">
+          <button onclick="createRun()">Create</button>
+        </div>
+        <div class="muted" style="margin-top:10px;">
+          After creation, click “Start” on a run. Worker will pick up stages.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Limits (placeholder)</h3>
+        <div id="limits">Loading...</div>
+        <div class="muted" style="margin-top:8px;">Provider limits endpoint is still stubbed.</div>
+
+        <hr style="border:0; border-top:1px solid #24325f; margin:14px 0;" />
+
+        <h3 style="margin-top:0;">YouTrack trigger (manual check)</h3>
+        <div class="muted">Calls <code>POST /api/youtrack/poll</code> and shows what issues were picked up.</div>
+        <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button onclick="youtrackPoll()">Check YouTrack now</button>
+          <span class="muted">(looks for <code>[AI]</code> issues in <code>In Progress</code>)</span>
+        </div>
+        <pre id="youtrackPollOut" style="margin-top:10px; max-height:200px;"></pre>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Agents & teams</h3>
+      <div class="muted">Skills discovered from <code>skills/*/SKILL.md</code>. Shows what exists and what duplicates in current runs.</div>
+      <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button onclick="loadAgents()">Refresh agents</button>
+        <span class="muted">Team:</span>
+        <input id="teamFilter" style="width:220px; margin:0;" placeholder="qa_automation | docs | unknown" />
+      </div>
+      <div id="agents" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Pipeline graph</h3>
+      <div class="muted">Rendered Mermaid graph. When you open a run, the graph switches to run-aware view (statuses).</div>
+      <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button onclick="loadGraph()">Refresh pipeline graph</button>
+        <button onclick="renderLastRunGraph()">Render last opened run graph</button>
+        <span class="muted">(Mermaid is rendered client-side)</span>
+      </div>
+      <div id="graph" style="margin-top:10px; overflow:auto; border:1px solid #273467; border-radius:10px; padding:10px; background:#0b1020;">
+        <div class="muted">Loading…</div>
+      </div>
+      <details style="margin-top:10px;">
+        <summary>Raw Mermaid source</summary>
+        <pre id="graphSrc" style="margin-top:10px; max-height:240px;"></pre>
+      </details>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Pipeline runs</h3>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Pipeline</th><th>Status</th><th>Stages</th><th>Created</th><th></th></tr>
+        </thead>
+        <tbody id="runs"></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>Selected run</h3>
+      <div id="runDetails" class="muted">Click “Open” in the runs table.</div>
+    </div>
+
+    <div class="card" style="margin-top:24px; opacity:0.9;">
+      <h3>Legacy: single tasks</h3>
+      <div class="muted">Kept for backward compatibility. Prefer pipeline runs.</div>
+      <div class="grid" style="margin-top:10px;">
+        <div>
+          <label>Role</label>
+          <input id="role" value="Analyst" />
+          <label>Prompt</label>
+          <textarea id="prompt" rows="5"></textarea>
+          <button onclick="createTask()">Submit legacy task</button>
+        </div>
+        <div>
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Role</th><th>Status</th><th>Tokens</th><th></th></tr>
+            </thead>
+            <tbody id="tasks"></tbody>
+          </table>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <div id="taskDetails" class="muted">Click “Open” in the legacy tasks table.</div>
+      </div>
+    </div>
+      
+    </div> <!-- /tab-dashboard -->
+
+    <!-- WORKFLOW TASKS TAB -->
+    <div id="tab-workflow" style="display:none; margin-top:16px;">
+      <div class="grid">
+        <div class="card">
+          <h3>Create workflow task</h3>
+          <div class="muted">Creates a long-running task with clarification loop (TZ 2026-04-28). Use this for real work; pipeline runs are execution primitives.</div>
+          <label>External source (optional)</label>
+          <input id="wf_externalSource" placeholder="youtrack | github | telegram | api" />
+          <label>External task id (optional)</label>
+          <input id="wf_externalTaskId" placeholder="PROJ-123" />
+          <label>Title</label>
+          <input id="wf_title" placeholder="Add validation for order creation" />
+          <label>Description</label>
+          <textarea id="wf_description" rows="6" placeholder="Context, requirements, links..."></textarea>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label style="display:flex; gap:8px; align-items:center; margin:0;">
+              <input id="wf_autoAnalyze" type="checkbox" checked style="width:auto; margin:0;" />
+              <span class="muted">autoAnalyze</span>
+            </label>
+            <button onclick="createWfTask()">Create</button>
+          </div>
+          <div id="wf_createResult" class="muted" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="card">
+          <h3>Workflow tasks</h3>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button onclick="loadWfTasks()">Refresh</button>
+            <span class="muted">Status filter:</span>
+            <input id="wf_statusFilter" style="width:220px; margin:0;" placeholder="ANALYZING | WAITING_FOR_HUMAN | ..." />
+          </div>
+          <table style="margin-top:10px;">
+            <thead>
+              <tr><th>ID</th><th>External</th><th>Title</th><th>Status</th><th>Open Q</th><th>Next ping</th><th></th></tr>
+            </thead>
+            <tbody id="wf_tasks"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Selected workflow task</h3>
+        <div id="wf_taskDetails" class="muted">Open a task from the table.</div>
+      </div>
+    </div> <!-- /tab-workflow -->
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    let lastOpenedRunId = null;
+    let activeTab = 'dashboard';
+
+    function initMermaid() {
+      if (!window.mermaid) return;
+      window.mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    }
+
+    function setTab(tab) {
+      activeTab = tab;
+      document.getElementById('activeTabLabel').textContent = tab;
+      document.getElementById('tab-dashboard').style.display = tab === 'dashboard' ? '' : 'none';
+      document.getElementById('tab-workflow').style.display = tab === 'workflow' ? '' : 'none';
+
+      document.getElementById('tabBtn-dashboard').style.opacity = tab === 'dashboard' ? '1' : '0.75';
+      document.getElementById('tabBtn-workflow').style.opacity = tab === 'workflow' ? '1' : '0.75';
+
+      if (tab === 'workflow') loadWfTasks();
+    }
+
+    async function fetchLimits() {
+      const res = await fetch('/api/limits');
+      const data = await res.json();
+      document.getElementById('limits').innerHTML = `<b>${data.used}</b> / <b>${data.total}</b> (${data.placeholder ? 'stub' : 'live'})`;
+    }
+
+    async function youtrackPoll() {
+      const out = document.getElementById('youtrackPollOut');
+      out.textContent = 'Polling…';
+      const res = await fetch('/api/youtrack/poll', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const txt = await res.text();
+      try {
+        out.textContent = JSON.stringify(JSON.parse(txt), null, 2);
+      } catch {
+        out.textContent = txt;
+      }
+    }
+
+    async function createRun() {
+      const payload = {
+        title: document.getElementById('runTitle').value || undefined,
+        pipelinePath: document.getElementById('pipelinePath').value || undefined,
+        inputText: document.getElementById('runInput').value,
+        externalRef: document.getElementById('externalRef').value || undefined,
+      };
+      const res = await fetch('/api/runs', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        alert('Failed: ' + JSON.stringify(e));
+        return;
+      }
+      document.getElementById('runInput').value = '';
+      await loadRuns();
+    }
+
+    // --- Workflow tasks UI ---
+    async function createWfTask() {
+      const payload = {
+        externalSource: document.getElementById('wf_externalSource').value.trim() || undefined,
+        externalTaskId: document.getElementById('wf_externalTaskId').value.trim() || undefined,
+        title: document.getElementById('wf_title').value.trim(),
+        description: document.getElementById('wf_description').value,
+        autoAnalyze: !!document.getElementById('wf_autoAnalyze').checked,
+      };
+
+      const res = await fetch('/api/wf/tasks', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const out = document.getElementById('wf_createResult');
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        out.textContent = 'Failed: ' + JSON.stringify(e);
+        return;
+      }
+      const data = await res.json();
+      out.innerHTML = `Created: <code>${data.taskId}</code>`;
+      await loadWfTasks();
+      await openWfTask(data.taskId);
+    }
+
+    async function loadWfTasks() {
+      const status = document.getElementById('wf_statusFilter').value.trim();
+      const url = '/api/wf/tasks' + (status ? ('?status=' + encodeURIComponent(status)) : '');
+      const res = await fetch(url);
+      const data = await res.json();
+      const tbody = document.getElementById('wf_tasks');
+      tbody.innerHTML = '';
+
+      for (const t of (data.tasks || [])) {
+        const tr = document.createElement('tr');
+        const ext = [t.externalSource, t.externalTaskId].filter(Boolean).join(':');
+        const nextPing = t.nextPingAt ? new Date(t.nextPingAt).toLocaleString() : '';
+        tr.innerHTML = `
+          <td class="mono">${t.id}</td>
+          <td class="mono">${ext}</td>
+          <td>${escapeHtml(t.title || '')}</td>
+          <td><span class="pill ${t.status}">${t.status}</span></td>
+          <td>${t.openQuestions ?? ''}</td>
+          <td class="mono">${nextPing}</td>
+          <td><button onclick="openWfTask('${t.id}')">Open</button></td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function openWfTask(id) {
+      const res = await fetch('/api/wf/tasks/' + id);
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        document.getElementById('wf_taskDetails').textContent = 'Failed: ' + JSON.stringify(e);
+        return;
+      }
+      const t = await res.json();
+
+      const openQs = (t.questions || []).filter(q => q.status === 'OPEN');
+
+      const qHtml = openQs.length ? openQs.map(q => {
+        return `
+          <div class="card" style="margin-top:10px; background:#0b1020; border:1px solid #273467;">
+            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+              <div>
+                <div style="font-weight:800;">${escapeHtml(q.questionText)}</div>
+                <div class="muted" style="margin-top:6px;">${escapeHtml(q.reason || '')}</div>
+                <div class="muted" style="margin-top:6px;">priority: <code>${escapeHtml(q.priority || '')}</code> targetRole: <code>${escapeHtml(q.targetRole || '')}</code></div>
+              </div>
+              <span class="pill ${q.status}">${q.status}</span>
+            </div>
+            <div style="margin-top:10px;">
+              <textarea id="wf_answer_${q.id}" rows="3" placeholder="Answer..."></textarea>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button onclick="submitWfAnswer('${t.id}','${q.id}')">Send answer</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('\n') : '<div class="muted">No open questions.</div>';
+
+      const events = (t.events || []).slice(-50).map(ev => {
+        const ts = ev.createdAt ? new Date(ev.createdAt).toLocaleString() : '';
+        return `<div class="muted"><span class="mono">${ts}</span> <b>${escapeHtml(ev.eventType)}</b> <span class="mono">${escapeHtml(ev.actorType || '')}</span></div>`;
+      }).join('\n');
+
+      document.getElementById('wf_taskDetails').innerHTML = `
+        <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:18px; font-weight:900;">${escapeHtml(t.title)}</div>
+            <div class="muted">${escapeHtml(t.description || '')}</div>
+            <div class="muted" style="margin-top:6px;">External: <code>${escapeHtml([t.externalSource, t.externalTaskId].filter(Boolean).join(':'))}</code></div>
+          </div>
+          <div>
+            <div><span class="pill ${t.status}">${t.status}</span></div>
+            <div class="muted" style="margin-top:6px;">openQuestions: <b>${t.openQuestions}</b></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button onclick="executeWfTask('${t.id}')">Execute</button>
+          <button onclick="loadWfTasks()">Refresh list</button>
+        </div>
+
+        <h4 style="margin-top:16px;">Open questions</h4>
+        ${qHtml}
+
+        <h4 style="margin-top:16px;">History (last 50 events)</h4>
+        <div style="margin-top:8px;">${events || '<div class="muted">No events.</div>'}</div>
+      `;
+    }
+
+    async function submitWfAnswer(taskId, questionId) {
+      const txt = document.getElementById('wf_answer_' + questionId).value;
+      const res = await fetch('/api/wf/tasks/' + taskId + '/answers', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify({ questionId, answer: txt, source: 'web-ui' }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        alert('Failed: ' + JSON.stringify(e));
+        return;
+      }
+      await openWfTask(taskId);
+      await loadWfTasks();
+    }
+
+    async function executeWfTask(taskId) {
+      const res = await fetch('/api/wf/tasks/' + taskId + '/execute', { method: 'POST' });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        alert('Failed: ' + JSON.stringify(e));
+        return;
+      }
+      await openWfTask(taskId);
+      await loadWfTasks();
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    }
+
+    async function startRun(id) {
+      const res = await fetch('/api/runs/' + id + '/start', { method: 'POST' });
+      if (!res.ok) {
+        const e = await res.json();
+        alert('Failed: ' + JSON.stringify(e));
+        return;
+      }
+      await loadRuns();
+      await openRun(id);
+    }
+
+    async function loadAgents() {
+      const team = document.getElementById('teamFilter').value.trim();
+      const url = '/api/agents/activity' + (team ? ('?team=' + encodeURIComponent(team)) : '');
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      const root = document.getElementById('agents');
+      root.innerHTML = '';
+
+      const style = document.createElement('style');
+      style.textContent = `
+        .agentGrid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
+        @media (max-width: 950px){ .agentGrid{ grid-template-columns: 1fr; } }
+        .agentCard { background:#0b1020; border:1px solid #273467; border-radius:14px; padding:12px; }
+        .agentTop { display:flex; align-items:center; gap:10px; }
+        .agentIcon { width:34px; height:34px; border-radius:12px; background:#5f7cff; display:flex; align-items:center; justify-content:center; font-weight:900; color:white; }
+        .agentName { font-weight:800; }
+        .agentMeta { color:#9fb0e6; font-size:12px; }
+        .badge { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #314275; background:#141b34; font-size:12px; font-weight:800; margin-left:6px; }
+        .agentBody { margin-top:10px; color:#cfe1ff; font-size:13px; }
+        details { margin-top:10px; }
+        summary { cursor:pointer; font-weight:800; }
+        .taskLine { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px; }
+        .linkBtn { background:#23305f; border:none; color:#eaf0ff; padding:6px 10px; border-radius:10px; font-weight:700; cursor:pointer; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px; }
+      `;
+      root.appendChild(style);
+
+      const grid = document.createElement('div');
+      grid.className = 'agentGrid';
+
+      for (const a of (data.agents || [])) {
+        const card = document.createElement('div');
+        card.className = 'agentCard';
+
+        const iconText = String(a.id || '?').replace(/[^0-9]/g,'').slice(0,2) || 'AI';
+        const busy = (a.counts?.running || 0) + (a.counts?.pending || 0);
+
+        card.innerHTML = `
+          <div class="agentTop">
+            <div class="agentIcon">${escapeHtml(iconText)}</div>
+            <div style="flex:1; min-width:0;">
+              <div class="agentName">${escapeHtml(a.id)} <span class="badge">busy ${busy}</span>
+                ${a.counts?.running ? `<span class="badge">RUN ${a.counts.running}</span>` : ''}
+                ${a.counts?.pending ? `<span class="badge">PEND ${a.counts.pending}</span>` : ''}
+              </div>
+              <div class="agentMeta">${escapeHtml(a.teamTitle || a.team || '')} • ${escapeHtml(a.type || '-')}${a.maturity ? ' • ' + escapeHtml(a.maturity) : ''}${a.humanReviewRequired ? ' • human-review' : ''}</div>
+            </div>
+          </div>
+          <div class="agentBody">${escapeHtml(a.description || '')}</div>
+        `;
+
+        const det = document.createElement('details');
+        det.innerHTML = `<summary>Details</summary>`;
+
+        const outputs = (a.outputs && a.outputs.length) ? a.outputs.join(', ') : '-';
+        const outDiv = document.createElement('div');
+        outDiv.style.marginTop = '8px';
+        outDiv.innerHTML = `<div class="agentMeta"><b>Outputs:</b> ${escapeHtml(outputs)}</div>`;
+        det.appendChild(outDiv);
+
+        const active = a.active || [];
+        const activeWrap = document.createElement('div');
+        activeWrap.style.marginTop = '10px';
+        activeWrap.innerHTML = `<div class="agentMeta"><b>Active tasks (from StageRuns):</b></div>`;
+
+        if (!active.length) {
+          const empty = document.createElement('div');
+          empty.className = 'agentMeta';
+          empty.style.marginTop = '6px';
+          empty.textContent = '— none';
+          activeWrap.appendChild(empty);
+        } else {
+          for (const t of active) {
+            const line = document.createElement('div');
+            line.className = 'taskLine';
+            const who = t.createdBy ? ` by ${t.createdBy}` : '';
+            const ext = t.externalRef ? ` ext=${t.externalRef}` : '';
+            line.innerHTML = `
+              <span class="badge">${escapeHtml(t.status)}</span>
+              <span class="mono">run ${escapeHtml(String(t.runId).slice(0,8))}</span>
+              <span class="mono">stage ${escapeHtml(t.stageId)}</span>
+              <span class="agentMeta">${escapeHtml((t.runTitle || '') + who + ext)}</span>
+              <button class="linkBtn" data-runid="${escapeHtml(t.runId)}">Open run</button>
+            `;
+            line.querySelector('button')?.addEventListener('click', () => openRun(t.runId));
+            activeWrap.appendChild(line);
+          }
+        }
+
+        det.appendChild(activeWrap);
+        card.appendChild(det);
+        grid.appendChild(card);
+      }
+
+      root.appendChild(grid);
+    }
+
+    async function renderMermaid(targetEl, srcEl, mermaidText) {
+      const graphEl = document.getElementById(targetEl);
+      const src = document.getElementById(srcEl);
+      if (src) src.textContent = mermaidText;
+
+      if (!window.mermaid) {
+        graphEl.innerHTML = `<div class="muted">Mermaid library not loaded (CDN blocked). Raw source is available below.</div>`;
+        return;
+      }
+
+      const id = 'm' + Math.random().toString(16).slice(2);
+      try {
+        const { svg } = await window.mermaid.render(id, mermaidText);
+        graphEl.innerHTML = svg;
+      } catch (e) {
+        graphEl.innerHTML = `<div class="muted">Failed to render Mermaid: ${escapeHtml(e?.message || String(e))}</div>`;
+      }
+    }
+
+    async function loadGraph() {
+      const pipelinePath = document.getElementById('pipelinePath').value || 'core/orchestration/pipeline.v1.yaml';
+      const res = await fetch('/api/pipelines/graph?pipelinePath=' + encodeURIComponent(pipelinePath));
+      const text = await res.text();
+      await renderMermaid('graph', 'graphSrc', text);
+    }
+
+    async function renderLastRunGraph() {
+      if (!lastOpenedRunId) {
+        alert('No run opened yet. Click Open on a run first.');
+        return;
+      }
+      const res = await fetch('/api/runs/' + lastOpenedRunId + '/graph');
+      const text = await res.text();
+      await renderMermaid('graph', 'graphSrc', text);
+    }
+
+    async function loadRuns() {
+      const res = await fetch('/api/runs?limit=50');
+      const data = await res.json();
+      const tbody = document.getElementById('runs');
+      tbody.innerHTML = '';
+      for (const r of data.runs) {
+        const stagesDone = (r.stages || []).filter(s => s.status === 'DONE' || s.status === 'SKIPPED').length;
+        const stagesTotal = (r.stages || []).length;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><code>${r.id.slice(0,8)}</code></td>
+          <td>${escapeHtml(r.pipelineId)}</td>
+          <td><span class="pill ${r.status}">${r.status}</span></td>
+          <td>${stagesDone}/${stagesTotal}</td>
+          <td>${new Date(r.createdAt).toLocaleString()}</td>
+          <td style="white-space:nowrap; display:flex; gap:8px;">
+            <button onclick="openRun('${r.id}')">Open</button>
+            ${r.status === 'PENDING' ? `<button onclick="startRun('${r.id}')">Start</button>` : ''}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function openRun(id) {
+      lastOpenedRunId = id;
+      const res = await fetch('/api/runs/' + id);
+      const r = await res.json();
+
+      const stages = (r.stages || []).map(s => {
+        const deps = (s.dependsOn || []).join(', ');
+        return `<tr>
+          <td><code>${escapeHtml(s.stageId)}</code></td>
+          <td>${escapeHtml(s.roleOrSkill)}</td>
+          <td>${deps ? escapeHtml(deps) : '-'}</td>
+          <td><span class="pill ${s.status}">${s.status}</span></td>
+          <td>${s.totalTokens ?? '-'}</td>
+          <td><button onclick="openStage('${r.id}','${s.id}')">View</button></td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('runDetails').innerHTML = `
+        <div><b>ID:</b> <code>${escapeHtml(r.id)}</code></div>
+        <div><b>Title:</b> ${escapeHtml(r.title ?? '-')}</div>
+        <div><b>Status:</b> <span class="pill ${r.status}">${r.status}</span></div>
+        <div><b>External ref:</b> ${escapeHtml(r.externalRef ?? '-')}</div>
+        <div style="margin-top:10px;"><b>Input</b></div>
+        <pre>${escapeHtml(r.inputText ?? '')}</pre>
+        <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <b>Stages</b>
+          <button class="linkBtn" onclick="renderLastRunGraph()">Render this run in graph</button>
+        </div>
+        <table>
+          <thead><tr><th>Stage</th><th>Role/Skill</th><th>Depends</th><th>Status</th><th>Tokens</th><th></th></tr></thead>
+          <tbody>${stages || '<tr><td colspan="6" class="muted">No stages</td></tr>'}</tbody>
+        </table>
+        <div id="stageDetails" class="muted" style="margin-top:12px;">Select a stage to view details.</div>
+      `;
+
+      // auto-render run graph
+      try { await renderLastRunGraph(); } catch {}
+    }
+
+    async function openStage(runId, stageRunId) {
+      const res = await fetch('/api/runs/' + runId);
+      const r = await res.json();
+      const s = (r.stages || []).find(x => x.id === stageRunId);
+      if (!s) return;
+      document.getElementById('stageDetails').innerHTML = `
+        <div><b>Stage:</b> <code>${escapeHtml(s.stageId)}</code> (${escapeHtml(s.stageName)})</div>
+        <div><b>Status:</b> <span class="pill ${s.status}">${s.status}</span></div>
+        <div><b>Role/Skill:</b> ${escapeHtml(s.roleOrSkill)}</div>
+        <div><b>Model:</b> ${escapeHtml(s.model ?? '-')}</div>
+        <div style="margin-top:8px;"><b>Result (raw)</b></div>
+        <pre>${escapeHtml(s.resultText ?? '')}</pre>
+        ${s.errorMessage ? `<div style="margin-top:8px;"><b>Error</b><pre>${escapeHtml(s.errorMessage)}</pre></div>` : ''}
+      `;
+    }
+
+    // Legacy tasks
+    async function createTask() {
+      const payload = {
+        role: document.getElementById('role').value,
+        prompt: document.getElementById('prompt').value,
+      };
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        alert('Failed: ' + JSON.stringify(e));
+        return;
+      }
+      document.getElementById('prompt').value = '';
+      await loadTasks();
+    }
+
+    async function loadTasks() {
+      const res = await fetch('/api/tasks?limit=50');
+      const data = await res.json();
+      const tbody = document.getElementById('tasks');
+      tbody.innerHTML = '';
+      for (const t of data.tasks) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><code>${t.id.slice(0,8)}</code></td>
+          <td>${escapeHtml(t.role)}</td>
+          <td><span class="pill ${t.status}">${t.status}</span></td>
+          <td>${t.totalTokens ?? '-'}</td>
+          <td><button onclick="openTask('${t.id}')">Open</button></td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function openTask(id) {
+      const res = await fetch('/api/tasks/' + id);
+      const t = await res.json();
+      document.getElementById('taskDetails').innerHTML = `
+        <div><b>ID:</b> <code>${escapeHtml(t.id)}</code></div>
+        <div><b>Role:</b> ${escapeHtml(t.role)}</div>
+        <div><b>Status:</b> <span class="pill ${t.status}">${t.status}</span></div>
+        <div><b>Model:</b> ${escapeHtml(t.model ?? '-')}</div>
+        <div><b>Total tokens:</b> ${t.totalTokens ?? '-'}</div>
+        <div style="margin-top:8px;"><b>Prompt</b></div>
+        <pre>${escapeHtml(t.prompt ?? '')}</pre>
+        <div style="margin-top:8px;"><b>Result</b></div>
+        <pre>${escapeHtml(t.resultText ?? '')}</pre>
+        ${t.errorMessage ? `<div style="margin-top:8px;"><b>Error</b><pre>${escapeHtml(t.errorMessage)}</pre></div>` : ''}
+      `;
+    }
+
+    function escapeHtml(s){ return String(s)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;')
+      .replaceAll('>','&gt;').replaceAll('"','&quot;')
+      .replaceAll("'",'&#39;'); }
+
+    initMermaid();
+    fetchLimits();
+    loadAgents();
+    loadGraph();
+    loadRuns();
+    loadTasks();
+    setTab('dashboard');
+
+    setInterval(() => {
+      // Keep dashboard fresh; workflow list refreshes when the tab is opened.
+      loadRuns();
+      loadTasks();
+      if (activeTab === 'workflow') loadWfTasks();
+    }, 3000);
+  </script>
+</body>
+</html>

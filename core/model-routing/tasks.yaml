@@ -1,0 +1,33 @@
+version: 1
+tasks:
+  repo_intake:
+    preferred: [claude-code, gpt-codex, gpt]
+    avoid: [small-local]
+    required_capabilities: [repo_adherence, structured_output]
+  requirements_structuring:
+    preferred: [gpt, gemini-pro]
+    required_capabilities: [reasoning, long_context, structured_output]
+  traceability_mapping:
+    preferred: [gpt, gemini-pro]
+    required_capabilities: [reasoning, consistency, structured_output]
+  test_case_splitting:
+    preferred: [gpt, gemini-pro]
+    required_capabilities: [reasoning, deduplication, structured_output]
+  playwright_code_generation:
+    preferred: [claude-code, gpt-codex]
+    required_capabilities: [code_editing, patch_precision, repo_adherence]
+  assertion_hardening:
+    preferred: [claude-code, gpt-codex, gpt]
+    required_capabilities: [code_editing, oracle_design]
+  flake_review:
+    preferred: [gpt, claude-code]
+    required_capabilities: [debug_reasoning, evidence_analysis]
+  gap_analysis:
+    preferred: [gpt, gemini-pro]
+    required_capabilities: [consistency, gap_detection, structured_output]
+  doc_refactor:
+    preferred: [gpt, claude-code]
+    required_capabilities: [information_architecture, consistency]
+  schema_authoring:
+    preferred: [gpt, claude-code]
+    required_capabilities: [structured_output, precision]

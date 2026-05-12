@@ -1,0 +1,390 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+// --- Workflow Orchestrator v1 (TZ 2026-04-28) ---
+// NOTE: prefixed with Wf* to avoid conflicts with legacy Task/PipelineRun tables.
+
+enum WfTaskStatus {
+  NEW
+  ANALYZING
+  NEEDS_CLARIFICATION
+  WAITING_FOR_HUMAN
+  CLARIFICATION_RECEIVED
+  READY_FOR_EXECUTION
+  IN_PROGRESS
+  COMMITTED
+  READY_FOR_REVIEW
+  BLOCKED
+  ESCALATED
+  DONE
+  CANCELLED
+}
+
+enum WfQuestionStatus {
+  OPEN
+  ANSWERED
+  IGNORED
+  CANCELLED
+  SUPERSEDED
+}
+
+enum WfEventType {
+  TASK_CREATED
+  ANALYSIS_STARTED
+  ANALYSIS_COMPLETED
+  QUESTION_CREATED
+  QUESTION_SENT
+  ANSWER_RECEIVED
+  STATUS_CHANGED
+  PING_SENT
+  ESCALATION_SENT
+  EXECUTION_STARTED
+  COMMIT_CREATED
+  PR_CREATED
+  TASK_DONE
+  TASK_CANCELLED
+}
+
+enum WfJobType {
+  ANALYZE_TASK
+  REANALYZE_TASK
+  SEND_QUESTION
+  SEND_REMINDER
+  ESCALATE_TASK
+  EXECUTE_TASK
+  RUN_TESTS
+  COMMIT_CHANGES
+  CREATE_REVIEW_SUMMARY
+  SYNC_EXTERNAL_STATUS
+}
+
+enum WfJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum StageStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+model Task {
+  id               String     @id @default(cuid())
+  title            String?
+  role             String
+  prompt           String
+  callbackUrl      String?
+  status           TaskStatus @default(PENDING)
+  resultText       String?
+  errorMessage     String?
+  model            String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  startedAt        DateTime?
+  finishedAt       DateTime?
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model PipelineRun {
+  id          String    @id @default(cuid())
+  title       String?
+  pipelineId  String
+  inputText   String
+  status      RunStatus @default(PENDING)
+
+  // Optional external correlation IDs (e.g., YouTrack issue)
+  externalRef String?
+
+  // Optional attribution (who created the run)
+  createdBy   String?
+
+  resultText  String?
+  errorMessage String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  stages      StageRun[]
+  artifacts   Artifact[]
+
+  @@index([status, createdAt])
+  @@index([pipelineId, createdAt])
+}
+
+model StageRun {
+  id           String      @id @default(cuid())
+  runId        String
+  stageId      String
+  stageName    String
+  roleOrSkill  String
+  status       StageStatus @default(PENDING)
+  dependsOn    String[]
+
+  promptText   String?
+  resultText   String?
+  errorMessage String?
+
+  model            String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  run         PipelineRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  artifacts   Artifact[]
+
+  @@index([runId, stageId])
+  @@index([status, createdAt])
+}
+
+model Artifact {
+  id          String   @id @default(cuid())
+  runId       String
+  stageRunId  String?
+
+  kind        String
+  name        String?
+  contentType String @default("text/plain")
+  text        String?
+  url         String?
+
+  createdAt   DateTime @default(now())
+
+  run         PipelineRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stageRun    StageRun?   @relation(fields: [stageRunId], references: [id], onDelete: Cascade)
+
+  @@index([runId, kind])
+  @@index([stageRunId, kind])
+}
+
+// --- Workflow Orchestrator tables ---
+model WfUser {
+  id             String   @id @default(cuid())
+  externalUserId String?
+  name           String
+  email          String?
+  role           String?
+  messengerHandle String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  reportedTasks  WfTask[] @relation("wf_reporter")
+  assignedTasks  WfTask[] @relation("wf_assignee")
+}
+
+model WfProject {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  repositories WfRepository[]
+  tasks        WfTask[]
+
+  @@unique([name])
+}
+
+model WfRepository {
+  id            String   @id @default(cuid())
+  projectId     String
+  url           String
+  defaultBranch String  @default("main")
+  accessType    String? // ssh|https|token|...
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project       WfProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks         WfTask[]
+
+  @@index([projectId])
+  @@unique([projectId, url])
+}
+
+model WfTask {
+  id             String       @id @default(cuid())
+
+  externalSource String?
+  externalTaskId String?
+
+  title          String
+  description    String?
+  taskType       String?
+  priority       String?
+
+  status         WfTaskStatus @default(NEW)
+
+  projectId      String?
+  repositoryId   String?
+
+  reporterId     String?
+  assigneeId     String?
+
+  deadlineAt     DateTime?
+
+  nextPingAt     DateTime?
+  pingCount      Int          @default(0)
+
+  blockedReason  String?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  project        WfProject?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  repository     WfRepository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+
+  reporter       WfUser?      @relation("wf_reporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  assignee       WfUser?      @relation("wf_assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  events         WfTaskEvent[]
+  questions      WfTaskQuestion[]
+  answers        WfTaskAnswer[]
+  jobs           WfJob[]
+  aiRuns         WfAiRun[]
+  gitChanges     WfGitChange[]
+
+  @@index([status, createdAt])
+  @@index([externalSource, externalTaskId])
+}
+
+model WfTaskEvent {
+  id          String      @id @default(cuid())
+  taskId      String
+  eventType   WfEventType
+  actorType   String?     // human|ai|system|integration
+  actorId     String?
+  payload     Json?
+  createdAt   DateTime    @default(now())
+
+  task        WfTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model WfTaskQuestion {
+  id           String            @id @default(cuid())
+  taskId       String
+  questionText String
+  reason       String?
+  targetUserId String?
+  targetRole   String?
+  status       WfQuestionStatus  @default(OPEN)
+  priority     String?
+  createdAt    DateTime          @default(now())
+  answeredAt   DateTime?
+
+  task         WfTask            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  answers      WfTaskAnswer[]
+
+  @@index([taskId, status])
+}
+
+model WfTaskAnswer {
+  id         String    @id @default(cuid())
+  taskId     String
+  questionId String?
+  authorId   String?
+  answerText String
+  source     String?
+  createdAt  DateTime  @default(now())
+
+  task       WfTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  question   WfTaskQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+}
+
+model WfJob {
+  id          String      @id @default(cuid())
+  taskId      String
+  type        WfJobType
+  status      WfJobStatus @default(PENDING)
+  payload     Json?
+  attempts    Int         @default(0)
+  runAfter    DateTime?   // schedule / reminder
+  errorMessage String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  task        WfTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([type, status])
+  @@index([runAfter])
+}
+
+model WfAiRun {
+  id            String      @id @default(cuid())
+  taskId        String
+  pipelineId    String?
+  modelProvider String?
+  modelName     String?
+  status        String
+  inputSummary  String?
+  outputSummary String?
+  tokensInput   Int?
+  tokensOutput  Int?
+  costEstimate  Float?
+  startedAt     DateTime?   @default(now())
+  finishedAt    DateTime?
+  errorMessage  String?
+
+  task          WfTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, startedAt])
+}
+
+model WfGitChange {
+  id            String   @id @default(cuid())
+  taskId        String
+  repositoryId  String?
+  branchName    String
+  commitHash    String?
+  pullRequestUrl String?
+  status        String?
+  createdAt     DateTime @default(now())
+
+  task          WfTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}

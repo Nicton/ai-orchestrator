@@ -1,0 +1,130 @@
+version: 1
+registry:
+  00-manager:
+    type: role
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: false
+  01-analyst:
+    type: role
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: false
+  02-qa-architect:
+    type: role
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: false
+  03-frontend-tagger:
+    type: role
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: true
+  04-manual-tester:
+    type: role
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: true
+  05-automation:
+    type: role
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: true
+  06-critic:
+    type: role
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: false
+  10-repo-intake:
+    type: skill
+    maturity: stable
+    contract_style: packaged-markdown
+    machine_contract: planned
+    outputs: [architecture_summary, existing_patterns, anti_patterns, recommended_entrypoints, assumptions]
+  11-test-traceability-mapper:
+    type: skill
+    maturity: stable
+    contract_style: markdown
+    machine_contract: planned
+    outputs: [traceability_matrix, scenario_priority, coverage_gaps]
+  12-test-case-splitter:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+  13-playwright-writer:
+    type: skill
+    maturity: beta
+    contract_style: packaged-markdown
+    machine_contract: planned
+  14-assertion-injector:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+  15-refactor-to-shared-helper:
+    type: skill
+    maturity: experimental
+    contract_style: markdown
+    machine_contract: planned
+  16-flake-reviewer:
+    type: skill
+    maturity: beta
+    contract_style: packaged-markdown
+    machine_contract: planned
+  20-ui-state-snapshot:
+    type: skill
+    maturity: experimental
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  21-locator-ranker:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  22-action-planner:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  23-smart-click-executor:
+    type: skill
+    maturity: experimental
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  24-postcondition-verifier:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  25-failure-classifier:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  26-recovery-strategy:
+    type: skill
+    maturity: experimental
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  27-sequence-debugger:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: aligned-with-tool-contracts
+  docgen-writer:
+    type: skill
+    maturity: experimental
+    contract_style: markdown
+    machine_contract: planned
+    outputs: [writerside_topic_xml]
+notes:
+  - maturity reflects current operational confidence, not conceptual completeness
+  - machine_contract=planned means the next step is INPUT/OUTPUT schema introduction

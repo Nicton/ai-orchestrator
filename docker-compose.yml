@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orchestrator
+      POSTGRES_PASSWORD: orchestrator
+      POSTGRES_DB: orchestrator
+    ports:
+      - "54322:5432"
+    volumes:
+      - orchestrator_mvp_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orchestrator -d orchestrator"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build:
+      context: .
+    env_file: .env
+    environment:
+      APP_PORT: ${APP_PORT:-4321}
+      YOUTRACK_BASE_URL: ${YOUTRACK_BASE_URL:-}
+      YOUTRACK_TOKEN_FILE: /run/secrets/youtrack_token
+      YOUTRACK_WEBHOOK_SECRET: ${YOUTRACK_WEBHOOK_SECRET:-}
+      YOUTRACK_QUERY: ${YOUTRACK_QUERY:-}
+      YOUTRACK_TRIGGER_STATE: ${YOUTRACK_TRIGGER_STATE:-In Progress}
+      YOUTRACK_PIPELINE_PATH: ${YOUTRACK_PIPELINE_PATH:-core/orchestration/pipeline.v1.yaml}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "4321:${APP_PORT:-4321}"
+    volumes:
+      - ./secrets/openai_api_key:/run/secrets/openai_api_key:ro
+      - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
+    command: ["sh","-lc","until node -e \"const net=require('net');const s=net.connect(5432,'db');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),500);\"; do echo 'waiting for db...'; sleep 1; done; npm run db:push && npm run start:app"]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+    env_file: .env
+    environment:
+      YOUTRACK_BASE_URL: ${YOUTRACK_BASE_URL:-}
+      YOUTRACK_TOKEN_FILE: /run/secrets/youtrack_token
+      YOUTRACK_WEBHOOK_SECRET: ${YOUTRACK_WEBHOOK_SECRET:-}
+      YOUTRACK_QUERY: ${YOUTRACK_QUERY:-}
+      YOUTRACK_TRIGGER_STATE: ${YOUTRACK_TRIGGER_STATE:-In Progress}
+      YOUTRACK_PIPELINE_PATH: ${YOUTRACK_PIPELINE_PATH:-core/orchestration/pipeline.v1.yaml}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./secrets/openai_api_key:/run/secrets/openai_api_key:ro
+      - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
+    command: ["sh","-lc","npm run start:worker"]
+    restart: unless-stopped
+
+volumes:
+  orchestrator_mvp_pg:
