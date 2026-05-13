@@ -33,6 +33,7 @@ services:
     ports:
       - "4321:${APP_PORT:-4321}"
     volumes:
+      - ./data:/app/data
       - ./secrets/openai_api_key:/run/secrets/openai_api_key:ro
       - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
     command: ["sh","-lc","until node -e \"const net=require('net');const s=net.connect(5432,'db');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),500);\"; do echo 'waiting for db...'; sleep 1; done; npm run db:push && npm run start:app"]
@@ -53,6 +54,7 @@ services:
       db:
         condition: service_healthy
     volumes:
+      - ./data:/app/data
       - ./secrets/openai_api_key:/run/secrets/openai_api_key:ro
       - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
     command: ["sh","-lc","npm run start:worker"]
