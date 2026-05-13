@@ -11,6 +11,7 @@ import { listAgents } from './agentRegistry.js';
 import { createDocgenRun, getDocgenTaskView } from './docgen.js';
 import { hydrateIssue, searchAiTodos, addComment } from './youtrack.js';
 import { wfCreateTask, wfEnqueueJob, wfSetStatus } from './workflow.js';
+import { readRecentEvents } from './bus/sink.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +48,13 @@ app.get('/api/limits', async () => {
     placeholder: true,
     note: 'MVP placeholder. Real provider limits will be added later.',
   };
+});
+
+// --- Activity stream (WS1/WS2) ---
+app.get('/api/events', async (req: any) => {
+  const limit = Math.min(Number(req.query?.limit || 200), 2000);
+  const events = readRecentEvents(limit);
+  return { events };
 });
 
 app.post('/api/tasks', async (req, reply) => {

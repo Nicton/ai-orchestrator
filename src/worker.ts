@@ -5,6 +5,8 @@ import { config } from './config.js';
 import { runRolePrompt } from './llm.js';
 import { loadSkillMarkdown } from './skills.js';
 import { executeCommand } from './youtrack.js';
+import { appendEvent } from './bus/sink.js';
+import { newEventId, nowIso } from './bus/events.js';
 
 async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
@@ -109,6 +111,17 @@ async function processNextStageRun() {
   if (locked.count === 0) return true;
 
   console.log(`[worker] stage start run=${candidate.runId} stage=${candidate.stageId} role=${candidate.roleOrSkill}`);
+  appendEvent({
+    id: newEventId(),
+    ts: nowIso(),
+    type: 'stage.status',
+    runId: candidate.runId,
+    stageId: candidate.stageId,
+    stageName: candidate.stageName,
+    status: 'running',
+    message: `stage start role=${candidate.roleOrSkill}`,
+    actor: { kind: 'agent', id: candidate.roleOrSkill },
+  });
 
   // Ensure run is RUNNING
   if (run.status === RunStatus.PENDING) {
@@ -133,7 +146,29 @@ async function processNextStageRun() {
       upstreamSummaries: upstream,
     });
 
+    appendEvent({
+      id: newEventId(),
+      ts: nowIso(),
+      type: 'tool.start',
+      runId: candidate.runId,
+      stageId: candidate.stageId,
+      actor: { kind: 'agent', id: candidate.roleOrSkill },
+      llm: { provider: 'openai' },
+      call: { tool: 'llm.runRolePrompt', input: { roleOrSkill: candidate.roleOrSkill } },
+    });
+
     const llm = await runRolePrompt(candidate.roleOrSkill, prompt);
+
+    appendEvent({
+      id: newEventId(),
+      ts: nowIso(),
+      type: 'tool.end',
+      runId: candidate.runId,
+      stageId: candidate.stageId,
+      actor: { kind: 'agent', id: candidate.roleOrSkill },
+      llm: { provider: 'openai', model: llm.model },
+      call: { tool: 'llm.runRolePrompt' },
+    });
 
     const done = await prisma.stageRun.update({
       where: { id: candidate.id },
@@ -150,6 +185,34 @@ async function processNextStageRun() {
     });
 
     console.log(`[worker] stage done  run=${candidate.runId} stage=${candidate.stageId} role=${candidate.roleOrSkill} tokens=${done.totalTokens ?? '-'}`);
+
+    appendEvent({
+      id: newEventId(),
+      ts: nowIso(),
+      type: 'stage.result',
+      runId: candidate.runId,
+      stageId: candidate.stageId,
+      actor: { kind: 'agent', id: candidate.roleOrSkill },
+      llm: { provider: 'openai', model: llm.model },
+      result: {
+        kind: 'success',
+        summary: `stage done tokens=${done.totalTokens ?? '-'}`,
+        rawText: done.resultText ?? '',
+      },
+    });
+
+    appendEvent({
+      id: newEventId(),
+      ts: nowIso(),
+      type: 'stage.status',
+      runId: candidate.runId,
+      stageId: candidate.stageId,
+      stageName: candidate.stageName,
+      status: 'completed',
+      message: 'stage completed',
+      actor: { kind: 'agent', id: candidate.roleOrSkill },
+      llm: { provider: 'openai', model: llm.model },
+    });
 
     await prisma.artifact.create({
       data: {
@@ -188,6 +251,17 @@ async function processNextStageRun() {
     }
   } catch (e: any) {
     console.error(`[worker] stage failed run=${candidate.runId} stage=${candidate.stageId} role=${candidate.roleOrSkill}`, e);
+    appendEvent({
+      id: newEventId(),
+      ts: nowIso(),
+      type: 'stage.status',
+      runId: candidate.runId,
+      stageId: candidate.stageId,
+      stageName: candidate.stageName,
+      status: 'failed',
+      message: e?.message || String(e),
+      actor: { kind: 'agent', id: candidate.roleOrSkill },
+    });
     await prisma.stageRun.update({
       where: { id: candidate.id },
       data: { status: StageStatus.FAILED, errorMessage: e?.message || String(e), finishedAt: new Date() },
