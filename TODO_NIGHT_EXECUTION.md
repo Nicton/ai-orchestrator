@@ -26,10 +26,16 @@ Deliver a production-ready integration of:
 - [ ] Add ownership map by modules/packages
 
 ### WS2 — Read-only Visual Layer (phase 1)
-- [ ] Build agent activity API (live + snapshot)
-- [ ] Expose team/task/role mapping in API
-- [ ] Add UI panel/route for agent office/read-only board
-- [ ] Show active action + last tool + task link
+- [x] Build agent activity API (events tail) — `/api/events`
+- [x] Add UI panel for agent office (Office tab)
+- [x] Show activity feed + board by runs (MVP)
+- [ ] Pixel Office MVP (Pixel Agents-style):
+  - [ ] Add `/office/pixel` page
+  - [ ] Render agents as pixel sprites in an office
+  - [ ] Map `/api/events` to agent states (idle/walk/type/read/wait)
+  - [ ] Click agent → open run/stage details
+  - [ ] Minimal assets pack vendored under MIT
+  - [ ] Autorefresh + performance budget
 
 ### WS3 — Runtime Context Visibility
 - [ ] Attach optional browser/task context to agent cards
@@ -63,8 +69,8 @@ Deliver a production-ready integration of:
 ---
 
 ## Progress Tracking
-- Overall progress: **18%**
-- Last updated: 2026-05-12 22:10 Europe/Warsaw
+- Overall progress: **~40%**
+- Last updated: 2026-05-13 Europe/Warsaw
 
 ## Completed so far
 - [x] Baseline orchestrator staged in local repo
