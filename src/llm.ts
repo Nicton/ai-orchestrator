@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { config } from './config.js';
 
 export type LlmResult = {
@@ -11,8 +11,41 @@ export type LlmResult = {
 };
 
 export async function runRolePrompt(role: string, prompt: string): Promise<LlmResult> {
-  const apiKey = config.openaiApiKey || (config.openaiApiKeyFile ? readFileSync(config.openaiApiKeyFile, 'utf8').trim() : '');
+  const mock = String(process.env.MOCK_LLM || '').trim() === '1';
+
+  let apiKey = config.openaiApiKey;
+  if (!apiKey && config.openaiApiKeyFile) {
+    try {
+      const st = statSync(config.openaiApiKeyFile);
+      if (!st.isFile()) {
+        // common docker pitfall: a directory got mounted instead of a file
+        apiKey = '';
+      } else {
+        apiKey = readFileSync(config.openaiApiKeyFile, 'utf8').trim();
+      }
+    } catch {
+      apiKey = '';
+    }
+  }
+
   if (!apiKey) {
+    if (mock) {
+      return {
+        text: JSON.stringify(
+          {
+            summary: `[MOCK] role=${role}: no OPENAI_API_KEY, returning stub result`,
+            artifacts: [],
+            next: [],
+          },
+          null,
+          2,
+        ),
+        model: 'mock',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      };
+    }
     throw new Error('OPENAI_API_KEY is missing (set OPENAI_API_KEY or OPENAI_API_KEY_FILE)');
   }
 
