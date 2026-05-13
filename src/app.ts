@@ -320,6 +320,121 @@ app.post('/api/runs/:id/start', async (req: any, reply) => {
   return updated;
 });
 
+// --- Admin-ish controls (MVP; no auth yet) ---
+app.post('/api/runs/:id/retry', async (req: any, reply) => {
+  const run = await prisma.pipelineRun.findUnique({ where: { id: req.params.id }, include: { stages: true } });
+  if (!run) return reply.code(404).send({ error: 'Run not found' });
+
+  // reset all stages
+  await prisma.stageRun.updateMany({
+    where: { runId: run.id },
+    data: {
+      status: 'PENDING',
+      startedAt: null,
+      finishedAt: null,
+      errorMessage: null,
+      resultText: null,
+      promptText: null,
+      model: null,
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+    },
+  });
+
+  const updated = await prisma.pipelineRun.update({
+    where: { id: run.id },
+    data: { status: 'RUNNING', startedAt: new Date(), finishedAt: null, errorMessage: null, resultText: null },
+    include: { stages: true },
+  });
+
+  return reply.send({ ok: true, run: updated });
+});
+
+app.post('/api/stages/:stageRunId/retry', async (req: any, reply) => {
+  const s = await prisma.stageRun.findUnique({ where: { id: String(req.params.stageRunId) } });
+  if (!s) return reply.code(404).send({ error: 'StageRun not found' });
+
+  // reset only this stage
+  const updatedStage = await prisma.stageRun.update({
+    where: { id: s.id },
+    data: {
+      status: 'PENDING',
+      startedAt: null,
+      finishedAt: null,
+      errorMessage: null,
+      resultText: null,
+      promptText: null,
+      model: null,
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+    },
+  });
+
+  // ensure run is RUNNING
+  await prisma.pipelineRun.update({ where: { id: s.runId }, data: { status: 'RUNNING', finishedAt: null, errorMessage: null } });
+
+  return reply.send({ ok: true, stage: updatedStage });
+});
+
+app.post('/api/stages/:stageRunId/skip', async (req: any, reply) => {
+  const s = await prisma.stageRun.findUnique({ where: { id: String(req.params.stageRunId) } });
+  if (!s) return reply.code(404).send({ error: 'StageRun not found' });
+
+  const updatedStage = await prisma.stageRun.update({
+    where: { id: s.id },
+    data: {
+      status: 'SKIPPED',
+      startedAt: s.startedAt ?? new Date(),
+      finishedAt: new Date(),
+      errorMessage: null,
+    },
+  });
+
+  await prisma.pipelineRun.update({ where: { id: s.runId }, data: { status: 'RUNNING', finishedAt: null, errorMessage: null } });
+
+  return reply.send({ ok: true, stage: updatedStage });
+});
+
+const adhocSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  roleOrSkill: z.string().min(1).max(200),
+  prompt: z.string().min(1),
+  createdBy: z.string().min(1).max(120).optional(),
+});
+
+// B: ad-hoc agent run (1-stage pipeline run)
+app.post('/api/adhoc', async (req: any, reply) => {
+  const parsed = adhocSchema.safeParse(req.body);
+  if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+  const run = await prisma.pipelineRun.create({
+    data: {
+      title: parsed.data.title ?? `ad-hoc: ${parsed.data.roleOrSkill}`,
+      pipelineId: 'adhoc',
+      inputText: parsed.data.prompt,
+      createdBy: parsed.data.createdBy,
+      status: 'RUNNING',
+      startedAt: new Date(),
+      stages: {
+        create: [
+          {
+            stageId: 'adhoc',
+            stageName: 'adhoc',
+            roleOrSkill: parsed.data.roleOrSkill,
+            dependsOn: [],
+            status: 'PENDING',
+          },
+        ],
+      },
+    },
+    include: { stages: true },
+  });
+
+  return reply.code(201).send(run);
+});
+
 // --- Pipeline specs & graph ---
 app.get('/api/pipelines', async () => {
   // For now, static list. Can become dynamic registry.

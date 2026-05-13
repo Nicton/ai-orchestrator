@@ -154,6 +154,22 @@
             <span class="muted">Runs:</span>
             <input id="officeRunsLimit" style="width:120px; margin:0;" value="20" />
           </div>
+
+          <hr style="border:0; border-top:1px solid #24325f; margin:14px 0;" />
+
+          <h3 style="margin:0;">Ad-hoc agent run</h3>
+          <div class="muted">(B) Run a single agent/skill immediately. Creates a 1-stage pipeline run so it appears in Office.</div>
+          <div style="margin-top:10px;">
+            <label>Role/Skill</label>
+            <input id="adhoc_role" placeholder="00-manager" />
+            <label>Prompt</label>
+            <textarea id="adhoc_prompt" rows="5" placeholder="What should the agent do?"></textarea>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button onclick="createAdhoc()">Run ad-hoc</button>
+            </div>
+            <div id="adhoc_out" class="muted" style="margin-top:8px;"></div>
+          </div>
+
           <div id="officeBoard" style="margin-top:12px;"></div>
         </div>
 
@@ -329,6 +345,36 @@
       root.appendChild(list);
     }
 
+    async function createAdhoc() {
+      const roleOrSkill = document.getElementById('adhoc_role').value.trim();
+      const prompt = document.getElementById('adhoc_prompt').value;
+      const out = document.getElementById('adhoc_out');
+      out.textContent = 'Running…';
+
+      if (!roleOrSkill || !prompt.trim()) {
+        out.textContent = 'roleOrSkill and prompt are required';
+        return;
+      }
+
+      const res = await fetch('/api/adhoc', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify({ roleOrSkill, prompt }),
+      });
+
+      if (!res.ok) {
+        const e = await res.text();
+        out.textContent = 'Failed: ' + e;
+        return;
+      }
+
+      const run = await res.json();
+      out.innerHTML = `Created run: <code>${escapeHtml(run.id)}</code>`;
+      document.getElementById('adhoc_prompt').value = '';
+      await loadOfficeBoard();
+      await loadEvents();
+    }
+
     async function loadOfficeBoard() {
       const root = document.getElementById('officeBoard');
       const runsLimit = Math.min(Number(document.getElementById('officeRunsLimit')?.value || 20), 100);
@@ -395,6 +441,7 @@
           <div class="kv" style="margin-top:10px;">last event: ${lastEv ? ('<code>' + escapeHtml(lastEv.type) + '</code> @ ' + escapeHtml(fmtTs(lastEv.ts)) + (lastEv.message ? (' — ' + escapeHtml(lastEv.message)) : '')) : '—'}</div>
           <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
             <button class="linkBtn" onclick="openRun('${r.id}')">Open run</button>
+            <button class="linkBtn" onclick="retryRun('${r.id}')">Retry run</button>
           </div>
         `;
 
@@ -758,6 +805,40 @@
       }
     }
 
+    async function retryRun(id) {
+      const res = await fetch('/api/runs/' + id + '/retry', { method: 'POST' });
+      if (!res.ok) {
+        const e = await res.text();
+        alert('Retry failed: ' + e);
+        return;
+      }
+      await loadRuns();
+      await loadOfficeBoard();
+      await openRun(id);
+    }
+
+    async function retryStage(stageRunId) {
+      const res = await fetch('/api/stages/' + stageRunId + '/retry', { method: 'POST' });
+      if (!res.ok) {
+        const e = await res.text();
+        alert('Retry stage failed: ' + e);
+        return;
+      }
+      if (lastOpenedRunId) await openRun(lastOpenedRunId);
+      await loadOfficeBoard();
+    }
+
+    async function skipStage(stageRunId) {
+      const res = await fetch('/api/stages/' + stageRunId + '/skip', { method: 'POST' });
+      if (!res.ok) {
+        const e = await res.text();
+        alert('Skip stage failed: ' + e);
+        return;
+      }
+      if (lastOpenedRunId) await openRun(lastOpenedRunId);
+      await loadOfficeBoard();
+    }
+
     async function openRun(id) {
       lastOpenedRunId = id;
       const res = await fetch('/api/runs/' + id);
@@ -771,7 +852,11 @@
           <td>${deps ? escapeHtml(deps) : '-'}</td>
           <td><span class="pill ${s.status}">${s.status}</span></td>
           <td>${s.totalTokens ?? '-'}</td>
-          <td><button onclick="openStage('${r.id}','${s.id}')">View</button></td>
+          <td style="white-space:nowrap; display:flex; gap:8px;">
+            <button onclick="openStage('${r.id}','${s.id}')">View</button>
+            <button onclick="retryStage('${s.id}')">Retry</button>
+            <button onclick="skipStage('${s.id}')">Skip</button>
+          </td>
         </tr>`;
       }).join('');
 
@@ -787,9 +872,12 @@
           <button class="linkBtn" onclick="renderLastRunGraph()">Render this run in graph</button>
         </div>
         <table>
-          <thead><tr><th>Stage</th><th>Role/Skill</th><th>Depends</th><th>Status</th><th>Tokens</th><th></th></tr></thead>
+          <thead><tr><th>Stage</th><th>Role/Skill</th><th>Depends</th><th>Status</th><th>Tokens</th><th>Actions</th></tr></thead>
           <tbody>${stages || '<tr><td colspan="6" class="muted">No stages</td></tr>'}</tbody>
         </table>
+        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="linkBtn" onclick="retryRun('${r.id}')">Retry full run</button>
+        </div>
         <div id="stageDetails" class="muted" style="margin-top:12px;">Select a stage to view details.</div>
       `;
 
