@@ -29,6 +29,7 @@
 
     <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
       <button id="tabBtn-dashboard" onclick="setTab('dashboard')">Dashboard</button>
+      <button id="tabBtn-office" onclick="setTab('office')">Office (read-only)</button>
       <button id="tabBtn-workflow" onclick="setTab('workflow')">Workflow tasks</button>
       <span class="muted">Tab:</span>
       <code id="activeTabLabel">dashboard</code>
@@ -142,6 +143,29 @@
       
     </div> <!-- /tab-dashboard -->
 
+    <!-- OFFICE TAB (read-only activity) -->
+    <div id="tab-office" style="display:none; margin-top:16px;">
+      <div class="grid">
+        <div class="card">
+          <h3>Live activity feed</h3>
+          <div class="muted">Tail of orchestrator events from <code>/api/events</code> (JSONL log shared between app & worker).</div>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button onclick="loadEvents()">Refresh</button>
+            <span class="muted">Limit:</span>
+            <input id="eventsLimit" style="width:120px; margin:0;" value="200" />
+            <span class="muted">Filter:</span>
+            <input id="eventsFilter" style="width:260px; margin:0;" placeholder="runId / stageId / agent id / text" />
+          </div>
+          <div id="events" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="card">
+          <h3>Selected event</h3>
+          <div id="eventDetails" class="muted">Click an event line to inspect raw JSON.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- WORKFLOW TASKS TAB -->
     <div id="tab-workflow" style="display:none; margin-top:16px;">
       <div class="grid">
@@ -204,18 +228,93 @@
       activeTab = tab;
       document.getElementById('activeTabLabel').textContent = tab;
       document.getElementById('tab-dashboard').style.display = tab === 'dashboard' ? '' : 'none';
+      document.getElementById('tab-office').style.display = tab === 'office' ? '' : 'none';
       document.getElementById('tab-workflow').style.display = tab === 'workflow' ? '' : 'none';
 
       document.getElementById('tabBtn-dashboard').style.opacity = tab === 'dashboard' ? '1' : '0.75';
+      document.getElementById('tabBtn-office').style.opacity = tab === 'office' ? '1' : '0.75';
       document.getElementById('tabBtn-workflow').style.opacity = tab === 'workflow' ? '1' : '0.75';
 
       if (tab === 'workflow') loadWfTasks();
+      if (tab === 'office') loadEvents();
     }
 
     async function fetchLimits() {
       const res = await fetch('/api/limits');
       const data = await res.json();
       document.getElementById('limits').innerHTML = `<b>${data.used}</b> / <b>${data.total}</b> (${data.placeholder ? 'stub' : 'live'})`;
+    }
+
+    // --- Office (read-only activity) ---
+    function fmtTs(iso) {
+      try { return new Date(iso).toLocaleString(); } catch { return String(iso || ''); }
+    }
+
+    async function loadEvents() {
+      const root = document.getElementById('events');
+      const limit = Math.min(Number(document.getElementById('eventsLimit')?.value || 200), 2000);
+      const filter = String(document.getElementById('eventsFilter')?.value || '').trim().toLowerCase();
+
+      root.innerHTML = '<div class="muted">Loading…</div>';
+      const res = await fetch('/api/events?limit=' + encodeURIComponent(String(limit)));
+      const data = await res.json();
+      const events = (data.events || []).slice().reverse(); // newest first
+
+      const filtered = filter ? events.filter(ev => {
+        const hay = [ev.type, ev.runId, ev.stageId, ev.actor?.id, ev.actor?.name, ev.message, ev.level, ev.result?.summary]
+          .filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(filter);
+      }) : events;
+
+      const list = document.createElement('div');
+
+      const style = document.createElement('style');
+      style.textContent = `
+        .evLine { padding:10px; border-radius:12px; border:1px solid #273467; background:#0b1020; margin-top:10px; cursor:pointer; }
+        .evTop { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .evType { font-weight:900; }
+        .evMeta { color:#9fb0e6; font-size:12px; }
+        .evMsg { margin-top:6px; color:#cfe1ff; font-size:13px; }
+      `;
+      list.appendChild(style);
+
+      if (!filtered.length) {
+        root.innerHTML = '<div class="muted">No events yet. Run a pipeline stage to generate activity.</div>';
+        return;
+      }
+
+      for (const ev of filtered.slice(0, 500)) {
+        const div = document.createElement('div');
+        div.className = 'evLine';
+
+        const tag = ev.type === 'stage.status' ? (ev.status || '') : (ev.level || '');
+        const pill = tag ? `<span class="pill">${escapeHtml(tag)}</span>` : '';
+
+        div.innerHTML = `
+          <div class="evTop">
+            <span class="evType">${escapeHtml(ev.type || '-')}</span>
+            ${pill}
+            <span class="evMeta mono">${escapeHtml(fmtTs(ev.ts))}</span>
+            ${ev.actor?.id ? `<span class="evMeta">actor: <code>${escapeHtml(ev.actor.id)}</code></span>` : ''}
+            ${ev.runId ? `<span class="evMeta">run: <code>${escapeHtml(String(ev.runId).slice(0,8))}</code></span>` : ''}
+            ${ev.stageId ? `<span class="evMeta">stage: <code>${escapeHtml(ev.stageId)}</code></span>` : ''}
+            ${ev.llm?.model ? `<span class="evMeta">model: <code>${escapeHtml(ev.llm.model)}</code></span>` : ''}
+          </div>
+          <div class="evMsg">${escapeHtml(ev.message || ev.result?.summary || '')}</div>
+        `;
+
+        div.addEventListener('click', () => {
+          document.getElementById('eventDetails').innerHTML = `<pre>${escapeHtml(JSON.stringify(ev, null, 2))}</pre>`;
+          if (ev.runId) {
+            lastOpenedRunId = ev.runId;
+          }
+        });
+
+        list.appendChild(div);
+      }
+
+      root.innerHTML = '';
+      root.appendChild(list);
     }
 
     async function youtrackPoll() {
@@ -695,10 +794,11 @@
     setTab('dashboard');
 
     setInterval(() => {
-      // Keep dashboard fresh; workflow list refreshes when the tab is opened.
+      // Keep dashboard fresh; workflow/office refresh only when tab is open.
       loadRuns();
       loadTasks();
       if (activeTab === 'workflow') loadWfTasks();
+      if (activeTab === 'office') loadEvents();
     }, 3000);
   </script>
 </body>
