@@ -147,6 +147,17 @@
     <div id="tab-office" style="display:none; margin-top:16px;">
       <div class="grid">
         <div class="card">
+          <h3>Office board (by run)</h3>
+          <div class="muted">Read-only snapshot built from <code>/api/runs</code> + recent <code>/api/events</code>. (MVP)</div>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button onclick="loadOfficeBoard()">Refresh</button>
+            <span class="muted">Runs:</span>
+            <input id="officeRunsLimit" style="width:120px; margin:0;" value="20" />
+          </div>
+          <div id="officeBoard" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="card">
           <h3>Live activity feed</h3>
           <div class="muted">Tail of orchestrator events from <code>/api/events</code> (JSONL log shared between app & worker).</div>
           <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -158,11 +169,11 @@
           </div>
           <div id="events" style="margin-top:12px;"></div>
         </div>
+      </div>
 
-        <div class="card">
-          <h3>Selected event</h3>
-          <div id="eventDetails" class="muted">Click an event line to inspect raw JSON.</div>
-        </div>
+      <div class="card" style="margin-top:16px;">
+        <h3>Selected event</h3>
+        <div id="eventDetails" class="muted">Click an event line to inspect raw JSON.</div>
       </div>
     </div>
 
@@ -236,7 +247,10 @@
       document.getElementById('tabBtn-workflow').style.opacity = tab === 'workflow' ? '1' : '0.75';
 
       if (tab === 'workflow') loadWfTasks();
-      if (tab === 'office') loadEvents();
+      if (tab === 'office') {
+        loadOfficeBoard();
+        loadEvents();
+      }
     }
 
     async function fetchLimits() {
@@ -305,9 +319,7 @@
 
         div.addEventListener('click', () => {
           document.getElementById('eventDetails').innerHTML = `<pre>${escapeHtml(JSON.stringify(ev, null, 2))}</pre>`;
-          if (ev.runId) {
-            lastOpenedRunId = ev.runId;
-          }
+          if (ev.runId) lastOpenedRunId = ev.runId;
         });
 
         list.appendChild(div);
@@ -315,6 +327,82 @@
 
       root.innerHTML = '';
       root.appendChild(list);
+    }
+
+    async function loadOfficeBoard() {
+      const root = document.getElementById('officeBoard');
+      const runsLimit = Math.min(Number(document.getElementById('officeRunsLimit')?.value || 20), 100);
+      root.innerHTML = '<div class="muted">Loading…</div>';
+
+      const [runsRes, evRes] = await Promise.all([
+        fetch('/api/runs?limit=' + encodeURIComponent(String(runsLimit))),
+        fetch('/api/events?limit=500'),
+      ]);
+      const runsData = await runsRes.json();
+      const evData = await evRes.json();
+
+      const runs = runsData.runs || [];
+      const events = evData.events || [];
+
+      const lastByRun = new Map();
+      for (const ev of events) {
+        if (!ev.runId) continue;
+        const prev = lastByRun.get(ev.runId);
+        if (!prev || String(ev.ts) > String(prev.ts)) lastByRun.set(ev.runId, ev);
+      }
+
+      const style = document.createElement('style');
+      style.textContent = `
+        .runCard { background:#0b1020; border:1px solid #273467; border-radius:14px; padding:12px; margin-top:12px; }
+        .runTop { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+        .runTitle { font-weight:900; }
+        .kv { color:#9fb0e6; font-size:12px; margin-top:4px; }
+        .stageRow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+        .tiny { font-size:12px; }
+      `;
+
+      const wrap = document.createElement('div');
+      wrap.appendChild(style);
+
+      if (!runs.length) {
+        root.innerHTML = '<div class="muted">No runs yet. Create a run in Dashboard first.</div>';
+        return;
+      }
+
+      for (const r of runs) {
+        const done = (r.stages || []).filter(s => s.status === 'DONE' || s.status === 'SKIPPED').length;
+        const total = (r.stages || []).length;
+        const lastEv = lastByRun.get(r.id);
+
+        const card = document.createElement('div');
+        card.className = 'runCard';
+        card.innerHTML = `
+          <div class="runTop">
+            <div>
+              <div class="runTitle">${escapeHtml(r.title || '(no title)')}</div>
+              <div class="kv">run: <code>${escapeHtml(String(r.id).slice(0,8))}</code> • pipeline: <code>${escapeHtml(r.pipelineId)}</code></div>
+              <div class="kv">created: <span class="mono">${escapeHtml(new Date(r.createdAt).toLocaleString())}</span>${r.externalRef ? ' • ext: <code>' + escapeHtml(r.externalRef) + '</code>' : ''}</div>
+            </div>
+            <div style="text-align:right;">
+              <div><span class="pill ${escapeHtml(r.status)}">${escapeHtml(r.status)}</span></div>
+              <div class="kv">stages: <b>${done}/${total}</b></div>
+            </div>
+          </div>
+          <div class="stageRow">
+            ${(r.stages || []).slice(0, 12).map(s => `<span class="pill ${escapeHtml(s.status)} tiny">${escapeHtml(s.stageId)}:${escapeHtml(s.status)}</span>`).join(' ')}
+            ${total > 12 ? `<span class="kv">+${total-12} more…</span>` : ''}
+          </div>
+          <div class="kv" style="margin-top:10px;">last event: ${lastEv ? ('<code>' + escapeHtml(lastEv.type) + '</code> @ ' + escapeHtml(fmtTs(lastEv.ts)) + (lastEv.message ? (' — ' + escapeHtml(lastEv.message)) : '')) : '—'}</div>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="linkBtn" onclick="openRun('${r.id}')">Open run</button>
+          </div>
+        `;
+
+        wrap.appendChild(card);
+      }
+
+      root.innerHTML = '';
+      root.appendChild(wrap);
     }
 
     async function youtrackPoll() {
