@@ -30,9 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: datamolahub/00_base_datamola_ci_runner:ubuntu25.10-node22
-      credentials:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
