@@ -7,6 +7,7 @@ export const config = {
   callbackTimeoutMs: Number(process.env.CALLBACK_TIMEOUT_MS || 10000),
 
   youtrack: {
+    enabled: !['0', 'false', 'no', 'off', ''].includes(String(process.env.YOUTRACK_ENABLED ?? '0').toLowerCase()),
     baseUrl: process.env.YOUTRACK_BASE_URL || '',
     tokenFile: process.env.YOUTRACK_TOKEN_FILE || '',
     token: process.env.YOUTRACK_TOKEN || '',

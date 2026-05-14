@@ -238,7 +238,7 @@ async function processNextStageRun() {
 
       // If run is linked to YouTrack, move issue to Done.
       const ext = String(run.externalRef || '').trim();
-      if (ext.startsWith('youtrack:')) {
+      if (config.youtrack.enabled && ext.startsWith('youtrack:')) {
         const idReadable = ext.slice('youtrack:'.length);
         const doneState = String(process.env.YOUTRACK_DONE_STATE || 'Done').trim();
         try {

@@ -749,6 +749,7 @@ async function handleYouTrackIssue(issueIdOrReadable: string, trigger: string) {
 
 app.post('/api/youtrack/webhook', async (req: any, reply) => {
   try {
+    if (!config.youtrack.enabled) return reply.code(503).send({ ok: false, disabled: true });
     assertWebhookSecret(req);
     const body: any = req.body || {};
     const issueId = String(body?.issue?.id || body?.issue?.idReadable || body?.issueId || body?.id || '').trim();
@@ -762,6 +763,7 @@ app.post('/api/youtrack/webhook', async (req: any, reply) => {
 
 app.post('/api/youtrack/poll', async (req: any, reply) => {
   try {
+    if (!config.youtrack.enabled) return reply.code(204).send();
     const found = await searchAiTodos();
     const issues = Array.isArray(found) ? found : [];
     const results = [];
