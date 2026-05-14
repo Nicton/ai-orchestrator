@@ -225,10 +225,12 @@ function drawOffice(){
   }
 
   // agents + overlays
-  const SCALE = 3; // make characters much larger (closest to Pixel Agents feel)
+  const SCALE = 4; // make characters larger + keep integer scaling for crisp pixels
   for (const a of agents){
-    const frameW = 32;
-    const frameH = 48;
+    // Sprite sheets here are 112x96 = 7x4 frames of 16x24.
+    const frameW = 16;
+    const frameH = 24;
+    // TODO: pick animation frame by state; for now use a decent standing frame (col=0,row=0).
     const sx = 0, sy = 0;
 
     const t = Date.now();
@@ -311,9 +313,9 @@ function drawOffice(){
 
 function hitTest(x,y){
   // check within sprite bounds (scaled)
-  const SCALE = 3;
-  const frameW = 32;
-  const frameH = 48;
+  const SCALE = 4;
+  const frameW = 16;
+  const frameH = 24;
   const dw = frameW * SCALE;
   const dh = frameH * SCALE;
 
