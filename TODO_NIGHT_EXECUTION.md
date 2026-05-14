@@ -29,13 +29,13 @@ Deliver a production-ready integration of:
 - [x] Build agent activity API (events tail) — `/api/events`
 - [x] Add UI panel for agent office (Office tab)
 - [x] Show activity feed + board by runs (MVP)
-- [ ] Pixel Office MVP (Pixel Agents-style):
-  - [ ] Add `/office/pixel` page
-  - [ ] Render agents as pixel sprites in an office
-  - [ ] Map `/api/events` to agent states (idle/walk/type/read/wait)
+- [~] Pixel Office MVP (Pixel Agents-style):
+  - [x] Add `/pixel/` page (keep as stable path for now)
+  - [~] Render agents as pixel sprites in an office (layout in progress)
+  - [~] Map `/api/events` to agent states (read/write/command/browser/llm/wait/failed)
   - [ ] Click agent → open run/stage details
-  - [ ] Minimal assets pack vendored under MIT
-  - [ ] Autorefresh + performance budget
+  - [x] Minimal assets pack vendored under MIT (NOTICE.md)
+  - [x] Autorefresh + performance budget (basic)
 
 ### WS3 — Runtime Context Visibility
 - [ ] Attach optional browser/task context to agent cards
