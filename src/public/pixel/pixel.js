@@ -59,51 +59,116 @@ function recomputeAgents(){
   // fallback: show at least 6 known ids (handy when no events)
   const base = ids.length ? ids : ['00-manager','00-engineer','00-reviewer','00-researcher','00-designer','00-writer'];
 
-  const cols = 6;
-  const spacing = 140;
-  const startX = 120;
-  const startY = 120;
+  // Fixed “office” seating (readable at a glance).
+  // If we have more agents than seats, we’ll spill to extra rows.
+  const seats = [
+    // Left pod
+    {x:140,y:150, team:'A'}, {x:260,y:150, team:'A'},
+    {x:140,y:280, team:'A'}, {x:260,y:280, team:'A'},
+
+    // Center pod
+    {x:520,y:150, team:'B'}, {x:640,y:150, team:'B'},
+    {x:520,y:280, team:'B'}, {x:640,y:280, team:'B'},
+
+    // Right pod
+    {x:900,y:150, team:'C'}, {x:1020,y:150, team:'C'},
+    {x:900,y:280, team:'C'}, {x:1020,y:280, team:'C'},
+  ];
 
   agents = base.map((id, i) => {
     const h = hashStr(id);
     const sprite = spriteImgs[h % spriteImgs.length];
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const x = startX + col * spacing;
-    const y = startY + row * spacing;
+
+    const seat = seats[i] || { x: 140 + (i % 6) * 140, y: 430 + Math.floor(i / 6) * 150, team: 'X' };
+
     const last = latestByAgent.get(id);
     const state = eventToState(last);
-    return { id, x, y, sprite, last, state };
+    return { id, x: seat.x, y: seat.y, team: seat.team, sprite, last, state };
   });
+}
+
+function doingText(ev){
+  if (!ev) return '';
+  if (ev.type === 'tool.start') {
+    const tool = String(ev.call?.tool || '').trim();
+    if (tool) return tool.replace(/^llm\./,'');
+    return 'tool…';
+  }
+  if (ev.type === 'stage.status') {
+    const msg = String(ev.message || '').trim();
+    if (msg) return msg;
+    return `stage ${ev.status}`;
+  }
+  if (ev.type === 'stage.result') {
+    return String(ev.result?.summary || 'stage result').trim();
+  }
+  return String(ev.type || '').trim();
+}
+
+function stateColor(state){
+  if (state === 'type') return '#ffcc66';
+  if (state === 'read') return '#7ee3ff';
+  if (state === 'walk') return '#b3ff8a';
+  if (state === 'wait') return '#ff7a90';
+  return '#9fb0e6';
 }
 
 function drawOffice(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // background grid
+  // soft background
+  ctx.fillStyle = '#0b1020';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // walls / zones (simple, but reads like “office”)
   ctx.save();
-  ctx.globalAlpha = 0.20;
-  ctx.strokeStyle = '#23305f';
-  for (let x=0;x<=canvas.width;x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
-  for (let y=0;y<=canvas.height;y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = '#0e1630';
+  ctx.strokeStyle = '#223060';
+  ctx.lineWidth = 3;
+
+  const zones = [
+    {x:60,y:70,w:320,h:290,label:'Team A'},
+    {x:420,y:70,w:320,h:290,label:'Team B'},
+    {x:780,y:70,w:360,h:290,label:'Team C'},
+  ];
+
+  for (const z of zones){
+    ctx.beginPath();
+    ctx.roundRect(z.x,z.y,z.w,z.h,18);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#9fb0e6';
+    ctx.font = '14px Inter, system-ui, Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(z.label, z.x+14, z.y+24);
+    ctx.fillStyle = '#0e1630';
+  }
   ctx.restore();
 
-  // simple desks
+  // desks + tiny monitors
   for (const a of agents){
     ctx.fillStyle = '#141b34';
     ctx.strokeStyle = '#273467';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(a.x-34, a.y+22, 68, 26, 8);
+    ctx.roundRect(a.x-44, a.y+18, 88, 30, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    // monitor
+    ctx.fillStyle = '#0b1020';
+    ctx.strokeStyle = '#314275';
+    ctx.beginPath();
+    ctx.roundRect(a.x-16, a.y+6, 32, 16, 6);
     ctx.fill();
     ctx.stroke();
   }
 
-  // agents
+  // agents + overlays
   for (const a of agents){
     const frameW = 32;
     const frameH = 48;
-    // sprite sheet is 4x4-ish in Pixel Agents; we just sample a standing frame.
     const sx = 0, sy = 0;
 
     const t = Date.now();
@@ -115,30 +180,47 @@ function drawOffice(){
       ctx.strokeStyle = '#5f7cff';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(a.x-26, a.y-54, 52, 62, 12);
+      ctx.roundRect(a.x-30, a.y-92, 60, 102, 14);
       ctx.stroke();
       ctx.restore();
     }
 
     ctx.drawImage(a.sprite, sx, sy, frameW, frameH, a.x-16, a.y-48 + bob, frameW, frameH);
 
+    // big status badge (name + doing)
+    const doing = doingText(a.last);
+    const badgeW = 160;
+    const badgeH = doing ? 44 : 26;
+    const bx = a.x - badgeW/2;
+    const by = a.y - 104;
+
+    ctx.fillStyle = '#0b1020';
+    ctx.strokeStyle = '#314275';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, badgeW, badgeH, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    // state dot
+    ctx.fillStyle = stateColor(a.state);
+    ctx.beginPath();
+    ctx.arc(bx + 12, by + 13, 5, 0, Math.PI*2);
+    ctx.fill();
+
     // name
     ctx.fillStyle = '#eaf0ff';
     ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(a.id, a.x, a.y + 64);
+    ctx.textAlign = 'left';
+    ctx.fillText(a.id, bx + 24, by + 17);
 
-    // state bubble
-    if (a.state !== 'idle'){
-      ctx.fillStyle = '#0b1020';
-      ctx.strokeStyle = '#314275';
-      ctx.beginPath();
-      ctx.roundRect(a.x-26, a.y-78, 52, 18, 8);
-      ctx.fill();
-      ctx.stroke();
+    if (doing){
       ctx.fillStyle = '#9fb0e6';
-      ctx.font = '11px Inter, system-ui, Arial';
-      ctx.fillText(a.state, a.x, a.y-65);
+      ctx.font = '12px Inter, system-ui, Arial';
+      // truncate to fit
+      const maxChars = 34;
+      const s = doing.length > maxChars ? doing.slice(0, maxChars-1) + '…' : doing;
+      ctx.fillText(s, bx + 12, by + 36);
     }
   }
 }
