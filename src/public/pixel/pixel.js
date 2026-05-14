@@ -176,6 +176,9 @@ function drawOffice(){
   ctx.fillStyle = '#0b1020';
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
+  // ensure pixel-crisp scaling
+  ctx.imageSmoothingEnabled = false;
+
   // walls / zones (simple, but reads like “office”)
   ctx.save();
   ctx.globalAlpha = 0.9;
@@ -222,6 +225,7 @@ function drawOffice(){
   }
 
   // agents + overlays
+  const SCALE = 3; // make characters much larger (closest to Pixel Agents feel)
   for (const a of agents){
     const frameW = 32;
     const frameH = 48;
@@ -241,7 +245,22 @@ function drawOffice(){
       ctx.restore();
     }
 
-    ctx.drawImage(a.sprite, sx, sy, frameW, frameH, a.x-16, a.y-48 + bob, frameW, frameH);
+    // sprite with simple “halo” so it reads on dark bg
+    const dw = frameW * SCALE;
+    const dh = frameH * SCALE;
+    const dx = a.x - dw/2;
+    const dy = a.y - dh + bob;
+
+    // halo box (cheap, but makes it pop)
+    ctx.save();
+    ctx.globalAlpha = 0.10;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(dx-6, dy-6, dw+12, dh+12, 14);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.drawImage(a.sprite, sx, sy, frameW, frameH, dx, dy, dw, dh);
 
     // big status badge (name + doing)
     const doing = doingText(a.last);
@@ -291,9 +310,17 @@ function drawOffice(){
 }
 
 function hitTest(x,y){
-  // check within sprite bounds
+  // check within sprite bounds (scaled)
+  const SCALE = 3;
+  const frameW = 32;
+  const frameH = 48;
+  const dw = frameW * SCALE;
+  const dh = frameH * SCALE;
+
   for (const a of agents){
-    if (x >= a.x-18 && x <= a.x+18 && y >= a.y-52 && y <= a.y+8) return a;
+    const dx = a.x - dw/2;
+    const dy = a.y - dh;
+    if (x >= dx && x <= dx + dw && y >= dy && y <= dy + dh) return a;
   }
   return null;
 }
