@@ -245,6 +245,14 @@
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>
     let lastOpenedRunId = null;
+
+    // Allow deep-linking from Pixel Office, etc.
+    function getQueryParam(name){
+      try {
+        const u = new URL(window.location.href);
+        return u.searchParams.get(name);
+      } catch { return null; }
+    }
     let activeTab = 'dashboard';
 
     function initMermaid() {
@@ -783,6 +791,22 @@
     }
 
     async function loadRuns() {
+      // If opened with a deep-link param, prefer it and then clean the URL.
+      const openRunId = getQueryParam('openRun');
+      const openStageId = getQueryParam('openStage');
+      if (openRunId) {
+        try {
+          await openRun(openRunId);
+          if (openStageId) await openStage(openRunId, openStageId);
+          const u = new URL(window.location.href);
+          u.searchParams.delete('openRun');
+          u.searchParams.delete('openStage');
+          window.history.replaceState({}, '', u.toString());
+        } catch (e) {
+          console.warn('Deep-link openRun failed', e);
+        }
+      }
+
       const res = await fetch('/api/runs?limit=50');
       const data = await res.json();
       const tbody = document.getElementById('runs');

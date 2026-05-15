@@ -2,6 +2,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
 const selEl = document.getElementById('sel');
+const selCardEl = document.getElementById('selCard');
 const pollMsEl = document.getElementById('pollMs');
 
 const SPRITES = [
@@ -327,14 +328,91 @@ function hitTest(x,y){
   return null;
 }
 
-canvas.addEventListener('click', (e) => {
+function escapeHtml(s){
+  return String(s ?? '')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#39;');
+}
+
+function agentDeepLink(runId, stageRunId){
+  const u = new URL(window.location.origin + '/');
+  if (runId) u.searchParams.set('openRun', runId);
+  if (stageRunId) u.searchParams.set('openStage', stageRunId);
+  return u.toString();
+}
+
+async function fetchAgentActivity(){
+  const res = await fetch('/api/agents/activity');
+  if (!res.ok) throw new Error('agents/activity fetch failed: ' + res.status);
+  return await res.json();
+}
+
+async function renderSelected(agent){
+  if (!agent){
+    selCardEl.innerHTML = `<div class="muted">(click an agent)</div>`;
+    return;
+  }
+
+  // Always show the last event summary fast; enrich with active tasks if possible.
+  const last = agent.last;
+  const doing = doingText(last);
+
+  let activeTasks = [];
+  try {
+    const data = await fetchAgentActivity();
+    const row = (data.agents || []).find(a => a.id === agent.id);
+    activeTasks = row?.active || [];
+  } catch (e) {
+    // non-fatal
+    console.warn('Failed to load agent activity', e);
+  }
+
+  const activeHtml = activeTasks.length ? activeTasks.map(t => {
+    const runId = String(t.runId || '');
+    const stageRunId = String(t.stageId || '');
+    const title = String(t.runTitle || '').trim();
+    return `
+      <div style="margin-top:10px; border-top:1px solid #273467; padding-top:10px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <span class="pill" style="border-color:#314275; background:#141b34;">${escapeHtml(t.status || '-')}</span>
+          <code style="color:#9fb0e6;">run ${escapeHtml(runId.slice(0,8))}</code>
+          <code style="color:#9fb0e6;">stage ${escapeHtml(stageRunId)}</code>
+        </div>
+        ${title ? `<div class="muted" style="margin-top:6px;">${escapeHtml(title)}</div>` : ''}
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+          <a href="${escapeHtml(agentDeepLink(runId))}" target="_blank">Open run</a>
+          <a href="${escapeHtml(agentDeepLink(runId, stageRunId))}" target="_blank">Open stage</a>
+        </div>
+      </div>
+    `;
+  }).join('') : `<div class="muted" style="margin-top:8px;">No active StageRuns for this agent.</div>`;
+
+  selCardEl.innerHTML = `
+    <div style="font-weight:900;">${escapeHtml(agent.id)}</div>
+    <div class="muted" style="margin-top:6px;">state: <b>${escapeHtml(agent.state)}</b>${doing ? ` • ${escapeHtml(doing)}` : ''}</div>
+    <div class="muted" style="margin-top:10px;">Actions</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;">
+      <a href="/" target="_blank">Open dashboard</a>
+    </div>
+    <div class="muted" style="margin-top:12px;">Active tasks</div>
+    ${activeHtml}
+  `;
+
+  // Keep raw JSON available for debugging (but hidden)
+  selEl.textContent = JSON.stringify({ id: agent.id, state: agent.state, lastEvent: agent.last, activeTasks }, null, 2);
+}
+
+canvas.addEventListener('click', async (e) => {
   const r = canvas.getBoundingClientRect();
   const x = (e.clientX - r.left) * (canvas.width / r.width);
   const y = (e.clientY - r.top) * (canvas.height / r.height);
   const a = hitTest(x,y);
   if (!a) return;
   selectedAgentId = a.id;
-  selEl.textContent = JSON.stringify({ id: a.id, state: a.state, lastEvent: a.last }, null, 2);
+  await renderSelected(a);
 });
 
 async function fetchEvents(limit=500){
@@ -359,6 +437,11 @@ async function refresh(){
     }
     latestByAgent = by;
     recomputeAgents();
+    // refresh selected card with enriched info
+    if (selectedAgentId) {
+      const a = agents.find(x => x.id === selectedAgentId);
+      if (a) await renderSelected(a);
+    }
     statusEl.textContent = `ok • agents ${agents.length}`;
   } catch (e){
     statusEl.textContent = 'error';
@@ -374,6 +457,8 @@ function loop(){
 }
 
 await refresh();
+recomputeAgents();
+await renderSelected(agents.find(a => a.id === selectedAgentId) || null);
 loop();
 
 let pollTimer = null;
