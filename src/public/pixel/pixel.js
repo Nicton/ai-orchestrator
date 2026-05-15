@@ -382,9 +382,13 @@ async function renderSelected(agent){
           <code style="color:#9fb0e6;">stage ${escapeHtml(stageRunId)}</code>
         </div>
         ${title ? `<div class="muted" style="margin-top:6px;">${escapeHtml(title)}</div>` : ''}
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; align-items:center;">
           <a href="${escapeHtml(agentDeepLink(runId))}" target="_blank">Open run</a>
           <a href="${escapeHtml(agentDeepLink(runId, stageRunId))}" target="_blank">Open stage</a>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+          <button data-action="retry-stage" data-stage="${escapeHtml(stageRunId)}" style="background:#23305f;">Retry stage</button>
+          <button data-action="skip-stage" data-stage="${escapeHtml(stageRunId)}" style="background:#23305f;">Skip stage</button>
         </div>
       </div>
     `;
@@ -394,12 +398,48 @@ async function renderSelected(agent){
     <div style="font-weight:900;">${escapeHtml(agent.id)}</div>
     <div class="muted" style="margin-top:6px;">state: <b>${escapeHtml(agent.state)}</b>${doing ? ` • ${escapeHtml(doing)}` : ''}</div>
     <div class="muted" style="margin-top:10px;">Actions</div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; align-items:center;">
       <a href="/" target="_blank">Open dashboard</a>
+      ${activeTasks[0]?.runId ? `<a href="${escapeHtml(agentDeepLink(activeTasks[0].runId))}" target="_blank">Open latest run</a>` : ''}
     </div>
     <div class="muted" style="margin-top:12px;">Active tasks</div>
     ${activeHtml}
   `;
+
+  // Wire up quick actions (no architecture coupling; just calls existing API endpoints)
+  selCardEl.querySelectorAll('button[data-action="retry-stage"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const stageRunId = btn.getAttribute('data-stage');
+      if (!stageRunId) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/stages/' + encodeURIComponent(stageRunId) + '/retry', { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+        await refresh();
+      } catch (e) {
+        alert('Retry failed: ' + (e?.message || String(e)));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  selCardEl.querySelectorAll('button[data-action="skip-stage"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const stageRunId = btn.getAttribute('data-stage');
+      if (!stageRunId) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/stages/' + encodeURIComponent(stageRunId) + '/skip', { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+        await refresh();
+      } catch (e) {
+        alert('Skip failed: ' + (e?.message || String(e)));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 
   // Keep raw JSON available for debugging (but hidden)
   selEl.textContent = JSON.stringify({ id: agent.id, state: agent.state, lastEvent: agent.last, activeTasks }, null, 2);
