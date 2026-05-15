@@ -8,6 +8,8 @@ Repo: `tmp/ai-orchestrator` (local-only commits, no push)
 Deliver a production-ready integration of:
 1. EA Orchestrator core (system of record)
 2. Visual agent activity layer (initial adapters: OpenAI GPT/Codex + Claude Code)
+
+(WS2 note: cancel is intentionally deferred unless we add a stable session-ref persistence contract; retry/skip are exposed in UI now without tightening architecture.)
 3. Admin mode (read/write) for managing agents, skills, pipelines
 4. Runtime observability (who does what, where, with which tools/context)
 5. Persistence model MD <-> Postgres serialization/deserialization
