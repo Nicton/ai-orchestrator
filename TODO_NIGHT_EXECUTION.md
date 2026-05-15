@@ -33,7 +33,7 @@ Deliver a production-ready integration of:
   - [x] Add `/pixel/` page (keep as stable path for now)
   - [~] Render agents as pixel sprites in an office (layout in progress)
   - [~] Map `/api/events` to agent states (read/write/command/browser/llm/wait/failed)
-  - [ ] Click agent → open run/stage details
+  - [x] Click agent → open run/stage details
   - [x] Minimal assets pack vendored under MIT (NOTICE.md)
   - [x] Autorefresh + performance budget (basic)
 
