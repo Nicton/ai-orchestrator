@@ -93,6 +93,24 @@ enum StageStatus {
   SKIPPED
 }
 
+// --- Voice → Requirement Intake (Shiptify) ---
+
+enum IntakeStatus {
+  RECEIVED
+  TRANSCRIBED
+  QUESTIONNAIRE
+  DRAFT_READY
+  CREATED_IN_JIRA
+  NEEDS_INFO
+  ERROR
+}
+
+enum IntakeInputKind {
+  voice
+  text
+}
+
+
 model Task {
   id               String     @id @default(cuid())
   title            String?
@@ -387,4 +405,107 @@ model WfGitChange {
   task          WfTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId, createdAt])
+}
+
+
+
+model Intake {
+  id        String        @id @default(cuid())
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  customerId    String?
+  customerName  String
+  customerEmail String?
+
+  inputKind        IntakeInputKind
+  inputText        String?
+  audioMime        String?
+  audioDurationSec Float?
+  audioPath        String?  // local storage path under ./data (docker volume)
+
+  status IntakeStatus @default(RECEIVED)
+  errorMessage String?
+
+  locale   String?
+  source   String?
+
+  transcript Transcript?
+  questionnaire QuestionnaireAnswerSet?
+  requirementCard RequirementCard?
+  jiraLink JiraIssueLink?
+
+  events IntakeEvent[]
+
+  @@index([status, createdAt])
+}
+
+model Transcript {
+  id        String   @id @default(cuid())
+  intakeId  String   @unique
+  createdAt DateTime @default(now())
+
+  text       String
+  confidence Float?
+  language   String?
+  segments   Json?
+
+  intake Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+}
+
+model QuestionnaireAnswerSet {
+  id        String   @id @default(cuid())
+  intakeId  String   @unique
+  createdAt DateTime @default(now())
+
+  answers Json
+
+  intake Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+}
+
+model RequirementCard {
+  id        String   @id @default(cuid())
+  intakeId  String   @unique
+  createdAt DateTime @default(now())
+
+  title   String
+  summary String
+  userStory String
+  scope   Json
+  affectedArea Json
+  acceptanceCriteria Json
+  openQuestions Json
+  attachments Json
+
+  markdown String
+
+  intake Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+}
+
+model JiraIssueLink {
+  id        String   @id @default(cuid())
+  intakeId  String   @unique
+  createdAt DateTime @default(now())
+
+  issueId  String?
+  issueKey String?
+  issueUrl String?
+
+  // used for idempotency/search markers
+  intakeMarker String @unique
+
+  intake Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+}
+
+model IntakeEvent {
+  id        String   @id @default(cuid())
+  intakeId  String
+  createdAt DateTime @default(now())
+
+  type    String
+  payload Json?
+
+  intake Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  @@index([intakeId, createdAt])
 }
