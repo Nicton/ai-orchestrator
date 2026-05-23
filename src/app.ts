@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyMultipart from '@fastify/multipart';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -12,6 +13,7 @@ import { createDocgenRun, getDocgenTaskView } from './docgen.js';
 import { hydrateIssue, searchAiTodos, addComment } from './youtrack.js';
 import { wfCreateTask, wfEnqueueJob, wfSetStatus } from './workflow.js';
 import { readRecentEvents } from './bus/sink.js';
+import { registerIntakeApi } from './intake.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +24,15 @@ app.register(fastifyStatic, {
   root: path.join(__dirname, 'public'),
   prefix: '/',
 });
+
+// multipart for voice intake uploads
+app.register(fastifyMultipart, {
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB
+  },
+});
+
+await registerIntakeApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
