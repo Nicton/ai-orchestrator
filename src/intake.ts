@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type { MultipartFile } from '@fastify/multipart';
 import { prisma } from './db.js';
 import { transcribeAudioFile } from './llm.js';
+import { generateQuestionnaireFromTranscript, generateRequirementCardFromQuestionnaire } from './requirementIntake.js';
 
 const createIntakeSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -219,5 +220,71 @@ export async function registerIntakeApi(app: FastifyInstance) {
     });
 
     return reply.send({ ok: true, transcriptId: transcript.id });
+  });
+
+  // Generate questionnaire JSON from transcript
+  app.post('/api/intake/:id/questionnaire', async (req: any, reply) => {
+    const id = String(req.params.id);
+
+    const existing = await prisma.questionnaireAnswerSet.findUnique({ where: { intakeId: id } });
+    if (existing) return reply.send({ ok: true, questionnaireId: existing.id, cached: true });
+
+    const gen = await generateQuestionnaireFromTranscript({ intakeId: id });
+
+    const row = await prisma.questionnaireAnswerSet.create({
+      data: {
+        intakeId: id,
+        answers: gen.questionnaire as any,
+      },
+    });
+
+    await prisma.intake.update({
+      where: { id },
+      data: {
+        status: 'QUESTIONNAIRE' as any,
+        events: {
+          create: { type: 'QUESTIONNAIRE_GENERATED', payload: { model: gen.model } },
+        },
+      },
+    });
+
+    return reply.send({ ok: true, questionnaireId: row.id });
+  });
+
+  // Generate requirement card draft from questionnaire
+  app.post('/api/intake/:id/requirement-card', async (req: any, reply) => {
+    const id = String(req.params.id);
+
+    const existing = await prisma.requirementCard.findUnique({ where: { intakeId: id } });
+    if (existing) return reply.send({ ok: true, requirementCardId: existing.id, cached: true });
+
+    const gen = await generateRequirementCardFromQuestionnaire({ intakeId: id });
+
+    const row = await prisma.requirementCard.create({
+      data: {
+        intakeId: id,
+        title: gen.card.title,
+        summary: gen.card.summary,
+        userStory: gen.card.userStory,
+        scope: gen.card.scope as any,
+        affectedArea: gen.card.affectedArea as any,
+        acceptanceCriteria: gen.card.acceptanceCriteria as any,
+        openQuestions: gen.card.openQuestions as any,
+        attachments: gen.card.attachments as any,
+        markdown: gen.card.markdown,
+      },
+    });
+
+    await prisma.intake.update({
+      where: { id },
+      data: {
+        status: 'DRAFT_READY' as any,
+        events: {
+          create: { type: 'REQUIREMENT_CARD_GENERATED', payload: { model: gen.model } },
+        },
+      },
+    });
+
+    return reply.send({ ok: true, requirementCardId: row.id });
   });
 }
