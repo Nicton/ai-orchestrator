@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { MultipartFile } from '@fastify/multipart';
 import { prisma } from './db.js';
+import { transcribeAudioFile } from './llm.js';
 
 const createIntakeSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -182,5 +183,41 @@ export async function registerIntakeApi(app: FastifyInstance) {
     });
     if (!intake) return reply.code(404).send({ error: 'Intake not found' });
     return intake;
+  });
+
+  // Transcribe audio (synchronous MVP)
+  app.post('/api/intake/:id/transcribe', async (req: any, reply) => {
+    const id = String(req.params.id);
+    const intake = await prisma.intake.findUnique({ where: { id } });
+    if (!intake) return reply.code(404).send({ error: 'Intake not found' });
+
+    if (!intake.audioPath) return reply.code(400).send({ error: 'No audioPath on intake. Upload audio first.' });
+
+    // if already exists, return existing
+    const existing = await prisma.transcript.findUnique({ where: { intakeId: id } });
+    if (existing) return reply.send({ ok: true, transcriptId: existing.id, cached: true });
+
+    const absAudioPath = path.resolve(process.cwd(), intake.audioPath);
+    const tr = await transcribeAudioFile(absAudioPath);
+
+    const transcript = await prisma.transcript.create({
+      data: {
+        intakeId: id,
+        text: tr.text,
+        language: tr.language,
+      },
+    });
+
+    await prisma.intake.update({
+      where: { id },
+      data: {
+        status: 'TRANSCRIBED' as any,
+        events: {
+          create: { type: 'TRANSCRIBED', payload: { model: tr.model, language: tr.language } },
+        },
+      },
+    });
+
+    return reply.send({ ok: true, transcriptId: transcript.id });
   });
 }

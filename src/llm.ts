@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { readFileSync, statSync } from 'node:fs';
+import fs from 'node:fs';
 import { config } from './config.js';
 
 export type LlmResult = {
@@ -10,9 +11,13 @@ export type LlmResult = {
   totalTokens?: number;
 };
 
-export async function runRolePrompt(role: string, prompt: string): Promise<LlmResult> {
-  const mock = String(process.env.MOCK_LLM || '').trim() === '1';
+export type TranscriptionResult = {
+  text: string;
+  model: string;
+  language?: string;
+};
 
+export function resolveOpenAiApiKey() {
   let apiKey = config.openaiApiKey;
   if (!apiKey && config.openaiApiKeyFile) {
     try {
@@ -27,6 +32,13 @@ export async function runRolePrompt(role: string, prompt: string): Promise<LlmRe
       apiKey = '';
     }
   }
+  return apiKey;
+}
+
+export async function runRolePrompt(role: string, prompt: string): Promise<LlmResult> {
+  const mock = String(process.env.MOCK_LLM || '').trim() === '1';
+
+  const apiKey = resolveOpenAiApiKey();
 
   if (!apiKey) {
     if (mock) {
@@ -73,3 +85,30 @@ export async function runRolePrompt(role: string, prompt: string): Promise<LlmRe
     totalTokens: response.usage?.total_tokens,
   };
 }
+
+export async function transcribeAudioFile(filePath: string): Promise<TranscriptionResult> {
+  const mock = String(process.env.MOCK_LLM || '').trim() === '1';
+  const apiKey = resolveOpenAiApiKey();
+
+  if (!apiKey) {
+    if (mock) return { text: `[MOCK] transcription for ${filePath}`, model: 'mock' };
+    throw new Error('OPENAI_API_KEY is missing (set OPENAI_API_KEY or OPENAI_API_KEY_FILE)');
+  }
+
+  const client = new OpenAI({ apiKey });
+
+  // OpenAI SDK expects a ReadStream for Node.
+  const file = fs.createReadStream(filePath);
+
+  const resp: any = await client.audio.transcriptions.create({
+    file,
+    model: config.transcribeModel,
+  });
+
+  return {
+    text: String(resp.text || ''),
+    model: config.transcribeModel,
+    language: resp.language ? String(resp.language) : undefined,
+  };
+}
+
