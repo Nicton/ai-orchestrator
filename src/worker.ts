@@ -370,7 +370,30 @@ async function processNextIntakeJob() {
       }
     }
 
-    // CREATE_JIRA_ISSUE will be implemented next (needs real cfg + idempotency logic)
+    if (next.type === IntakeJobType.CREATE_JIRA_ISSUE) {
+      const intake = await prisma.intake.findUnique({ where: { id: next.intakeId } });
+      if (!intake) throw new Error('Intake not found');
+
+      const existing = await prisma.jiraIssueLink.findUnique({ where: { intakeId: next.intakeId } });
+      if (!existing) {
+        const marker = `intake:${next.intakeId}`;
+        await prisma.jiraIssueLink.create({
+          data: {
+            intakeId: next.intakeId,
+            intakeMarker: marker,
+          },
+        });
+
+        // Until real Jira auth is wired, keep it explicit.
+        await prisma.intake.update({
+          where: { id: next.intakeId },
+          data: {
+            status: 'NEEDS_INFO' as any,
+            events: { create: { type: 'JIRA_STUB_CREATED', payload: { marker, note: 'Jira integration not enabled yet' } } },
+          },
+        });
+      }
+    }
 
     await prisma.intakeJob.update({
       where: { id: next.id },

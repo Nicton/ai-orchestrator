@@ -319,4 +319,22 @@ export async function registerIntakeApi(app: FastifyInstance) {
 
     return reply.send({ ok: true, requirementCardId: row.id, sync: true });
   });
+
+  // Create/link Jira issue (async job)
+  app.post('/api/intake/:id/jira', async (req: any, reply) => {
+    const id = String(req.params.id);
+
+    const intake = await prisma.intake.findUnique({ where: { id } });
+    if (!intake) return reply.code(404).send({ error: 'Intake not found' });
+
+    const existing = await prisma.jiraIssueLink.findUnique({ where: { intakeId: id } });
+    if (existing) return reply.send({ ok: true, jiraLinkId: existing.id, cached: true, issueKey: existing.issueKey, issueUrl: existing.issueUrl });
+
+    const job = await enqueueIntakeJob({ intakeId: id, type: IntakeJobType.CREATE_JIRA_ISSUE });
+    await prisma.intakeEvent.create({
+      data: { intakeId: id, type: 'JOB_ENQUEUED', payload: { jobId: job.id, type: job.type } },
+    });
+
+    return reply.code(202).send({ ok: true, jobId: job.id, enqueued: true });
+  });
 }
