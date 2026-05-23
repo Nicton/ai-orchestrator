@@ -4,8 +4,10 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { MultipartFile } from '@fastify/multipart';
 import { prisma } from './db.js';
+import { IntakeJobType } from '@prisma/client';
 import { transcribeAudioFile } from './llm.js';
 import { generateQuestionnaireFromTranscript, generateRequirementCardFromQuestionnaire } from './requirementIntake.js';
+import { enqueueIntakeJob } from './intakeJobs.js';
 
 const createIntakeSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -186,7 +188,9 @@ export async function registerIntakeApi(app: FastifyInstance) {
     return intake;
   });
 
-  // Transcribe audio (synchronous MVP)
+  // Transcribe audio
+  // Default: enqueue async job and return 202.
+  // If query ?sync=1 is provided, performs synchronous transcription.
   app.post('/api/intake/:id/transcribe', async (req: any, reply) => {
     const id = String(req.params.id);
     const intake = await prisma.intake.findUnique({ where: { id } });
@@ -198,6 +202,16 @@ export async function registerIntakeApi(app: FastifyInstance) {
     const existing = await prisma.transcript.findUnique({ where: { intakeId: id } });
     if (existing) return reply.send({ ok: true, transcriptId: existing.id, cached: true });
 
+    const sync = String(req.query?.sync || '').trim() === '1';
+    if (!sync) {
+      const job = await enqueueIntakeJob({ intakeId: id, type: IntakeJobType.TRANSCRIBE });
+      await prisma.intakeEvent.create({
+        data: { intakeId: id, type: 'JOB_ENQUEUED', payload: { jobId: job.id, type: job.type } },
+      });
+      return reply.code(202).send({ ok: true, jobId: job.id, enqueued: true });
+    }
+
+    // sync path
     const absAudioPath = path.resolve(process.cwd(), intake.audioPath);
     const tr = await transcribeAudioFile(absAudioPath);
 
@@ -219,7 +233,7 @@ export async function registerIntakeApi(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ ok: true, transcriptId: transcript.id });
+    return reply.send({ ok: true, transcriptId: transcript.id, sync: true });
   });
 
   // Generate questionnaire JSON from transcript
@@ -228,6 +242,15 @@ export async function registerIntakeApi(app: FastifyInstance) {
 
     const existing = await prisma.questionnaireAnswerSet.findUnique({ where: { intakeId: id } });
     if (existing) return reply.send({ ok: true, questionnaireId: existing.id, cached: true });
+
+    const sync = String(req.query?.sync || '').trim() === '1';
+    if (!sync) {
+      const job = await enqueueIntakeJob({ intakeId: id, type: IntakeJobType.GENERATE_QUESTIONNAIRE });
+      await prisma.intakeEvent.create({
+        data: { intakeId: id, type: 'JOB_ENQUEUED', payload: { jobId: job.id, type: job.type } },
+      });
+      return reply.code(202).send({ ok: true, jobId: job.id, enqueued: true });
+    }
 
     const gen = await generateQuestionnaireFromTranscript({ intakeId: id });
 
@@ -248,7 +271,7 @@ export async function registerIntakeApi(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ ok: true, questionnaireId: row.id });
+    return reply.send({ ok: true, questionnaireId: row.id, sync: true });
   });
 
   // Generate requirement card draft from questionnaire
@@ -257,6 +280,15 @@ export async function registerIntakeApi(app: FastifyInstance) {
 
     const existing = await prisma.requirementCard.findUnique({ where: { intakeId: id } });
     if (existing) return reply.send({ ok: true, requirementCardId: existing.id, cached: true });
+
+    const sync = String(req.query?.sync || '').trim() === '1';
+    if (!sync) {
+      const job = await enqueueIntakeJob({ intakeId: id, type: IntakeJobType.GENERATE_REQUIREMENT_CARD });
+      await prisma.intakeEvent.create({
+        data: { intakeId: id, type: 'JOB_ENQUEUED', payload: { jobId: job.id, type: job.type } },
+      });
+      return reply.code(202).send({ ok: true, jobId: job.id, enqueued: true });
+    }
 
     const gen = await generateRequirementCardFromQuestionnaire({ intakeId: id });
 
@@ -285,6 +317,6 @@ export async function registerIntakeApi(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ ok: true, requirementCardId: row.id });
+    return reply.send({ ok: true, requirementCardId: row.id, sync: true });
   });
 }

@@ -1,10 +1,11 @@
 import fetch from 'node-fetch';
-import { RunStatus, StageStatus, TaskStatus } from '@prisma/client';
+import { IntakeJobStatus, IntakeJobType, RunStatus, StageStatus, TaskStatus } from '@prisma/client';
 import { prisma } from './db.js';
 import { config } from './config.js';
-import { runRolePrompt } from './llm.js';
+import { runRolePrompt, transcribeAudioFile } from './llm.js';
 import { loadSkillMarkdown } from './skills.js';
 import { executeCommand } from './youtrack.js';
+import { generateQuestionnaireFromTranscript, generateRequirementCardFromQuestionnaire } from './requirementIntake.js';
 import { appendEvent } from './bus/sink.js';
 import { newEventId, nowIso } from './bus/events.js';
 
@@ -275,6 +276,140 @@ async function processNextStageRun() {
   return true;
 }
 
+function backoffMs(attempt: number) {
+  // 1m, 2m, 4m ... capped at 30m
+  return Math.min(30 * 60_000, 60_000 * Math.pow(2, Math.max(0, attempt)));
+}
+
+async function processNextIntakeJob() {
+  const now = new Date();
+  const next = await prisma.intakeJob.findFirst({
+    where: {
+      status: IntakeJobStatus.PENDING,
+      OR: [{ runAfter: null }, { runAfter: { lte: now } }],
+    },
+    orderBy: [{ runAfter: 'asc' }, { createdAt: 'asc' }],
+  });
+  if (!next) return false;
+
+  const locked = await prisma.intakeJob.updateMany({
+    where: { id: next.id, status: IntakeJobStatus.PENDING },
+    data: { status: IntakeJobStatus.RUNNING, startedAt: new Date(), lockedAt: new Date() },
+  });
+  if (locked.count === 0) return true;
+
+  try {
+    if (next.type === IntakeJobType.TRANSCRIBE) {
+      const intake = await prisma.intake.findUnique({ where: { id: next.intakeId } });
+      if (!intake) throw new Error('Intake not found');
+      if (!intake.audioPath) throw new Error('No audioPath on intake');
+
+      const existing = await prisma.transcript.findUnique({ where: { intakeId: next.intakeId } });
+      if (!existing) {
+        const abs = new URL(`file:${process.cwd()}/`);
+        // resolve relative path safely
+        const filePath = new URL(intake.audioPath, abs).pathname;
+        const tr = await transcribeAudioFile(filePath);
+
+        await prisma.transcript.create({
+          data: { intakeId: next.intakeId, text: tr.text, language: tr.language },
+        });
+
+        await prisma.intake.update({
+          where: { id: next.intakeId },
+          data: {
+            status: 'TRANSCRIBED' as any,
+            events: { create: { type: 'TRANSCRIBED', payload: { model: tr.model, language: tr.language } } },
+          },
+        });
+      }
+    }
+
+    if (next.type === IntakeJobType.GENERATE_QUESTIONNAIRE) {
+      const existing = await prisma.questionnaireAnswerSet.findUnique({ where: { intakeId: next.intakeId } });
+      if (!existing) {
+        const gen = await generateQuestionnaireFromTranscript({ intakeId: next.intakeId });
+        await prisma.questionnaireAnswerSet.create({
+          data: { intakeId: next.intakeId, answers: gen.questionnaire as any },
+        });
+        await prisma.intake.update({
+          where: { id: next.intakeId },
+          data: {
+            status: 'QUESTIONNAIRE' as any,
+            events: { create: { type: 'QUESTIONNAIRE_GENERATED', payload: { model: gen.model } } },
+          },
+        });
+      }
+    }
+
+    if (next.type === IntakeJobType.GENERATE_REQUIREMENT_CARD) {
+      const existing = await prisma.requirementCard.findUnique({ where: { intakeId: next.intakeId } });
+      if (!existing) {
+        const gen = await generateRequirementCardFromQuestionnaire({ intakeId: next.intakeId });
+        await prisma.requirementCard.create({
+          data: {
+            intakeId: next.intakeId,
+            title: gen.card.title,
+            summary: gen.card.summary,
+            userStory: gen.card.userStory,
+            scope: gen.card.scope as any,
+            affectedArea: gen.card.affectedArea as any,
+            acceptanceCriteria: gen.card.acceptanceCriteria as any,
+            openQuestions: gen.card.openQuestions as any,
+            attachments: gen.card.attachments as any,
+            markdown: gen.card.markdown,
+          },
+        });
+        await prisma.intake.update({
+          where: { id: next.intakeId },
+          data: {
+            status: 'DRAFT_READY' as any,
+            events: { create: { type: 'REQUIREMENT_CARD_GENERATED', payload: { model: gen.model } } },
+          },
+        });
+      }
+    }
+
+    // CREATE_JIRA_ISSUE will be implemented next (needs real cfg + idempotency logic)
+
+    await prisma.intakeJob.update({
+      where: { id: next.id },
+      data: { status: IntakeJobStatus.DONE, finishedAt: new Date(), errorMessage: null },
+    });
+
+    await prisma.intakeEvent.create({
+      data: { intakeId: next.intakeId, type: 'JOB_DONE', payload: { jobId: next.id, type: next.type } },
+    });
+  } catch (e: any) {
+    const err = e?.message || String(e);
+    const attempts = (next.attempts ?? 0) + 1;
+    const retryAt = new Date(Date.now() + backoffMs(attempts));
+
+    await prisma.intakeJob.update({
+      where: { id: next.id },
+      data: {
+        status: IntakeJobStatus.PENDING,
+        attempts,
+        errorMessage: err,
+        runAfter: retryAt,
+        lockedAt: null,
+        startedAt: next.startedAt ?? new Date(),
+      },
+    });
+
+    await prisma.intake.update({
+      where: { id: next.intakeId },
+      data: {
+        status: 'ERROR' as any,
+        errorMessage: err,
+        events: { create: { type: 'JOB_FAILED', payload: { jobId: next.id, type: next.type, err, attempts, retryAt } } },
+      },
+    });
+  }
+
+  return true;
+}
+
 async function processNextTaskLegacy() {
   const next = await prisma.task.findFirst({
     where: { status: TaskStatus.PENDING },
@@ -355,6 +490,9 @@ async function run() {
     try {
       const hadStageWork = await processNextStageRun();
       if (hadStageWork) continue;
+
+      const hadIntakeJob = await processNextIntakeJob();
+      if (hadIntakeJob) continue;
 
       const hadLegacy = await processNextTaskLegacy();
       if (!hadLegacy) await sleep(config.workerPollMs);
