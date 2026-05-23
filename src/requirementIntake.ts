@@ -1,5 +1,6 @@
 import { prisma } from './db.js';
 import { runRolePrompt } from './llm.js';
+import { safeJsonParse } from './json.js';
 
 export type Questionnaire = {
   // Free-form, but we keep a predictable top-level shape.
@@ -68,8 +69,8 @@ Transcript:\n"""\n${intake.transcript.text}\n"""\n`;
 
   let json: Questionnaire;
   try {
-    json = JSON.parse(llm.text);
-  } catch (e) {
+    json = safeJsonParse<Questionnaire>(llm.text);
+  } catch {
     throw new Error(`LLM did not return valid JSON for questionnaire. model=${llm.model}`);
   }
 
@@ -116,8 +117,8 @@ Questionnaire JSON:\n${JSON.stringify(questionnaireJson, null, 2)}\n`;
 
   let json: RequirementCardDraft;
   try {
-    json = JSON.parse(llm.text);
-  } catch (e) {
+    json = safeJsonParse<RequirementCardDraft>(llm.text);
+  } catch {
     throw new Error(`LLM did not return valid JSON for requirement card. model=${llm.model}`);
   }
 
