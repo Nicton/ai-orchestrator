@@ -84,7 +84,22 @@ Base path: `/api/intake`
 `POST /api/intake/:id/jira`
 - currently enqueues a job; worker creates a stub Jira link row and marks intake as NEEDS_INFO unless Jira integration is fully enabled/wired.
 
-## Smoke test: end-to-end (manual curl)
+## Smoke test: end-to-end
+
+### Option A: script (recommended)
+
+```bash
+# async (requires worker running)
+npm run e2e:voice-intake -- --audio ./sample.wav
+
+# sync mode (no worker required)
+npm run e2e:voice-intake -- --audio ./sample.wav --sync
+
+# custom baseUrl
+npm run e2e:voice-intake -- --audio ./sample.wav --baseUrl http://localhost:4321
+```
+
+### Option B: manual curl
 
 > Goal: `upload → transcribe → questionnaire → requirement-card` and watch intake status + events.
 
