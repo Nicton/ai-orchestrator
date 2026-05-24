@@ -188,6 +188,51 @@ export async function registerIntakeApi(app: FastifyInstance) {
     return intake;
   });
 
+  // Events (debug/observability)
+  // Supports basic pagination via ?limit=200&cursor=<eventId>
+  app.get('/api/intake/:id/events', async (req: any, reply) => {
+    const intakeId = String(req.params.id);
+
+    // Ensure intake exists (nicer 404 vs returning empty array)
+    const intake = await prisma.intake.findUnique({ where: { id: intakeId }, select: { id: true } });
+    if (!intake) return reply.code(404).send({ error: 'Intake not found' });
+
+    const limit = Math.min(Number(req.query?.limit || 200), 500);
+    const cursor = req.query?.cursor ? String(req.query.cursor) : undefined;
+
+    const events = await prisma.intakeEvent.findMany({
+      where: { intakeId },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+      ...(cursor
+        ? {
+            skip: 1,
+            cursor: { id: cursor },
+          }
+        : {}),
+    });
+
+    return { intakeId, events, nextCursor: events.length ? events[events.length - 1]!.id : null };
+  });
+
+  // Jobs (debug/observability)
+  app.get('/api/intake/:id/jobs', async (req: any, reply) => {
+    const intakeId = String(req.params.id);
+
+    const intake = await prisma.intake.findUnique({ where: { id: intakeId }, select: { id: true } });
+    if (!intake) return reply.code(404).send({ error: 'Intake not found' });
+
+    const limit = Math.min(Number(req.query?.limit || 200), 500);
+
+    const jobs = await prisma.intakeJob.findMany({
+      where: { intakeId },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    return { intakeId, jobs };
+  });
+
   // Transcribe audio
   // Default: enqueue async job and return 202.
   // If query ?sync=1 is provided, performs synchronous transcription.
