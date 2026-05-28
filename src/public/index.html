@@ -32,6 +32,7 @@
       <button id="tabBtn-office" onclick="setTab('office')">Office (read-only)</button>
       <a class="muted" href="/pixel/" style="margin-left:6px;">Pixel Office →</a>
       <button id="tabBtn-workflow" onclick="setTab('workflow')">Workflow tasks</button>
+      <button id="tabBtn-voice" onclick="setTab('voice')">Voice intake</button>
       <span class="muted">Tab:</span>
       <code id="activeTabLabel">dashboard</code>
     </div>
@@ -240,6 +241,85 @@
       </div>
     </div> <!-- /tab-workflow -->
 
+    <!-- VOICE TAB -->
+    <div id="tab-voice" style="display:none;">
+      <div class="card" style="margin-top:16px;">
+        <h3>Voice → Requirement Intake (prototype)</h3>
+        <div class="muted">
+          Flow: <code>upload → transcribe → questionnaire → requirement card</code>. Backend is async (worker) by default.
+        </div>
+        <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button onclick="voiceLoadIntakes()">Refresh list</button>
+          <button onclick="voiceOpenSelected()">Open selected</button>
+          <span class="muted">Selected:</span>
+          <code id="voice_selectedId">(none)</code>
+        </div>
+        <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div>
+            <label>Upload new intake (audio)</label>
+            <input id="voice_customerName" placeholder="Customer name" />
+            <input id="voice_customerEmail" placeholder="Customer email (optional)" />
+            <input id="voice_source" placeholder="Source (optional) e.g. Telegram" />
+            <input id="voice_locale" placeholder="Locale (optional) e.g. en-US" />
+            <input id="voice_audio" type="file" accept="audio/*" />
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button onclick="voiceUpload()">Upload</button>
+              <button onclick="voiceUploadAndRunAll()">Upload + run all</button>
+            </div>
+            <pre id="voice_uploadOut" style="margin-top:10px; max-height:240px;"></pre>
+          </div>
+          <div>
+            <label>Existing intakes</label>
+            <div class="muted">Click a row to select. Use Open selected to load details.</div>
+            <table style="margin-top:8px;">
+              <thead>
+                <tr><th>ID</th><th>Status</th><th>Customer</th><th>Kind</th><th>Updated</th></tr>
+              </thead>
+              <tbody id="voice_intakes"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:16px;">
+        <div class="card">
+          <h3>Actions</h3>
+          <div class="muted">Async mode enqueues worker jobs. Use sync only for debugging.</div>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button onclick="voiceAction('transcribe')">Transcribe (async)</button>
+            <button onclick="voiceAction('questionnaire')">Questionnaire (async)</button>
+            <button onclick="voiceAction('requirement-card')">Requirement card (async)</button>
+            <button onclick="voiceRunAll()">Run all (async)</button>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button onclick="voiceAction('transcribe', true)">Transcribe (sync)</button>
+            <button onclick="voiceAction('questionnaire', true)">Questionnaire (sync)</button>
+            <button onclick="voiceAction('requirement-card', true)">Requirement card (sync)</button>
+          </div>
+          <pre id="voice_actionOut" style="margin-top:10px; max-height:240px;"></pre>
+        </div>
+
+        <div class="card">
+          <h3>Selected intake (details)</h3>
+          <div class="muted">Backend data from <code>/api/intake/:id</code>.</div>
+          <pre id="voice_details" style="margin-top:10px; max-height:420px;"></pre>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:16px;">
+        <div class="card">
+          <h3>Pipeline trace: events</h3>
+          <div class="muted">From <code>/api/intake/:id/events</code>.</div>
+          <pre id="voice_events" style="margin-top:10px; max-height:420px;"></pre>
+        </div>
+        <div class="card">
+          <h3>Pipeline trace: jobs</h3>
+          <div class="muted">From <code>/api/intake/:id/jobs</code>.</div>
+          <pre id="voice_jobs" style="margin-top:10px; max-height:420px;"></pre>
+        </div>
+      </div>
+    </div> <!-- /tab-voice -->
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
@@ -266,12 +346,15 @@
       document.getElementById('tab-dashboard').style.display = tab === 'dashboard' ? '' : 'none';
       document.getElementById('tab-office').style.display = tab === 'office' ? '' : 'none';
       document.getElementById('tab-workflow').style.display = tab === 'workflow' ? '' : 'none';
+      document.getElementById('tab-voice').style.display = tab === 'voice' ? '' : 'none';
 
       document.getElementById('tabBtn-dashboard').style.opacity = tab === 'dashboard' ? '1' : '0.75';
       document.getElementById('tabBtn-office').style.opacity = tab === 'office' ? '1' : '0.75';
       document.getElementById('tabBtn-workflow').style.opacity = tab === 'workflow' ? '1' : '0.75';
+      document.getElementById('tabBtn-voice').style.opacity = tab === 'voice' ? '1' : '0.75';
 
       if (tab === 'workflow') loadWfTasks();
+      if (tab === 'voice') voiceLoadIntakes();
       if (tab === 'office') {
         loadOfficeBoard();
         loadEvents();
@@ -981,8 +1064,118 @@
       `;
     }
 
-    function escapeHtml(s){ return String(s)
-      .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    // --- Voice Intake UI ---
++    let voiceSelectedId = null;
++
++    function voiceSetSelected(id){
++      voiceSelectedId = id;
++      document.getElementById('voice_selectedId').textContent = id || '(none)';
++    }
++
++    async function voiceLoadIntakes(){
++      const tbody = document.getElementById('voice_intakes');
++      tbody.innerHTML = '<tr><td colspan="5" class="muted">Loading…</td></tr>';
++      const res = await fetch('/api/intake?limit=50');
++      const data = await res.json();
++      const items = data.intakes || [];
++      tbody.innerHTML = '';
++      if (!items.length) {
++        tbody.innerHTML = '<tr><td colspan="5" class="muted">No intakes yet</td></tr>';
++        return;
++      }
++      for (const it of items) {
++        const tr = document.createElement('tr');
++        tr.style.cursor = 'pointer';
++        tr.onclick = () => voiceSetSelected(it.id);
++        tr.innerHTML = `
++          <td><code>${escapeHtml(String(it.id).slice(0,8))}</code></td>
++          <td>${escapeHtml(String(it.status||'-'))}</td>
++          <td>${escapeHtml(String(it.customerName||'-'))}</td>
++          <td>${escapeHtml(String(it.inputKind||'-'))}</td>
++          <td>${escapeHtml(fmtTs(it.updatedAt || it.createdAt))}</td>
++        `;
++        tbody.appendChild(tr);
++      }
++    }
++
++    async function voiceUpload(){
++      const out = document.getElementById('voice_uploadOut');
++      out.textContent = 'Uploading…';
++      const f = document.getElementById('voice_audio').files?.[0];
++      if (!f) { out.textContent = 'Pick an audio file first'; return; }
++
++      const fd = new FormData();
++      fd.append('audio', f);
++      fd.append('customerName', document.getElementById('voice_customerName').value || 'Unknown');
++      const ce = document.getElementById('voice_customerEmail').value.trim();
++      if (ce) fd.append('customerEmail', ce);
++      const src = document.getElementById('voice_source').value.trim();
++      if (src) fd.append('source', src);
++      const loc = document.getElementById('voice_locale').value.trim();
++      if (loc) fd.append('locale', loc);
++      fd.append('inputKind', 'voice');
++
++      const res = await fetch('/api/intake/upload', { method: 'POST', body: fd });
++      const txt = await res.text();
++      if (!res.ok) { out.textContent = 'Upload failed: ' + txt; return; }
++      out.textContent = txt;
++      try {
++        const j = JSON.parse(txt);
++        if (j?.id) voiceSetSelected(j.id);
++      } catch {}
++      await voiceLoadIntakes();
++    }
++
++    async function voiceUploadAndRunAll(){
++      await voiceUpload();
++      await voiceRunAll();
++    }
++
++    async function voiceOpenSelected(){
++      const id = voiceSelectedId;
++      if (!id) { alert('Select an intake first'); return; }
++      await voiceRefreshSelected();
++    }
++
++    async function voiceRefreshSelected(){
++      const id = voiceSelectedId;
++      if (!id) return;
++      const details = document.getElementById('voice_details');
++      const events = document.getElementById('voice_events');
++      const jobs = document.getElementById('voice_jobs');
++
++      details.textContent = 'Loading…';
++      events.textContent = 'Loading…';
++      jobs.textContent = 'Loading…';
++
++      const r1 = await fetch('/api/intake/' + encodeURIComponent(id));
++      details.textContent = JSON.stringify(await r1.json(), null, 2);
++      const r2 = await fetch('/api/intake/' + encodeURIComponent(id) + '/events?limit=500');
++      events.textContent = JSON.stringify(await r2.json(), null, 2);
++      const r3 = await fetch('/api/intake/' + encodeURIComponent(id) + '/jobs');
++      jobs.textContent = JSON.stringify(await r3.json(), null, 2);
++    }
++
++    async function voiceAction(action, sync){
++      const id = voiceSelectedId;
++      if (!id) { alert('Select an intake first'); return; }
++      const out = document.getElementById('voice_actionOut');
++      out.textContent = 'Calling…';
++      const url = '/api/intake/' + encodeURIComponent(id) + '/' + action + (sync ? '?sync=1' : '');
++      const res = await fetch(url, { method: 'POST' });
++      const txt = await res.text();
++      out.textContent = (res.ok ? '' : 'ERROR: ') + txt;
++      await voiceRefreshSelected();
++    }
++
++    async function voiceRunAll(){
++      await voiceAction('transcribe');
++      await voiceAction('questionnaire');
++      await voiceAction('requirement-card');
++    }
++
++    function escapeHtml(s){ return String(s)
++      .replaceAll('&','&amp;').replaceAll('<','&lt;')
       .replaceAll('>','&gt;').replaceAll('"','&quot;')
       .replaceAll("'",'&#39;'); }
 
