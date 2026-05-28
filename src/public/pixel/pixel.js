@@ -4,6 +4,18 @@ const statusEl = document.getElementById('status');
 const selEl = document.getElementById('sel');
 const selCardEl = document.getElementById('selCard');
 const pollMsEl = document.getElementById('pollMs');
+const verEl = document.getElementById('ver');
+
+async function loadVersion(){
+  try {
+    const res = await fetch('/api/version');
+    const v = await res.json();
+    if (verEl) verEl.textContent = `ver: ${v.version} (${String(v.gitSha||'').slice(0,7)})`;
+  } catch {
+    if (verEl) verEl.textContent = 'ver: n/a';
+  }
+}
+loadVersion();
 
 const SPRITES = [
   './characters/char_0.png',

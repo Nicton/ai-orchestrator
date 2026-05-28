@@ -61,6 +61,26 @@ app.get('/api/limits', async () => {
   };
 });
 
+// --- Internal KB progress (ShiptiFy) ---
+app.get('/api/progress', async () => {
+  try {
+    const fs = await import('node:fs/promises');
+    const raw = await fs.readFile('/app/data/knowledge-base/progress.json', 'utf-8');
+    return JSON.parse(raw);
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+});
+
+// --- Version (frontend/backend parity) ---
+app.get('/api/version', async () => {
+  return {
+    version: String(process.env.APP_VERSION || 'vLOCAL-DEV'),
+    gitSha: String(process.env.GIT_SHA || 'unknown'),
+    buildTime: String(process.env.BUILD_TIME || 'unknown'),
+  };
+});
+
 // --- Activity stream (WS1/WS2) ---
 app.get('/api/events', async (req: any) => {
   const limit = Math.min(Number(req.query?.limit || 200), 2000);
