@@ -1188,11 +1188,12 @@
     setTab('dashboard');
 
     setInterval(() => {
-      // Keep dashboard fresh; workflow/office refresh only when tab is open.
+      // Keep dashboard fresh; workflow/office/voice refresh only when tab is open.
       loadRuns();
       loadTasks();
       if (activeTab === 'workflow') loadWfTasks();
       if (activeTab === 'office') loadEvents();
+      if (activeTab === 'voice') voiceRefreshSelected();
     }, 3000);
   </script>
 </body>
