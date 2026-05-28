@@ -420,6 +420,40 @@ model WfGitChange {
   @@index([taskId, createdAt])
 }
 
+// --- Global Data Sources (Aleh 2026-05) ---
+
+enum DataSourceType {
+  task_tracker
+  wiki
+  code
+  tests
+  app
+  other
+}
+
+model DataSource {
+  id String @id @default(cuid())
+
+  name    String?
+  type    DataSourceType
+  url     String
+  comment String?
+
+  // Token/secret is stored server-side. API should never return it back.
+  tokenEnc String?
+
+  scope     String   @default("GLOBAL")
+  projectId String?
+
+  archivedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([type, createdAt])
+  @@index([archivedAt])
+  @@unique([scope, url])
+}
+
 model Intake {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
