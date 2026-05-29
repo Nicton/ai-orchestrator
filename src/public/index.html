@@ -318,6 +318,14 @@
           <pre id="voice_jobs" style="margin-top:10px; max-height:420px;"></pre>
         </div>
       </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Requirements / doc</h3>
+        <div class="muted">
+          Renders <code>requirementCard.markdown</code> (if present) from <code>/api/intake/:id</code>.
+        </div>
+        <div id="voice_doc" style="margin-top:10px;"><span class="muted">Open an intake to see the doc.</span></div>
+      </div>
     </div> <!-- /tab-voice -->
 
   </div>
@@ -1065,117 +1073,137 @@
     }
 
     // --- Voice Intake UI ---
-+    let voiceSelectedId = null;
-+
-+    function voiceSetSelected(id){
-+      voiceSelectedId = id;
-+      document.getElementById('voice_selectedId').textContent = id || '(none)';
-+    }
-+
-+    async function voiceLoadIntakes(){
-+      const tbody = document.getElementById('voice_intakes');
-+      tbody.innerHTML = '<tr><td colspan="5" class="muted">Loading…</td></tr>';
-+      const res = await fetch('/api/intake?limit=50');
-+      const data = await res.json();
-+      const items = data.intakes || [];
-+      tbody.innerHTML = '';
-+      if (!items.length) {
-+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No intakes yet</td></tr>';
-+        return;
-+      }
-+      for (const it of items) {
-+        const tr = document.createElement('tr');
-+        tr.style.cursor = 'pointer';
-+        tr.onclick = () => voiceSetSelected(it.id);
-+        tr.innerHTML = `
-+          <td><code>${escapeHtml(String(it.id).slice(0,8))}</code></td>
-+          <td>${escapeHtml(String(it.status||'-'))}</td>
-+          <td>${escapeHtml(String(it.customerName||'-'))}</td>
-+          <td>${escapeHtml(String(it.inputKind||'-'))}</td>
-+          <td>${escapeHtml(fmtTs(it.updatedAt || it.createdAt))}</td>
-+        `;
-+        tbody.appendChild(tr);
-+      }
-+    }
-+
-+    async function voiceUpload(){
-+      const out = document.getElementById('voice_uploadOut');
-+      out.textContent = 'Uploading…';
-+      const f = document.getElementById('voice_audio').files?.[0];
-+      if (!f) { out.textContent = 'Pick an audio file first'; return; }
-+
-+      const fd = new FormData();
-+      fd.append('audio', f);
-+      fd.append('customerName', document.getElementById('voice_customerName').value || 'Unknown');
-+      const ce = document.getElementById('voice_customerEmail').value.trim();
-+      if (ce) fd.append('customerEmail', ce);
-+      const src = document.getElementById('voice_source').value.trim();
-+      if (src) fd.append('source', src);
-+      const loc = document.getElementById('voice_locale').value.trim();
-+      if (loc) fd.append('locale', loc);
-+      fd.append('inputKind', 'voice');
-+
-+      const res = await fetch('/api/intake/upload', { method: 'POST', body: fd });
-+      const txt = await res.text();
-+      if (!res.ok) { out.textContent = 'Upload failed: ' + txt; return; }
-+      out.textContent = txt;
-+      try {
-+        const j = JSON.parse(txt);
-+        if (j?.id) voiceSetSelected(j.id);
-+      } catch {}
-+      await voiceLoadIntakes();
-+    }
-+
-+    async function voiceUploadAndRunAll(){
-+      await voiceUpload();
-+      await voiceRunAll();
-+    }
-+
-+    async function voiceOpenSelected(){
-+      const id = voiceSelectedId;
-+      if (!id) { alert('Select an intake first'); return; }
-+      await voiceRefreshSelected();
-+    }
-+
-+    async function voiceRefreshSelected(){
-+      const id = voiceSelectedId;
-+      if (!id) return;
-+      const details = document.getElementById('voice_details');
-+      const events = document.getElementById('voice_events');
-+      const jobs = document.getElementById('voice_jobs');
-+
-+      details.textContent = 'Loading…';
-+      events.textContent = 'Loading…';
-+      jobs.textContent = 'Loading…';
-+
-+      const r1 = await fetch('/api/intake/' + encodeURIComponent(id));
-+      details.textContent = JSON.stringify(await r1.json(), null, 2);
-+      const r2 = await fetch('/api/intake/' + encodeURIComponent(id) + '/events?limit=500');
-+      events.textContent = JSON.stringify(await r2.json(), null, 2);
-+      const r3 = await fetch('/api/intake/' + encodeURIComponent(id) + '/jobs');
-+      jobs.textContent = JSON.stringify(await r3.json(), null, 2);
-+    }
-+
-+    async function voiceAction(action, sync){
-+      const id = voiceSelectedId;
-+      if (!id) { alert('Select an intake first'); return; }
-+      const out = document.getElementById('voice_actionOut');
-+      out.textContent = 'Calling…';
-+      const url = '/api/intake/' + encodeURIComponent(id) + '/' + action + (sync ? '?sync=1' : '');
-+      const res = await fetch(url, { method: 'POST' });
-+      const txt = await res.text();
-+      out.textContent = (res.ok ? '' : 'ERROR: ') + txt;
-+      await voiceRefreshSelected();
-+    }
-+
-+    async function voiceRunAll(){
-+      await voiceAction('transcribe');
-+      await voiceAction('questionnaire');
-+      await voiceAction('requirement-card');
-+    }
-+
-+    function escapeHtml(s){ return String(s)
-+      .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    let voiceSelectedId = null;
+
+    function voiceSetSelected(id){
+      voiceSelectedId = id;
+      document.getElementById('voice_selectedId').textContent = id || '(none)';
+    }
+
+    async function voiceLoadIntakes(){
+      const tbody = document.getElementById('voice_intakes');
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">Loading…</td></tr>';
+      const res = await fetch('/api/intake?limit=50');
+      const data = await res.json();
+      const items = data.intakes || [];
+      tbody.innerHTML = '';
+      if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No intakes yet</td></tr>';
+        return;
+      }
+      for (const it of items) {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.onclick = () => voiceSetSelected(it.id);
+        tr.innerHTML = `
+          <td><code>${escapeHtml(String(it.id).slice(0,8))}</code></td>
+          <td>${escapeHtml(String(it.status||'-'))}</td>
+          <td>${escapeHtml(String(it.customerName||'-'))}</td>
+          <td>${escapeHtml(String(it.inputKind||'-'))}</td>
+          <td>${escapeHtml(fmtTs(it.updatedAt || it.createdAt))}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function voiceUpload(){
+      const out = document.getElementById('voice_uploadOut');
+      out.textContent = 'Uploading…';
+      const f = document.getElementById('voice_audio').files?.[0];
+      if (!f) { out.textContent = 'Pick an audio file first'; return; }
+
+      const fd = new FormData();
+      fd.append('audio', f);
+      fd.append('customerName', document.getElementById('voice_customerName').value || 'Unknown');
+      const ce = document.getElementById('voice_customerEmail').value.trim();
+      if (ce) fd.append('customerEmail', ce);
+      const src = document.getElementById('voice_source').value.trim();
+      if (src) fd.append('source', src);
+      const loc = document.getElementById('voice_locale').value.trim();
+      if (loc) fd.append('locale', loc);
+      fd.append('inputKind', 'voice');
+
+      const res = await fetch('/api/intake/upload', { method: 'POST', body: fd });
+      const txt = await res.text();
+      if (!res.ok) { out.textContent = 'Upload failed: ' + txt; return; }
+      out.textContent = txt;
+      try {
+        const j = JSON.parse(txt);
+        if (j?.id) voiceSetSelected(j.id);
+      } catch {}
+      await voiceLoadIntakes();
+    }
+
+    async function voiceUploadAndRunAll(){
+      await voiceUpload();
+      await voiceRunAll();
+    }
+
+    async function voiceOpenSelected(){
+      const id = voiceSelectedId;
+      if (!id) { alert('Select an intake first'); return; }
+      await voiceRefreshSelected();
+    }
+
+    async function voiceRefreshSelected(){
+      const id = voiceSelectedId;
+      if (!id) return;
+      const details = document.getElementById('voice_details');
+      const events = document.getElementById('voice_events');
+      const jobs = document.getElementById('voice_jobs');
+      const doc = document.getElementById('voice_doc');
+
+      details.textContent = 'Loading…';
+      events.textContent = 'Loading…';
+      jobs.textContent = 'Loading…';
+      if (doc) doc.innerHTML = '<span class="muted">Loading…</span>';
+
+      const r1 = await fetch('/api/intake/' + encodeURIComponent(id));
+      const intake = await r1.json();
+      details.textContent = JSON.stringify(intake, null, 2);
+
+      const md = intake?.requirementCard?.markdown;
+      if (doc) {
+        if (md && String(md).trim()) {
+          const mdStr = String(md);
+          doc.innerHTML = `
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button onclick='navigator.clipboard?.writeText(${JSON.stringify(mdStr)}).catch(()=>{})'>Copy markdown</button>
+              <span class="muted">(raw markdown below)</span>
+            </div>
+            <pre style="margin-top:10px; max-height:520px; white-space:pre-wrap;">${escapeHtml(mdStr)}</pre>
+          `;
+        } else {
+          doc.innerHTML = '<span class="muted">No requirement card yet. Run “Requirement card (async)” then refresh.</span>';
+        }
+      }
+
+      const r2 = await fetch('/api/intake/' + encodeURIComponent(id) + '/events?limit=500');
+      events.textContent = JSON.stringify(await r2.json(), null, 2);
+      const r3 = await fetch('/api/intake/' + encodeURIComponent(id) + '/jobs');
+      jobs.textContent = JSON.stringify(await r3.json(), null, 2);
+    }
+
+    async function voiceAction(action, sync){
+      const id = voiceSelectedId;
+      if (!id) { alert('Select an intake first'); return; }
+      const out = document.getElementById('voice_actionOut');
+      out.textContent = 'Calling…';
+      const url = '/api/intake/' + encodeURIComponent(id) + '/' + action + (sync ? '?sync=1' : '');
+      const res = await fetch(url, { method: 'POST' });
+      const txt = await res.text();
+      out.textContent = (res.ok ? '' : 'ERROR: ') + txt;
+      await voiceRefreshSelected();
+    }
+
+    async function voiceRunAll(){
+      await voiceAction('transcribe');
+      await voiceAction('questionnaire');
+      await voiceAction('requirement-card');
+    }
+
+    function escapeHtml(s){ return String(s)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;')
       .replaceAll('>','&gt;').replaceAll('"','&quot;')
       .replaceAll("'",'&#39;'); }
 
