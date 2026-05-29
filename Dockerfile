@@ -1,6 +1,6 @@
-FROM node:22-bookworm-slim
-
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# NOTE: Using non-slim image to avoid apt GPG/signature failures during build.
+# It includes the needed runtime deps (incl. OpenSSL for Prisma) without apt-get.
+FROM node:22-bookworm
 
 WORKDIR /app
 
