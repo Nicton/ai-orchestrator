@@ -1,9 +1,6 @@
 export const config = {
   port: Number(process.env.APP_PORT || 4321),
-  model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-  transcribeModel: process.env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1',
-  openaiApiKey: process.env.OPENAI_API_KEY || '',
-  openaiApiKeyFile: process.env.OPENAI_API_KEY_FILE || '',
+  model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
   workerPollMs: Number(process.env.WORKER_POLL_MS || 2000),
   callbackTimeoutMs: Number(process.env.CALLBACK_TIMEOUT_MS || 10000),
 
