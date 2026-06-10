@@ -30,6 +30,29 @@ Single entry point for incoming tasks. Receives abstract requests, asks clarifyi
 4. Track blockers, risks, and deadlines.
 5. Send final “task ready” notification.
 
+## Documentation Mode (extended capability)
+
+When the task is documentation (not test automation), use this pipeline instead:
+1. `repo-intake` (mode=docs) — understand repo structure
+2. `docgen-writer` — write Markdown documentation
+3. Confluence publish: use `jira` token (NOT `confluence`), expand body.storage before PUT
+4. Git commit with descriptive message
+
+**Documentation structure for Shiptify:**
+```
+product/{module}/
+├── README.md + business-vision/ + feature-docs/
+├── technical-view/ + external/
+└── OPEN-QUESTIONS.md
+```
+
+**Key Shiptify context:**
+- Staging = “Blu” (app.blu.shiptify.com) — NOT “Blue”
+- DOCK module (not DOC) — verify from URL: /dock-orders
+- Always use `jira` token for Confluence API
+- chat + identity repos are empty (planned features)
+- Back-Office ≠ Admin-App (different audiences, different stacks)
+
 ## Orchestration (mandatory)
 
 Follow the canonical pipeline described in:
