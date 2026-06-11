@@ -119,6 +119,12 @@ registry:
     maturity: beta
     contract_style: markdown
     machine_contract: aligned-with-tool-contracts
+  30-code-truth-verifier:
+    type: skill
+    maturity: beta
+    contract_style: markdown
+    machine_contract: planned
+    human_review_required: false
   docgen-writer:
     type: skill
     maturity: experimental
