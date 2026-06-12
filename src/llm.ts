@@ -74,11 +74,11 @@ function runClaudeCli(role: string, prompt: string, model?: string): Promise<Llm
 // OpenAI-compatible /audio/transcriptions API (config.stt). Browser speech is
 // not the production path. Falls back to a mock only when MOCK_LLM=1.
 export async function transcribeAudioFile(filePath: string, languageHint?: string): Promise<TranscriptionResult> {
-  if (String(process.env.MOCK_LLM || '').trim() === '1') {
+  const { openaiApiKey, baseUrl, model } = config.stt;
+  if (!openaiApiKey && String(process.env.MOCK_LLM || '').trim() === '1') {
     return { text: 'This is a mock transcription of the recorded question.', model: 'mock', language: languageHint };
   }
 
-  const { openaiApiKey, baseUrl, model } = config.stt;
   if (!openaiApiKey) {
     const err: any = new Error(
       'Speech-to-text is not configured. Set OPENAI_API_KEY (Whisper) or run with MOCK_LLM=1.',

@@ -1,3 +1,15 @@
+import fs from 'node:fs';
+
+function readFileTrim(filePath?: string) {
+  const p = String(filePath || '').trim();
+  if (!p) return '';
+  try {
+    return fs.readFileSync(p, 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
 export const config = {
   port: Number(process.env.APP_PORT || 4321),
   model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
@@ -10,7 +22,7 @@ export const config = {
   // Speech-to-text (Whisper). When openaiApiKey is set, audio is transcribed
   // via the OpenAI Whisper API; otherwise STT is unavailable (unless MOCK_LLM).
   stt: {
-    openaiApiKey: process.env.OPENAI_API_KEY || '',
+    openaiApiKey: (process.env.OPENAI_API_KEY || '').trim() || readFileTrim(process.env.OPENAI_API_KEY_FILE),
     baseUrl: process.env.STT_BASE_URL || 'https://api.openai.com/v1',
     model: process.env.STT_MODEL || 'whisper-1',
   },
