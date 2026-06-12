@@ -521,6 +521,9 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
 
     const query = await prisma.knowledgeQuery.findUnique({ where: { id: String(req.params.id) } });
     if (!query) return reply.code(404).send({ error: 'Query not found' });
+    if (query.userId && query.userId !== user.id && user.role !== 'admin') {
+      return reply.code(403).send({ error: 'Cannot leave feedback for another user\'s query' });
+    }
 
     const feedback = await prisma.knowledgeFeedback.create({
       data: {
@@ -550,6 +553,9 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
 
     const query = await prisma.knowledgeQuery.findUnique({ where: { id: String(req.params.id) } });
     if (!query) return reply.code(404).send({ error: 'Query not found' });
+    if (query.userId && query.userId !== user.id && user.role !== 'admin') {
+      return reply.code(403).send({ error: 'Cannot correct another user\'s query' });
+    }
 
     const correction = await prisma.knowledgeCorrection.create({
       data: { queryId: query.id, userId: user.id, text: parsed.data.text },
@@ -714,6 +720,7 @@ async function buildAnalytics() {
         id: gap.id,
         topic: gap.topic,
         title: gap.title,
+        reason: gap.reason,
         status: gap.status,
         occurrences: gap.occurrences,
         confidenceAvg: gap.confidenceAvg,

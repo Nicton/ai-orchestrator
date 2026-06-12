@@ -30,6 +30,18 @@ function randomPassword() {
   return crypto.randomBytes(9).toString('base64url');
 }
 
+// Domain-agnostic admin rule: any email containing this substring is an admin.
+// Configurable via ADMIN_EMAIL_MATCH (default "asmalouski"). Empty disables it.
+function adminEmailMatch() {
+  return (process.env.ADMIN_EMAIL_MATCH ?? 'asmalouski').toLowerCase().trim();
+}
+
+export function isAdminEmail(email: string): boolean {
+  const match = adminEmailMatch();
+  if (!match) return false;
+  return String(email || '').toLowerCase().includes(match);
+}
+
 const SESSION_COOKIE = 'ka_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 
@@ -126,9 +138,12 @@ export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Pr
 // ---------------------------------------------------------------------------
 
 export async function seedDefaultAdmin() {
-  const email = (process.env.ADMIN_EMAIL || 'aleh.asmalouski@shiptify.com').toLowerCase().trim();
+  // Domain is irrelevant — only the "asmalouski" substring matters for admin rights.
+  const email = (process.env.ADMIN_EMAIL || 'a.asmalouski@sociala.com').toLowerCase().trim();
   const name = process.env.ADMIN_NAME || 'Aleh Asmalouski';
-  const password = process.env.ADMIN_PASSWORD || 'shiptify-admin';
+  const configuredPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+  const insecureDefaults = new Set(['', 'shiptify-admin', 'admin12345', 'change-me']);
+  const password = insecureDefaults.has(configuredPassword) ? randomPassword() : configuredPassword;
 
   const existing = await prisma.appUser.findUnique({ where: { email } });
   if (existing) {
@@ -146,6 +161,10 @@ export async function seedDefaultAdmin() {
   await prisma.appUser.create({
     data: { email, name, role: 'admin', passwordHash: hash, passwordSalt: salt },
   });
+  if (insecureDefaults.has(configuredPassword)) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] ADMIN_PASSWORD missing or unsafe; generated a random seed password for the default admin.');
+  }
   // eslint-disable-next-line no-console
   console.log(`[auth] Seeded default admin: ${email} (password: ${password})`);
   return { created: true, email };
@@ -169,6 +188,12 @@ export async function registerAuthApi(app: FastifyInstance) {
     const user = await prisma.appUser.findUnique({ where: { email } });
     if (!user || !user.isActive || !verifyPassword(parsed.data.password, user.passwordHash, user.passwordSalt)) {
       return reply.code(401).send({ error: 'Invalid email or password' });
+    }
+
+    // Domain-agnostic auto-promotion: an "asmalouski" email is always an admin.
+    if (isAdminEmail(user.email) && user.role !== 'admin') {
+      await prisma.appUser.update({ where: { id: user.id }, data: { role: 'admin' } });
+      user.role = 'admin';
     }
 
     const token = randomToken();
@@ -226,11 +251,15 @@ export async function registerAuthApi(app: FastifyInstance) {
     const { hash, salt } = hashPassword(tempPassword);
     const inviteToken = randomToken(18);
 
+    // An admin can create both users and admins; an "asmalouski" email is
+    // always an admin regardless of the chosen role.
+    const role = isAdminEmail(email) ? 'admin' : parsed.data.role;
+
     const user = await prisma.appUser.create({
       data: {
         email,
         name: parsed.data.name,
-        role: parsed.data.role,
+        role,
         passwordHash: hash,
         passwordSalt: salt,
         mustReset: true,
