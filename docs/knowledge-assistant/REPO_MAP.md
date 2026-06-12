@@ -15,6 +15,7 @@
 
 ## Main content roots for the knowledge assistant
 
+- `../../knowledge-base`: canonical Shiptify product/process knowledge currently written mostly in Russian
 - `workspaces/documentation`: primary documentation workspace
 - `docs`: curated repo documentation
 - `product`: extra product-specific markdown

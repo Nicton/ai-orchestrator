@@ -4,6 +4,7 @@ This folder is the local landing zone for the Shiptify knowledge assistant work.
 
 ## What lives here
 
+- [CLAUDE_CODE_MASTER_SPEC.md](./CLAUDE_CODE_MASTER_SPEC.md): consolidated product and implementation specification assembled from live requirement capture.
 - [SPEC.md](./SPEC.md): assembled contractor-ready version of the business idea and phased scope.
 - [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md): practical build plan for the current codebase.
 - [REPO_MAP.md](./REPO_MAP.md): where the important code, documents, and data sources live.
