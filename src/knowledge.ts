@@ -24,17 +24,32 @@ type KnowledgeSearchHit = {
   rootLabel: string;
   title: string;
   score: number;
+  rawScore: number;
+  termMatches: number;
   snippet: string;
   sourceUrl?: string;
   sourceType: SourceType;
 };
 
+type KnowledgeRootConfig = {
+  label: string;
+  relPath: string;
+  weight: number;
+};
+
 const searchableExts = new Set(['.md', '.mdx', '.txt']);
 const ignoredDirs = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.audio_temp']);
-const docRoots = [
-  { label: 'documentation', relPath: 'workspaces/documentation' },
-  { label: 'docs', relPath: 'docs' },
-  { label: 'product', relPath: 'product' },
+const docRoots: KnowledgeRootConfig[] = [
+  { label: 'knowledge-base', relPath: '../../knowledge-base', weight: 1.35 },
+  { label: 'documentation', relPath: 'workspaces/documentation', weight: 1.15 },
+  { label: 'docs', relPath: 'docs', weight: 1.0 },
+  { label: 'product', relPath: 'product', weight: 0.95 },
+];
+const pathScoreRules = [
+  { pattern: /(^|\/)open-questions(\.md)?$/i, multiplier: 0.35 },
+  { pattern: /(^|\/)todo(s)?(\.md)?$/i, multiplier: 0.45 },
+  { pattern: /(^|\/)draft(s)?\//i, multiplier: 0.6 },
+  { pattern: /(^|\/)readme(\.md)?$/i, multiplier: 0.9 },
 ];
 
 const scanCache: {
@@ -129,10 +144,37 @@ function deriveTopic(question: string, terms: string[]) {
   return topic || clipped.toLowerCase();
 }
 
-function confidenceFromSources(hitCount: number, topScore: number) {
-  const base = hitCount === 0 ? 0.12 : 0.34 + Math.min(0.38, hitCount * 0.07);
-  const scoreBoost = Math.min(0.2, topScore / 50);
-  return Number(Math.min(0.92, base + scoreBoost).toFixed(2));
+function pathScoreMultiplier(docPath: string) {
+  return pathScoreRules.reduce((multiplier, rule) => (
+    rule.pattern.test(docPath) ? multiplier * rule.multiplier : multiplier
+  ), 1);
+}
+
+function confidenceFromHits(hits: KnowledgeSearchHit[], termCount: number) {
+  if (!hits.length) return 0.08;
+
+  const topHits = hits.slice(0, 3);
+  const topHit = topHits[0];
+  const safeTermCount = Math.max(termCount, 1);
+  const matchedTermRatio = Math.min(1, topHit.termMatches / safeTermCount);
+  const coverageRatio = Math.min(
+    1,
+    topHits.reduce((sum, hit) => sum + hit.termMatches, 0) / (safeTermCount * 2),
+  );
+  const normalizedTopScore = Math.min(1, topHit.score / 28);
+  const evidenceDiversity = new Set(topHits.map((hit) => hit.rootLabel)).size / Math.min(3, topHits.length);
+  const trustedTopEvidence = topHits.filter((hit) => hit.rootLabel === 'knowledge-base' || hit.rootLabel === 'documentation').length;
+  const trustedEvidenceRatio = trustedTopEvidence / topHits.length;
+
+  const rawConfidence = 0.1
+    + matchedTermRatio * 0.28
+    + coverageRatio * 0.18
+    + normalizedTopScore * 0.18
+    + evidenceDiversity * 0.08
+    + trustedEvidenceRatio * 0.18;
+
+  const cap = topHit.rootLabel === 'knowledge-base' ? 0.84 : 0.76;
+  return Number(Math.min(cap, rawConfidence).toFixed(2));
 }
 
 function buildSnippet(text: string, terms: string[]) {
@@ -232,26 +274,31 @@ async function searchKnowledge(query: string) {
 
   const hits: KnowledgeSearchHit[] = docs
     .map((doc) => {
-      let score = 0;
+      let rawScore = 0;
       let matchedTerms = 0;
 
       for (const term of terms) {
         const pathMatches = doc.path.toLowerCase().includes(term) ? 1 : 0;
         const bodyMatches = doc.normalized.split(term).length - 1;
         if (pathMatches || bodyMatches) matchedTerms += 1;
-        score += pathMatches * 8;
-        score += Math.min(6, bodyMatches);
+        rawScore += pathMatches * 8;
+        rawScore += Math.min(6, bodyMatches);
       }
 
-      if (doc.normalized.includes(normalizedQuestion)) score += 16;
-      if (matchedTerms === terms.length && terms.length > 0) score += 10;
-      if (doc.title.toLowerCase().includes(terms[0] || '')) score += 4;
+      if (doc.normalized.includes(normalizedQuestion)) rawScore += 16;
+      if (matchedTerms === terms.length && terms.length > 0) rawScore += 10;
+      if (doc.title.toLowerCase().includes(terms[0] || '')) rawScore += 4;
+
+      const rootWeight = docRoots.find((root) => root.label === doc.rootLabel)?.weight || 1;
+      const weightedScore = rawScore * rootWeight * pathScoreMultiplier(doc.path);
 
       return {
         path: doc.path,
         rootLabel: doc.rootLabel,
         title: doc.title,
-        score,
+        score: Number(weightedScore.toFixed(2)),
+        rawScore: Number(rawScore.toFixed(2)),
+        termMatches: matchedTerms,
         snippet: buildSnippet(doc.text, terms),
         sourceUrl: doc.sourceUrl,
         sourceType: doc.sourceType,
@@ -267,8 +314,8 @@ async function searchKnowledge(query: string) {
 async function composeAnswer(question: string, hits: KnowledgeSearchHit[], language: string) {
   if (!hits.length) {
     const fallbackByLanguage: Record<string, string> = {
-      ru: 'Не нашёл достаточно сильного ответа в проиндексированной документации. Попробуй сузить область продукта или добавь недостающие материалы в documentation/docs.',
-      en: 'I could not find a strong answer in the indexed documentation yet. Try narrowing the product area or add the missing source materials into documentation/docs first.',
+      ru: 'Не нашёл достаточно сильного ответа в проиндексированной базе знаний. Попробуй сузить область продукта или добавь недостающие материалы в knowledge-base / documentation / docs.',
+      en: 'I could not find a strong answer in the indexed knowledge base yet. Try narrowing the product area or add the missing source materials into knowledge-base / documentation / docs first.',
     };
     return {
       mode: 'fallback',
@@ -441,7 +488,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     const { hits, terms } = await searchKnowledge(parsed.data.question);
     const composed = await composeAnswer(parsed.data.question, hits, language);
     const latencyMs = Date.now() - started;
-    const confidence = confidenceFromSources(hits.length, hits[0]?.score || 0);
+    const confidence = confidenceFromHits(hits, terms.length);
 
     const saved = await prisma.knowledgeQuery.create({
       data: {

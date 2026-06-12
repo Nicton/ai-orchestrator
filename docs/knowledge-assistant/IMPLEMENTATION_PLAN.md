@@ -17,6 +17,7 @@ The fastest safe path is to extend that foundation instead of introducing a new 
 1. Add repo-local documentation so the feature has a clear home.
 2. Add backend API for the knowledge tab.
 3. Index local docs from:
+   - `../../knowledge-base`
    - `workspaces/documentation`
    - `docs`
    - `product`
@@ -27,6 +28,7 @@ The fastest safe path is to extend that foundation instead of introducing a new 
 ## Practical MVP decisions
 
 - Retrieval for now: filesystem scan + lightweight lexical scoring.
+- Retrieval priority for now: `knowledge-base` first, then curated docs, while deprioritizing draft/open-question files.
 - Answer synthesis: Claude role prompt when available, fallback summary otherwise.
 - Analytics store: PostgreSQL through Prisma.
 - Source of truth for content: repo-local docs first, imported systems later.
