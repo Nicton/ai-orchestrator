@@ -18,6 +18,21 @@
     .PENDING{ background:#545f89; } .RUNNING{ background:#776300; } .DONE{ background:#0a6a44; } .FAILED{ background:#7a2030; } .SKIPPED{ background:#4f4f4f; }
     .muted { color:#9fb0e6; font-size:13px; }
     pre { white-space: pre-wrap; background:#0b1020; border:1px solid #273467; border-radius:10px; padding:10px; max-height:320px; overflow:auto; }
+    .knowledge-answer { margin-top:8px; background:#0b1020; border:1px solid #273467; border-radius:10px; padding:14px; max-height:420px; overflow:auto; line-height:1.55; }
+    .knowledge-answer h4 { margin:16px 0 8px; font-size:14px; color:#cfe1ff; }
+    .knowledge-answer h4:first-child { margin-top:0; }
+    .knowledge-answer p { margin:0 0 10px; }
+    .knowledge-answer ul { margin:0 0 12px 18px; padding:0; }
+    .knowledge-answer li { margin:0 0 8px; }
+    .knowledge-answer .ka-lead { font-size:15px; color:#f4f7ff; }
+    .knowledge-answer .ka-meta { margin-top:14px; padding-top:12px; border-top:1px solid #24325f; color:#9fb0e6; font-size:13px; }
+    .knowledge-answer .ka-sources { margin-top:14px; padding-top:12px; border-top:1px solid #24325f; }
+    .knowledge-answer .ka-source { margin-top:8px; padding:10px; border:1px solid #24325f; border-radius:10px; background:#111831; }
+    .knowledge-answer .ka-source-path { font-weight:700; word-break:break-word; }
+    .knowledge-answer .ka-source-score { color:#9fb0e6; font-size:12px; margin-top:4px; }
+    .voice-controls { margin-top:4px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .voice-status-dot { width:10px; height:10px; border-radius:999px; background:#4c5f95; display:inline-block; }
+    .voice-status-dot.recording { background:#ff6767; box-shadow:0 0 0 6px rgba(255, 103, 103, 0.16); }
     code { color:#cfe1ff; }
     @media (max-width: 950px){ .grid{ grid-template-columns: 1fr; } }
   </style>
@@ -29,6 +44,7 @@
 
     <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
       <button id="tabBtn-dashboard" onclick="setTab('dashboard')">Dashboard</button>
+      <button id="tabBtn-knowledge" onclick="setTab('knowledge')">Knowledge</button>
       <button id="tabBtn-office" onclick="setTab('office')">Office (read-only)</button>
       <a class="muted" href="/pixel/" style="margin-left:6px;">Pixel Office →</a>
       <button id="tabBtn-workflow" onclick="setTab('workflow')">Workflow tasks</button>
@@ -143,6 +159,66 @@
     </div>
       
     </div> <!-- /tab-dashboard -->
+
+    <!-- KNOWLEDGE TAB -->
+    <div id="tab-knowledge" style="display:none; margin-top:16px;">
+      <div class="grid">
+        <div class="card">
+          <h3>Knowledge Assistant</h3>
+          <div class="muted">Asks across local documentation sources and stores every query for later analytics.</div>
+          <label>Your question</label>
+          <textarea id="knowledgeQuestion" rows="7" placeholder="What will be affected if we change carrier billing rules in TMS?"></textarea>
+          <div class="voice-controls">
+            <button id="knowledgeVoiceBtn" type="button" onclick="toggleKnowledgeVoice()">Start voice</button>
+            <label for="knowledgeVoiceLang" class="muted" style="display:flex; align-items:center; gap:6px;">
+              Voice language
+              <select id="knowledgeVoiceLang">
+                <option value="ru-RU" selected>Russian</option>
+                <option value="en-US">English</option>
+                <option value="auto">Auto</option>
+              </select>
+            </label>
+            <span class="muted"><span id="knowledgeVoiceDot" class="voice-status-dot"></span> <span id="knowledgeVoiceStatus">Voice input is idle.</span></span>
+          </div>
+          <label>User label (optional)</label>
+          <input id="knowledgeUserLabel" placeholder="BA | PM | Support | Aleh" />
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button onclick="askKnowledge()">Ask</button>
+            <button onclick="reindexKnowledge()">Reindex docs</button>
+          </div>
+          <div id="knowledgeStatus" class="muted" style="margin-top:10px;"></div>
+          <div style="margin-top:12px;">
+            <div style="font-weight:800;">Answer</div>
+            <div id="knowledgeAnswer" class="knowledge-answer">Ask a question to see the grounded response here.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Index Status</h3>
+          <div id="knowledgeRoots" class="muted">Loading…</div>
+
+          <hr style="border:0; border-top:1px solid #24325f; margin:14px 0;" />
+
+          <h3 style="margin-top:0;">Top Sources</h3>
+          <div id="knowledgeTopSources" class="muted">Loading…</div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:16px;">
+        <div class="card">
+          <h3>Recent Queries</h3>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button onclick="loadKnowledgeQueries()">Refresh</button>
+          </div>
+          <div id="knowledgeQueries" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="card">
+          <h3>Analytics & Gaps</h3>
+          <div id="knowledgeAnalytics" class="muted">Loading…</div>
+        </div>
+      </div>
+    </div>
 
     <!-- OFFICE TAB (read-only activity) -->
     <div id="tab-office" style="display:none; margin-top:16px;">
@@ -264,13 +340,20 @@
       activeTab = tab;
       document.getElementById('activeTabLabel').textContent = tab;
       document.getElementById('tab-dashboard').style.display = tab === 'dashboard' ? '' : 'none';
+      document.getElementById('tab-knowledge').style.display = tab === 'knowledge' ? '' : 'none';
       document.getElementById('tab-office').style.display = tab === 'office' ? '' : 'none';
       document.getElementById('tab-workflow').style.display = tab === 'workflow' ? '' : 'none';
 
       document.getElementById('tabBtn-dashboard').style.opacity = tab === 'dashboard' ? '1' : '0.75';
+      document.getElementById('tabBtn-knowledge').style.opacity = tab === 'knowledge' ? '1' : '0.75';
       document.getElementById('tabBtn-office').style.opacity = tab === 'office' ? '1' : '0.75';
       document.getElementById('tabBtn-workflow').style.opacity = tab === 'workflow' ? '1' : '0.75';
 
+      if (tab === 'knowledge') {
+        loadKnowledgeStatus();
+        loadKnowledgeQueries();
+        loadKnowledgeAnalytics();
+      }
       if (tab === 'workflow') loadWfTasks();
       if (tab === 'office') {
         loadOfficeBoard();
@@ -282,6 +365,228 @@
       const res = await fetch('/api/limits');
       const data = await res.json();
       document.getElementById('limits').innerHTML = `<b>${data.used}</b> / <b>${data.total}</b> (${data.placeholder ? 'stub' : 'live'})`;
+    }
+
+    async function loadKnowledgeStatus() {
+      const res = await fetch('/api/knowledge/status');
+      const data = await res.json();
+      const root = document.getElementById('knowledgeRoots');
+      const status = document.getElementById('knowledgeStatus');
+      status.innerHTML = `Indexed <b>${data.totalDocs || 0}</b> docs. Last scan: <code>${escapeHtml(data.scannedAt || '-')}</code>`;
+      root.innerHTML = `
+        ${(data.roots || []).map(r => `
+          <div style="margin-top:8px; padding:10px; border:1px solid #273467; border-radius:10px; background:#0b1020;">
+            <div style="font-weight:800;">${escapeHtml(r.label)}</div>
+            <div class="muted"><code>${escapeHtml(r.path)}</code></div>
+            <div class="muted" style="margin-top:4px;">files: <b>${r.files}</b></div>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    async function askKnowledge() {
+      const question = document.getElementById('knowledgeQuestion').value.trim();
+      const userLabel = document.getElementById('knowledgeUserLabel').value.trim() || undefined;
+      const languageHint = getKnowledgeAnswerLanguageHint();
+      if (!question) {
+        alert('Question is required');
+        return;
+      }
+
+      document.getElementById('knowledgeAnswer').textContent = 'Thinking…';
+      const res = await fetch('/api/knowledge/ask', {
+        method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify({ question, userLabel, channel: 'web-ui', languageHint }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        document.getElementById('knowledgeAnswer').textContent = 'Failed: ' + JSON.stringify(data);
+        return;
+      }
+
+      document.getElementById('knowledgeAnswer').innerHTML = renderKnowledgeAnswer(data);
+      document.getElementById('knowledgeVoiceStatus').textContent = data.language === 'ru'
+        ? 'Ответ сформирован на языке вопроса.'
+        : 'Answer language matched the question.';
+      document.getElementById('knowledgeVoiceDot').classList.remove('recording');
+
+      await loadKnowledgeQueries();
+      await loadKnowledgeAnalytics();
+    }
+
+    let knowledgeSpeechRecognition = null;
+    let knowledgeVoiceActive = false;
+    let knowledgeVoiceTranscript = '';
+
+    function getKnowledgeSpeechRecognition() {
+      if (knowledgeSpeechRecognition) return knowledgeSpeechRecognition;
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return null;
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        knowledgeVoiceActive = true;
+        knowledgeVoiceTranscript = '';
+        document.getElementById('knowledgeVoiceBtn').textContent = 'Stop voice';
+        document.getElementById('knowledgeVoiceDot').classList.add('recording');
+        document.getElementById('knowledgeVoiceStatus').textContent = 'Listening… speak your question.';
+      };
+
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const part = event.results[i][0]?.transcript?.trim();
+          if (!part) continue;
+          if (event.results[i].isFinal) {
+            knowledgeVoiceTranscript = `${knowledgeVoiceTranscript} ${part}`.trim();
+          } else {
+            interimTranscript = `${interimTranscript} ${part}`.trim();
+          }
+        }
+        const textarea = document.getElementById('knowledgeQuestion');
+        textarea.value = [knowledgeVoiceTranscript, interimTranscript].filter(Boolean).join(' ').trim();
+        document.getElementById('knowledgeVoiceStatus').textContent = interimTranscript
+          ? 'Listening… checking live transcript.'
+          : 'Voice question captured. You can edit the text before sending.';
+      };
+
+      recognition.onerror = (event) => {
+        knowledgeVoiceActive = false;
+        document.getElementById('knowledgeVoiceBtn').textContent = 'Start voice';
+        document.getElementById('knowledgeVoiceDot').classList.remove('recording');
+        document.getElementById('knowledgeVoiceStatus').textContent = `Voice input failed: ${event.error || 'unknown error'}`;
+      };
+
+      recognition.onend = () => {
+        knowledgeVoiceActive = false;
+        document.getElementById('knowledgeVoiceBtn').textContent = 'Start voice';
+        document.getElementById('knowledgeVoiceDot').classList.remove('recording');
+        const status = document.getElementById('knowledgeVoiceStatus');
+        if (status.textContent === 'Listening… speak your question.') {
+          status.textContent = 'Voice input stopped.';
+        }
+      };
+
+      knowledgeSpeechRecognition = recognition;
+      return recognition;
+    }
+
+    function detectBrowserSpeechLang(text) {
+      const sample = String(text || '').trim();
+      if (/[А-Яа-яЁёІіЎў]/.test(sample)) return 'ru-RU';
+      return navigator.language || 'en-US';
+    }
+
+    function getKnowledgeVoiceLang() {
+      const selected = document.getElementById('knowledgeVoiceLang').value;
+      if (selected && selected !== 'auto') return selected;
+      return detectBrowserSpeechLang(document.getElementById('knowledgeQuestion').value);
+    }
+
+    function getKnowledgeAnswerLanguageHint() {
+      const speechLang = getKnowledgeVoiceLang().toLowerCase();
+      if (speechLang.startsWith('ru')) return 'ru';
+      return 'en';
+    }
+
+    function toggleKnowledgeVoice() {
+      const recognition = getKnowledgeSpeechRecognition();
+      if (!recognition) {
+        document.getElementById('knowledgeVoiceStatus').textContent = 'This browser does not support built-in voice input. Try Chrome or Edge.';
+        return;
+      }
+
+      if (knowledgeVoiceActive) {
+        recognition.stop();
+        return;
+      }
+
+      recognition.lang = getKnowledgeVoiceLang();
+      recognition.start();
+    }
+
+    async function reindexKnowledge() {
+      document.getElementById('knowledgeStatus').textContent = 'Reindexing…';
+      const res = await fetch('/api/knowledge/reindex', { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('knowledgeStatus').innerHTML = `Reindexed <b>${data.totalDocs || 0}</b> docs.`;
+      await loadKnowledgeStatus();
+      await loadKnowledgeAnalytics();
+    }
+
+    async function loadKnowledgeQueries() {
+      const res = await fetch('/api/knowledge/queries?limit=12');
+      const data = await res.json();
+      const root = document.getElementById('knowledgeQueries');
+      root.innerHTML = '';
+
+      if (!(data.queries || []).length) {
+        root.innerHTML = '<div class="muted">No queries yet.</div>';
+        return;
+      }
+
+      for (const item of data.queries) {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.background = '#0b1020';
+        div.style.border = '1px solid #273467';
+        div.style.marginTop = '10px';
+        div.innerHTML = `
+          <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <div style="font-weight:800;">${escapeHtml(item.question)}</div>
+            <div class="muted"><code>${escapeHtml(new Date(item.createdAt).toLocaleString())}</code></div>
+          </div>
+          <div class="muted" style="margin-top:6px;">intent: <b>${escapeHtml(item.intent || '-')}</b> • confidence: <b>${item.confidence ?? '-'}</b> • sources: <b>${item.sourceCount ?? 0}</b></div>
+          <pre style="margin-top:8px; max-height:180px;">${escapeHtml(item.answer || '')}</pre>
+        `;
+        root.appendChild(div);
+      }
+    }
+
+    async function loadKnowledgeAnalytics() {
+      const res = await fetch('/api/knowledge/analytics');
+      const data = await res.json();
+      const analytics = document.getElementById('knowledgeAnalytics');
+      const topSources = document.getElementById('knowledgeTopSources');
+
+      topSources.innerHTML = (data.topSources || []).length
+        ? (data.topSources || []).map(s => `<div class="muted" style="margin-top:6px;"><code>${escapeHtml(s.path)}</code> • ${s.count}</div>`).join('')
+        : '<div class="muted">No source usage yet.</div>';
+
+      analytics.innerHTML = `
+        <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:10px;">
+          <div class="card" style="background:#0b1020; border:1px solid #273467;">
+            <div class="muted">queries</div>
+            <div style="font-size:24px; font-weight:900;">${data.totals?.queries ?? 0}</div>
+          </div>
+          <div class="card" style="background:#0b1020; border:1px solid #273467;">
+            <div class="muted">avg latency</div>
+            <div style="font-size:24px; font-weight:900;">${data.totals?.avgLatencyMs ?? 0}ms</div>
+          </div>
+          <div class="card" style="background:#0b1020; border:1px solid #273467;">
+            <div class="muted">avg confidence</div>
+            <div style="font-size:24px; font-weight:900;">${data.totals?.avgConfidence ?? 0}</div>
+          </div>
+        </div>
+        <h4 style="margin-top:16px;">Top Questions</h4>
+        <div>${(data.topQuestions || []).map(q => `<div class="muted" style="margin-top:6px;">${escapeHtml(q.question)} • <b>${q.count}</b></div>`).join('') || '<div class="muted">No data yet.</div>'}</div>
+        <h4 style="margin-top:16px;">Top Intents</h4>
+        <div>${(data.intents || []).map(i => `<div class="muted" style="margin-top:6px;">${escapeHtml(i.intent)} • <b>${i.count}</b></div>`).join('') || '<div class="muted">No data yet.</div>'}</div>
+        <h4 style="margin-top:16px;">Knowledge Gaps</h4>
+        <div>${(data.gaps || []).map(g => `
+          <div style="margin-top:8px; padding:10px; border:1px solid #273467; border-radius:10px; background:#0b1020;">
+            <div style="font-weight:800;">${escapeHtml(g.title || g.topic)}</div>
+            <div class="muted">status: <b>${escapeHtml(g.status || 'OPEN')}</b> • occurrences: <b>${g.occurrences ?? 0}</b> • confidence: <b>${g.confidenceAvg ?? '-'}</b></div>
+            <div class="muted" style="margin-top:4px;">${escapeHtml(g.lastQuestion || '')}</div>
+          </div>
+        `).join('') || '<div class="muted">No gaps detected yet.</div>'}</div>
+      `;
     }
 
     // --- Office (read-only activity) ---
@@ -986,18 +1291,109 @@
       .replaceAll('>','&gt;').replaceAll('"','&quot;')
       .replaceAll("'",'&#39;'); }
 
+    function formatInline(text) {
+      return escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
+    function renderKnowledgeBody(answerText) {
+      const text = String(answerText || '').trim();
+      if (!text) return '<div class="muted">No answer returned.</div>';
+
+      const sections = text
+        .split(/\n\s*\n/)
+        .map((block) => block.trim())
+        .filter(Boolean);
+
+      const html = [];
+      for (let i = 0; i < sections.length; i++) {
+        const block = sections[i];
+        const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+        if (!lines.length) continue;
+
+        if (i === 0) {
+          html.push(`<p class="ka-lead">${formatInline(lines.join(' '))}</p>`);
+          continue;
+        }
+
+        const firstLine = lines[0];
+        const looksLikeHeading = lines.length === 1 && /:$/.test(firstLine);
+        const allBullets = lines.every((line) => line.startsWith('- '));
+
+        if (/^Sources:/i.test(firstLine)) {
+          continue;
+        }
+
+        if (looksLikeHeading) {
+          html.push(`<h4>${formatInline(firstLine.replace(/:$/, ''))}</h4>`);
+          continue;
+        }
+
+        if (allBullets) {
+          html.push(`<ul>${lines.map((line) => `<li>${formatInline(line.slice(2))}</li>`).join('')}</ul>`);
+          continue;
+        }
+
+        if (/^[A-Z][A-Za-z0-9 /_-]{1,60}:$/.test(firstLine) && lines.slice(1).every((line) => line.startsWith('- '))) {
+          html.push(`<h4>${formatInline(firstLine.replace(/:$/, ''))}</h4>`);
+          html.push(`<ul>${lines.slice(1).map((line) => `<li>${formatInline(line.slice(2))}</li>`).join('')}</ul>`);
+          continue;
+        }
+
+        html.push(`<p>${lines.map((line) => formatInline(line)).join('<br />')}</p>`);
+      }
+
+      return html.join('');
+    }
+
+    function renderKnowledgeAnswer(data) {
+      const sources = Array.isArray(data.sources) ? data.sources : [];
+      const meta = `
+        <div class="ka-meta">
+          Intent: <b>${escapeHtml(data.intent || '-')}</b>
+          &nbsp;•&nbsp; Confidence: <b>${data.confidence ?? '-'}</b>
+          &nbsp;•&nbsp; Latency: <b>${data.latencyMs ?? '-'}ms</b>
+          &nbsp;•&nbsp; Language: <b>${escapeHtml(data.language || 'auto')}</b>
+        </div>
+      `;
+
+      const sourcesHtml = sources.length
+        ? `
+          <div class="ka-sources">
+            <h4>Sources</h4>
+            ${sources.map((source) => `
+              <div class="ka-source">
+                <div class="ka-source-path"><code>${escapeHtml(source.path || '-')}</code></div>
+                <div class="ka-source-score">score: ${escapeHtml(source.score ?? '-')}</div>
+              </div>
+            `).join('')}
+          </div>
+        `
+        : '';
+
+      return `${renderKnowledgeBody(data.answer)}${meta}${sourcesHtml}`;
+    }
+
     initMermaid();
     fetchLimits();
     loadAgents();
     loadGraph();
     loadRuns();
     loadTasks();
+    loadKnowledgeStatus();
+    loadKnowledgeQueries();
+    loadKnowledgeAnalytics();
     setTab('dashboard');
 
     setInterval(() => {
       // Keep dashboard fresh; workflow/office refresh only when tab is open.
       loadRuns();
       loadTasks();
+      if (activeTab === 'knowledge') {
+        loadKnowledgeQueries();
+        loadKnowledgeAnalytics();
+      }
       if (activeTab === 'workflow') loadWfTasks();
       if (activeTab === 'office') loadEvents();
     }, 3000);

@@ -548,3 +548,42 @@ model IntakeJob {
   @@index([runAfter])
   @@index([intakeId, status])
 }
+
+model KnowledgeQuery {
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  userLabel          String?
+  channel            String?
+  question           String
+  normalizedQuestion String?
+  answer             String
+  answerMode         String?
+  intent             String?
+  confidence         Float?
+  latencyMs          Int?
+  sourceCount        Int      @default(0)
+  rating             Int?
+  sources            Json?
+
+  @@index([createdAt])
+  @@index([intent, createdAt])
+  @@index([normalizedQuestion])
+}
+
+model KnowledgeGap {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  topic         String   @unique
+  title         String
+  reason        String?
+  status        String   @default("OPEN")
+  occurrences   Int      @default(1)
+  lastQuestion  String?
+  confidenceAvg Float?
+  metadata      Json?
+
+  @@index([status, updatedAt])
+  @@index([occurrences, updatedAt])
+}

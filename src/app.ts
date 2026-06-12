@@ -4,7 +4,6 @@ import fastifyMultipart from '@fastify/multipart';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { TaskStatus, WfJobType, WfTaskStatus } from '@prisma/client';
 import { prisma } from './db.js';
 import { config } from './config.js';
 import { loadPipelineSpec, stageRoleOrSkill, pipelineToMermaid } from './pipeline.js';
@@ -14,6 +13,8 @@ import { hydrateIssue, searchAiTodos, addComment } from './youtrack.js';
 import { wfCreateTask, wfEnqueueJob, wfSetStatus } from './workflow.js';
 import { readRecentEvents } from './bus/sink.js';
 import { registerIntakeApi } from './intake.js';
+import { registerKnowledgeApi } from './knowledge.js';
+import { TaskStatus, WfJobType, WfTaskStatus } from './prismaEnums.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,7 @@ app.register(fastifyMultipart, {
 });
 
 await registerIntakeApi(app);
+await registerKnowledgeApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -152,7 +154,7 @@ app.get('/api/wf/tasks', async (req: any) => {
   });
 
   return {
-    tasks: tasks.map((t) => ({
+    tasks: tasks.map((t: any) => ({
       id: t.id,
       externalSource: t.externalSource,
       externalTaskId: t.externalTaskId,
@@ -180,7 +182,7 @@ app.get('/api/wf/tasks/:id', async (req: any, reply) => {
   });
   if (!task) return reply.code(404).send({ error: 'Task not found' });
 
-  const openQuestions = task.questions.filter((q) => q.status === 'OPEN').length;
+  const openQuestions = task.questions.filter((q: any) => q.status === 'OPEN').length;
 
   return {
     id: task.id,
@@ -555,12 +557,12 @@ app.get('/api/agents/activity', async (req: any) => {
     },
   });
 
-  const runIds = Array.from(new Set(activeStages.map((s) => s.runId)));
+  const runIds = Array.from(new Set(activeStages.map((s: any) => s.runId)));
   const runs = await prisma.pipelineRun.findMany({
     where: { id: { in: runIds } },
     select: { id: true, title: true, externalRef: true, createdBy: true, createdAt: true },
   });
-  const runMap = new Map(runs.map((r) => [r.id, r]));
+  const runMap = new Map<string, any>(runs.map((r: any) => [r.id, r]));
 
   const activeByAgent = new Map<string, any[]>();
   for (const s of activeStages) {
