@@ -20,10 +20,14 @@ the existing knowledge backend (`src/knowledge.ts`).
 - Two roles: `user` and `admin`.
 - Users are stored in Postgres (`AppUser`) with scrypt-hashed passwords.
 - Sessions are cookie-based (`AppSession`, HttpOnly, 30-day TTL).
-- A default admin is seeded on first startup (see `ADMIN_EMAIL` / `ADMIN_NAME` /
-  `ADMIN_PASSWORD`, default `aleh.asmalouski@shiptify.com` / `shiptify-admin`).
-- Admins create users from the Admin → Users tab; the app returns a temporary password
-  and an access link to forward to the new user.
+- A default admin is seeded on first startup (`ADMIN_EMAIL` / `ADMIN_NAME` /
+  `ADMIN_PASSWORD`).
+- **Admin rule is domain-agnostic:** any email containing the `ADMIN_EMAIL_MATCH`
+  substring (default `asmalouski`) is treated as an admin — applied at seeding, at user
+  creation, and auto-promoted at login. Set `ADMIN_EMAIL_MATCH` empty to disable.
+- Admins create both regular users and other admins from the Admin → Users tab; the app
+  returns a temporary password and an access link to forward to the new user. Creating a
+  user with an `asmalouski` email yields an admin regardless of the selected role.
 
 ## Logging
 
