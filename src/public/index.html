@@ -375,6 +375,51 @@ function makeVoiceController(handlers){
   // handlers: { onState(state), onTranscript(text) }
   let mediaRecorder = null, chunks = [], stream = null, recording = false;
 
+  async function startBrowserSpeechFallback(detail){
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return false;
+
+    handlers.onState('fallback', detail || 'Server transcription is unavailable. Switching to browser speech recognition…');
+
+    return await new Promise((resolve) => {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      let transcript = '';
+
+      recognition.onstart = () => {
+        handlers.onState('recording', '🟡 Browser fallback is listening… speak now.');
+      };
+      recognition.onresult = (event) => {
+        transcript = Array.from(event.results || [])
+          .map((result) => result?.[0]?.transcript?.trim() || '')
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+      };
+      recognition.onerror = (event) => {
+        handlers.onState('error', `Server STT is unavailable, and browser fallback failed: ${event.error || 'unknown error'}`);
+        resolve(true);
+      };
+      recognition.onend = () => {
+        if (transcript) {
+          handlers.onTranscript(transcript);
+          handlers.onState('done');
+        } else {
+          handlers.onState('error', 'Server STT is unavailable, and browser fallback did not capture any speech.');
+        }
+        resolve(true);
+      };
+
+      try {
+        recognition.start();
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
   async function start(){
     if (recording) return;
     if (!navigator.mediaDevices || !window.MediaRecorder){
@@ -393,10 +438,22 @@ function makeVoiceController(handlers){
       try {
         const r = await API.transcribe(blob);
         const data = await r.json().catch(()=>({}));
-        if (!r.ok){ handlers.onState('error', data.error || 'Transcription failed'); return; }
+        if (!r.ok){
+          const detail = data.error || 'Transcription failed';
+          const shouldFallback = /insufficient_quota|quota|not configured|transcription failed|network error/i.test(String(detail));
+          if (shouldFallback) {
+            const startedFallback = await startBrowserSpeechFallback('Server Whisper is unavailable right now. Switching to browser speech recognition…');
+            if (startedFallback) return;
+          }
+          handlers.onState('error', detail);
+          return;
+        }
         handlers.onTranscript(data.text || '');
         handlers.onState('done');
-      } catch(_){ handlers.onState('error', 'Network error during transcription'); }
+      } catch(_){
+        const startedFallback = await startBrowserSpeechFallback('Network issue during server transcription. Switching to browser speech recognition…');
+        if (!startedFallback) handlers.onState('error', 'Network error during transcription');
+      }
     };
     mediaRecorder.start();
     recording = true;
@@ -569,8 +626,9 @@ const voiceHint = $('voicehint');
 const searchVoice = makeVoiceController({
   onState: (state, detail) => {
     const mic = $('micBtn');
-    if (state === 'recording'){ mic.classList.add('recording'); voiceHint.textContent = '🔴 Recording… press the mic again to stop'; }
+    if (state === 'recording'){ mic.classList.add('recording'); voiceHint.textContent = detail || '🔴 Recording… press the mic again to stop'; }
     else if (state === 'processing'){ mic.classList.remove('recording'); mic.classList.add('processing'); voiceHint.innerHTML = '<span class="spinner"></span> Transcribing your question…'; }
+    else if (state === 'fallback'){ mic.classList.remove('processing'); voiceHint.textContent = detail || 'Server Whisper is unavailable. Using browser speech recognition…'; }
     else if (state === 'done'){ mic.classList.remove('processing'); voiceHint.textContent = 'Transcribed. Review the text and press Ask.'; pendingInputMode = 'voice'; autoGrow($('q')); $('q').focus(); }
     else if (state === 'denied'){ mic.classList.remove('recording','processing'); voiceHint.textContent = 'Microphone access was denied.'; }
     else if (state === 'unsupported'){ voiceHint.textContent = 'Recording is not supported in this browser.'; }
@@ -623,8 +681,9 @@ function openFeedback(rating){
   const fbVoice = makeVoiceController({
     onState: (state, detail) => {
       const m = $('fbMic');
-      if (state === 'recording'){ m.classList.add('recording'); $('fbMicState').textContent = 'Recording… click to stop'; }
+      if (state === 'recording'){ m.classList.add('recording'); $('fbMicState').textContent = detail || 'Recording… click to stop'; }
       else if (state === 'processing'){ m.classList.remove('recording'); $('fbMicState').innerHTML = '<span class="spinner"></span> Transcribing…'; }
+      else if (state === 'fallback'){ m.classList.remove('recording'); $('fbMicState').textContent = detail || 'Server Whisper unavailable. Browser speech fallback started…'; }
       else if (state === 'done'){ $('fbMicState').textContent = 'Captured by voice'; }
       else if (state === 'denied'){ $('fbMicState').textContent = 'Mic access denied'; }
       else if (state === 'unsupported'){ $('fbMicState').textContent = 'Recording not supported'; }
@@ -686,8 +745,9 @@ function openCorrection(){
   const crVoice = makeVoiceController({
     onState: (state, detail) => {
       const m = $('crMic');
-      if (state === 'recording'){ m.classList.add('recording'); $('crMicState').textContent = 'Recording… click to stop'; }
+      if (state === 'recording'){ m.classList.add('recording'); $('crMicState').textContent = detail || 'Recording… click to stop'; }
       else if (state === 'processing'){ m.classList.remove('recording'); $('crMicState').innerHTML = '<span class="spinner"></span> Transcribing…'; }
+      else if (state === 'fallback'){ m.classList.remove('recording'); $('crMicState').textContent = detail || 'Server Whisper unavailable. Browser speech fallback started…'; }
       else if (state === 'done'){ $('crMicState').textContent = 'Captured by voice'; }
       else if (state === 'denied'){ $('crMicState').textContent = 'Mic access denied'; }
       else if (state === 'unsupported'){ $('crMicState').textContent = 'Recording not supported'; }
