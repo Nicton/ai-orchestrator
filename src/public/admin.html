@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Knowledge Assistant — Admin</title>
+<style>
+  :root {
+    --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea;
+    --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025;
+    --shadow:0 1px 4px rgba(32,33,36,.12);
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button { font-family:inherit; cursor:pointer; }
+  .hidden { display:none !important; }
+
+  header.bar {
+    background:var(--panel); border-bottom:1px solid var(--line); padding:14px 26px;
+    display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:10;
+  }
+  header.bar .title { font-size:18px; font-weight:600; }
+  header.bar .title small { color:var(--muted); font-weight:400; font-size:13px; margin-left:8px; }
+  header.bar .spacer { flex:1; }
+  header.bar .who { color:var(--muted); font-size:14px; }
+  .ghost { border:1px solid var(--line); background:#fff; color:#3c4043; padding:8px 14px; border-radius:8px; font-size:14px; }
+  .ghost:hover { background:var(--bg); }
+
+  .wrap { max-width:1180px; margin:0 auto; padding:22px 26px 80px; }
+  .tabs { display:flex; gap:6px; margin-bottom:20px; border-bottom:1px solid var(--line); }
+  .tab { padding:11px 18px; border:none; background:none; font-size:14px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tab.active { color:var(--blue); border-bottom-color:var(--blue); font-weight:500; }
+
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:22px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow); }
+  .card .k { color:var(--muted); font-size:13px; }
+  .card .v { font-size:28px; font-weight:600; margin-top:4px; }
+
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:20px; overflow:hidden; }
+  .panel h3 { margin:0; padding:14px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; }
+  .panel .pad { padding:16px 18px; }
+
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th { text-align:left; color:var(--muted); font-weight:500; padding:10px 12px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--panel); font-size:12px; text-transform:uppercase; letter-spacing:.3px; }
+  td { padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:hover td { background:#fafbfd; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:12px; }
+  .pill-admin { background:#e8f0fe; color:var(--blue-dark); }
+  .pill-user { background:#f1f3f4; color:#5f6368; }
+  .pill-on { background:#e6f4ea; color:var(--green); }
+  .pill-off { background:#fce8e6; color:var(--red); }
+  .rating-emoji { font-size:18px; }
+  .muted { color:var(--muted); }
+  .truncate { max-width:340px; }
+  .qrow { cursor:pointer; }
+  .detail-row td { background:#f8fafd; }
+  .kv { margin:0 0 10px; }
+  .kv .lbl { font-size:12px; text-transform:uppercase; color:var(--muted); letter-spacing:.3px; margin-bottom:4px; }
+  .answer-box { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; white-space:pre-wrap; line-height:1.55; font-size:13.5px; max-height:280px; overflow:auto; }
+  .src-chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; margin:0 6px 6px 0; font-size:12.5px; }
+  .badge { font-size:10px; font-weight:600; padding:1px 6px; border-radius:8px; }
+  .badge-confluence,.badge-jira { background:#deebff; color:#0747a6; }
+  .badge-web { background:#e6f4ea; color:#188038; }
+  .badge-local { background:#f1f3f4; color:#5f6368; }
+  .fb { border-left:3px solid var(--amber); padding:6px 10px; margin:6px 0; background:#fffaf2; border-radius:0 6px 6px 0; font-size:13px; }
+  .cor { border-left:3px solid var(--blue); padding:6px 10px; margin:6px 0; background:#f3f8ff; border-radius:0 6px 6px 0; font-size:13px; }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr 140px auto; gap:10px; align-items:end; }
+  .form-grid .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+  .form-grid input, .form-grid select { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+  .btn-fill { background:var(--blue); color:#fff; border:none; padding:10px 18px; border-radius:8px; font-size:14px; font-weight:500; }
+  .btn-fill:hover { background:var(--blue-dark); }
+  .access-box { margin-top:14px; background:#e6f4ea; border:1px solid #ceead6; border-radius:10px; padding:14px 16px; font-size:13.5px; }
+  .access-box code { background:#fff; padding:2px 7px; border-radius:5px; border:1px solid #ceead6; }
+  .access-box .copy { margin-left:8px; font-size:12px; }
+  .deny { text-align:center; padding:80px 20px; color:var(--muted); }
+  .toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:#202124; color:#fff; padding:12px 20px; border-radius:8px; font-size:14px; z-index:60; }
+  .bars { display:flex; flex-direction:column; gap:8px; }
+  .bar-row { display:flex; align-items:center; gap:10px; font-size:13px; }
+  .bar-row .lbl { width:120px; color:var(--muted); }
+  .bar-row .track { flex:1; background:#eef1f5; border-radius:6px; height:10px; overflow:hidden; }
+  .bar-row .fill { height:100%; background:var(--blue); border-radius:6px; }
+  .bar-row .num { width:36px; text-align:right; color:var(--muted); }
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="title">Knowledge Assistant <small>Admin console</small></span>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+  <a class="ghost" href="/">← Back to search</a>
+  <button class="ghost" id="logout">Sign out</button>
+</header>
+
+<div id="root" class="wrap">
+  <div class="deny" id="loadingMsg">Loading…</div>
+</div>
+<div id="toastMount"></div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const EMOJI = ['😣','🙁','😐','🙂','😄'];
+function toast(m){ $('toastMount').innerHTML = `<div class="toast">${escapeHtml(m)}</div>`; setTimeout(()=>$('toastMount').innerHTML='',2600); }
+
+let me = null, activeTab = 'overview', cache = {};
+
+async function boot(){
+  const r = await fetch('/api/auth/me');
+  if (!r.ok){ location.href = '/login'; return; }
+  me = (await r.json()).user;
+  $('who').textContent = `${me.name} · ${me.email}`;
+  if (me.role !== 'admin'){
+    $('root').innerHTML = `<div class="deny">You need administrator access to view this page.<br><br><a href="/">Go to search</a></div>`;
+    return;
+  }
+  renderShell();
+  loadTab('overview');
+}
+
+$('logout').addEventListener('click', async () => { await fetch('/api/auth/logout',{method:'POST'}); location.href='/'; });
+
+function renderShell(){
+  $('root').innerHTML = `
+    <div class="tabs">
+      <button class="tab" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="history">Query history</button>
+      <button class="tab" data-tab="users">Users</button>
+    </div>
+    <div id="tabBody"></div>`;
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => loadTab(t.dataset.tab)));
+}
+
+function loadTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  if (tab==='overview') renderOverview();
+  if (tab==='history') renderHistory();
+  if (tab==='users') renderUsers();
+}
+
+// ---------------- OVERVIEW ----------------
+async function renderOverview(){
+  const body = $('tabBody');
+  body.innerHTML = `<div class="muted" style="padding:20px">Loading analytics…</div>`;
+  const a = await fetch('/api/admin/knowledge/analytics').then(r=>r.json());
+  const dist = a.ratingDistribution || {};
+  const maxDist = Math.max(1, ...Object.values(dist).map(Number));
+  body.innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="k">Total queries</div><div class="v">${a.totals.queries}</div></div>
+      <div class="card"><div class="k">Avg rating</div><div class="v">${a.totals.avgRating || '—'}</div></div>
+      <div class="card"><div class="k">Rated queries</div><div class="v">${a.totals.ratedQueries||0}</div></div>
+      <div class="card"><div class="k">Avg confidence</div><div class="v">${Math.round((a.totals.avgConfidence||0)*100)}%</div></div>
+      <div class="card"><div class="k">Avg latency</div><div class="v">${a.totals.avgLatencyMs||0}<span style="font-size:14px"> ms</span></div></div>
+    </div>
+    <div class="panel">
+      <h3>Rating distribution</h3>
+      <div class="pad bars">
+        ${[5,4,3,2,1].map(n => `<div class="bar-row"><span class="lbl">${EMOJI[n-1]} ${['Very unhappy','Unhappy','Neutral','Happy','Very happy'][n-1]}</span><span class="track"><span class="fill" style="width:${Math.round((Number(dist[n]||0)/maxDist)*100)}%"></span></span><span class="num">${dist[n]||0}</span></div>`).join('')}
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Top questions</h3>
+      <div class="pad">${(a.topQuestions||[]).length ? `<table><thead><tr><th>Question</th><th style="width:80px">Count</th></tr></thead><tbody>${a.topQuestions.map(q=>`<tr><td>${escapeHtml(q.question)}</td><td>${q.count}</td></tr>`).join('')}</tbody></table>` : '<span class="muted">No data yet.</span>'}</div>
+    </div>
+    <div class="panel">
+      <h3>Most-used sources</h3>
+      <div class="pad">${(a.topSources||[]).length ? `<table><thead><tr><th>Source</th><th style="width:80px">Uses</th></tr></thead><tbody>${a.topSources.map(s=>`<tr><td>${escapeHtml(s.path)}</td><td>${s.count}</td></tr>`).join('')}</tbody></table>` : '<span class="muted">No data yet.</span>'}</div>
+    </div>
+    <div class="panel">
+      <h3>Documentation gaps</h3>
+      <div class="pad">${(a.gaps||[]).length ? `<table><thead><tr><th>Topic</th><th>Reason</th><th style="width:90px">Occurs</th></tr></thead><tbody>${a.gaps.map(g=>`<tr><td>${escapeHtml(g.title)}</td><td class="muted">${escapeHtml(g.reason||'')}</td><td>${g.occurrences}</td></tr>`).join('')}</tbody></table>` : '<span class="muted">No gaps detected.</span>'}</div>
+    </div>`;
+}
+
+// ---------------- HISTORY ----------------
+async function renderHistory(){
+  const body = $('tabBody');
+  body.innerHTML = `<div class="muted" style="padding:20px">Loading history…</div>`;
+  const data = await fetch('/api/admin/knowledge/queries').then(r=>r.json());
+  cache.queries = data.queries || [];
+  if (!cache.queries.length){ body.innerHTML = `<div class="panel"><div class="pad muted">No queries logged yet.</div></div>`; return; }
+  body.innerHTML = `
+    <div class="panel">
+      <h3>Full query history (${cache.queries.length})</h3>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>When</th><th>User</th><th>Question</th><th>Rating</th><th>Conf.</th><th>Input</th><th>FB</th><th>Corr.</th></tr></thead>
+        <tbody id="qtbody">
+          ${cache.queries.map((q,i)=>`
+            <tr class="qrow" data-i="${i}">
+              <td class="muted" style="white-space:nowrap">${new Date(q.createdAt).toLocaleString()}</td>
+              <td>${escapeHtml(q.user.name)}<br><span class="muted" style="font-size:12px">${escapeHtml(q.user.email||'')}</span></td>
+              <td class="truncate">${escapeHtml(q.question)}</td>
+              <td class="rating-emoji">${q.rating ? EMOJI[q.rating-1] : '<span class="muted">—</span>'}</td>
+              <td>${q.confidence!=null?Math.round(q.confidence*100)+'%':'—'}</td>
+              <td>${q.inputMode==='voice'?'🎙️':'⌨️'}</td>
+              <td>${q.feedbacks.length||'<span class="muted">0</span>'}</td>
+              <td>${q.corrections.length||'<span class="muted">0</span>'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+  body.querySelectorAll('.qrow').forEach(row => row.addEventListener('click', () => toggleDetail(row)));
+}
+
+function toggleDetail(row){
+  const i = row.dataset.i;
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains('detail-row')){ next.remove(); return; }
+  const q = cache.queries[i];
+  const sources = (q.sources||[]).map(s => {
+    const t = s.sourceType||'local';
+    const label = s.sourceUrl ? `<a href="${escapeHtml(s.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>` : escapeHtml(s.title||s.path);
+    return `<span class="src-chip"><span class="badge badge-${t}">${t}</span>${label}</span>`;
+  }).join('') || '<span class="muted">No sources</span>';
+  const fbs = q.feedbacks.length ? q.feedbacks.map(f=>`<div class="fb"><strong>${f.kind==='voice'?'🎙️ voice':'⌨️ text'}</strong>${f.rating?` · rated ${EMOJI[f.rating-1]}`:''}<br>${escapeHtml(f.text)}<br><span class="muted" style="font-size:11px">${new Date(f.createdAt).toLocaleString()}</span></div>`).join('') : '<span class="muted">No feedback</span>';
+  const cors = q.corrections.length ? q.corrections.map(c=>`<div class="cor">${escapeHtml(c.text)}<br><span class="muted" style="font-size:11px">${new Date(c.createdAt).toLocaleString()} · ${escapeHtml(c.status)}</span></div>`).join('') : '<span class="muted">No corrections</span>';
+  const tr = document.createElement('tr');
+  tr.className = 'detail-row';
+  tr.innerHTML = `<td colspan="8">
+    <div class="kv"><div class="lbl">Answer</div><div class="answer-box">${escapeHtml(q.answer)}</div></div>
+    <div class="kv"><div class="lbl">Sources</div><div>${sources}</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="kv"><div class="lbl">Feedback</div>${fbs}</div>
+      <div class="kv"><div class="lbl">Corrections</div>${cors}</div>
+    </div>
+  </td>`;
+  row.after(tr);
+}
+
+// ---------------- USERS ----------------
+async function renderUsers(){
+  const body = $('tabBody');
+  body.innerHTML = `<div class="muted" style="padding:20px">Loading users…</div>`;
+  const data = await fetch('/api/admin/users').then(r=>r.json());
+  const users = data.users || [];
+  body.innerHTML = `
+    <div class="panel">
+      <h3>Create user &amp; send access</h3>
+      <div class="pad">
+        <div class="form-grid">
+          <div class="field"><label>Full name</label><input id="nuName" placeholder="Jane Doe" /></div>
+          <div class="field"><label>Email (login)</label><input id="nuEmail" type="email" placeholder="jane@company.com" /></div>
+          <div class="field"><label>Role</label><select id="nuRole"><option value="user">user</option><option value="admin">admin</option></select></div>
+          <div class="field"><button class="btn-fill" id="nuCreate">Create user</button></div>
+        </div>
+        <div id="accessOut"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Users (${users.length})</h3>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Queries</th><th>Last login</th><th></th></tr></thead>
+        <tbody>
+          ${users.map(u=>`<tr>
+            <td>${escapeHtml(u.name)}</td>
+            <td>${escapeHtml(u.email)}</td>
+            <td><span class="pill pill-${u.role}">${u.role}</span></td>
+            <td><span class="pill ${u.isActive?'pill-on':'pill-off'}">${u.isActive?'active':'disabled'}</span></td>
+            <td>${u.queryCount}</td>
+            <td class="muted">${u.lastLoginAt?new Date(u.lastLoginAt).toLocaleString():'never'}</td>
+            <td><button class="ghost" data-reset="${u.id}" style="padding:5px 10px;font-size:12px">Reset password</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+  $('nuCreate').addEventListener('click', createUser);
+  body.querySelectorAll('[data-reset]').forEach(b => b.addEventListener('click', () => resetPassword(b.dataset.reset)));
+}
+
+async function createUser(){
+  const name = $('nuName').value.trim(), email = $('nuEmail').value.trim(), role = $('nuRole').value;
+  if (!name || !email){ toast('Name and email are required'); return; }
+  const r = await fetch('/api/admin/users', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name, email, role}) });
+  const data = await r.json().catch(()=>({}));
+  if (!r.ok){ toast(typeof data.error==='string'?data.error:'Could not create user'); return; }
+  const ac = data.access;
+  $('accessOut').innerHTML = `
+    <div class="access-box">
+      <strong>✅ User created.</strong> Send these access details to <b>${escapeHtml(ac.email)}</b>:
+      <div style="margin-top:8px">Temporary password: <code id="tmpPw">${escapeHtml(ac.tempPassword)}</code><button class="ghost copy" onclick="navigator.clipboard.writeText('${escapeHtml(ac.tempPassword)}');">Copy</button></div>
+      <div style="margin-top:6px">Access link: <code>${escapeHtml(ac.accessLink)}</code><button class="ghost copy" onclick="navigator.clipboard.writeText('${escapeHtml(ac.accessLink)}');">Copy</button></div>
+      <div class="muted" style="margin-top:8px">They will be asked to change the password after first sign-in.</div>
+    </div>`;
+  $('nuName').value=''; $('nuEmail').value='';
+  // refresh list under the form
+  const list = await fetch('/api/admin/users').then(r=>r.json());
+  toast(`User ${ac.email} created`);
+}
+
+async function resetPassword(id){
+  if (!confirm('Reset this user\'s password? A new temporary password will be generated.')) return;
+  const r = await fetch(`/api/admin/users/${id}`, { method:'PATCH', headers:{'content-type':'application/json'}, body: JSON.stringify({resetPassword:true}) });
+  const data = await r.json().catch(()=>({}));
+  if (!r.ok){ toast('Reset failed'); return; }
+  prompt('New temporary password (copy and send to the user):', data.newPassword || '');
+}
+
+boot();
+</script>
+</body>
+</html>

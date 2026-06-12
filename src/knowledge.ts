@@ -4,6 +4,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from './db.js';
 import { runRolePrompt } from './llm.js';
+import { requireAuth, requireAdmin } from './auth.js';
+
+type SourceType = 'confluence' | 'jira' | 'web' | 'local';
 
 type KnowledgeDoc = {
   path: string;
@@ -12,6 +15,8 @@ type KnowledgeDoc = {
   text: string;
   normalized: string;
   mtimeMs: number;
+  sourceUrl?: string;
+  sourceType: SourceType;
 };
 
 type KnowledgeSearchHit = {
@@ -20,6 +25,8 @@ type KnowledgeSearchHit = {
   title: string;
   score: number;
   snippet: string;
+  sourceUrl?: string;
+  sourceType: SourceType;
 };
 
 const searchableExts = new Set(['.md', '.mdx', '.txt']);
@@ -42,6 +49,45 @@ const scanCache: {
 
 function normalizeWhitespace(text: string) {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+// Parse a leading YAML-ish frontmatter block (--- ... ---) for source metadata.
+// Recognised keys: title, source_url / url / confluence_url / jira_url, source_type.
+function parseFrontmatter(raw: string): {
+  body: string;
+  title?: string;
+  sourceUrl?: string;
+  sourceType?: SourceType;
+} {
+  const match = raw.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!match) return { body: raw };
+
+  const fm = match[1];
+  const body = raw.slice(match[0].length);
+  const meta: Record<string, string> = {};
+  for (const line of fm.split(/\r?\n/)) {
+    const idx = line.indexOf(':');
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    let value = line.slice(idx + 1).trim();
+    value = value.replace(/^["']|["']$/g, '');
+    if (key) meta[key] = value;
+  }
+
+  const sourceUrl =
+    meta.confluence_url || meta.jira_url || meta.source_url || meta.url || undefined;
+  let sourceType = (meta.source_type as SourceType) || undefined;
+  if (!sourceType && sourceUrl) sourceType = inferSourceType(sourceUrl);
+
+  return { body, title: meta.title || undefined, sourceUrl, sourceType };
+}
+
+function inferSourceType(url: string): SourceType {
+  const u = url.toLowerCase();
+  if (u.includes('confluence') || u.includes('atlassian.net/wiki') || u.includes('/wiki/')) return 'confluence';
+  if (u.includes('jira') || u.includes('atlassian.net/browse')) return 'jira';
+  if (u.startsWith('http')) return 'web';
+  return 'local';
 }
 
 function normalizeQuery(text: string) {
@@ -132,17 +178,20 @@ async function walkDocs(absRoot: string, label: string) {
         const stat = await fs.stat(absPath);
         if (stat.size > 250_000) continue;
         const raw = await fs.readFile(absPath, 'utf8');
-        const text = normalizeWhitespace(raw);
+        const { body, title, sourceUrl, sourceType } = parseFrontmatter(raw);
+        const text = normalizeWhitespace(body);
         if (!text) continue;
 
         const rel = path.relative(process.cwd(), absPath);
         docs.push({
           path: rel,
           rootLabel: label,
-          title: path.basename(absPath, ext),
+          title: title || path.basename(absPath, ext),
           text,
           normalized: text.toLowerCase(),
           mtimeMs: stat.mtimeMs,
+          sourceUrl,
+          sourceType: sourceType || 'local',
         });
       } catch {
         // Skip unreadable files but keep the index warm.
@@ -204,6 +253,8 @@ async function searchKnowledge(query: string) {
         title: doc.title,
         score,
         snippet: buildSnippet(doc.text, terms),
+        sourceUrl: doc.sourceUrl,
+        sourceType: doc.sourceType,
       };
     })
     .filter((hit) => hit.score > 0)
@@ -229,7 +280,7 @@ async function composeAnswer(question: string, hits: KnowledgeSearchHit[], langu
     .slice(0, 5)
     .map(
       (hit, index) =>
-        `Source ${index + 1}\npath: ${hit.path}\ntitle: ${hit.title}\nexcerpt: ${hit.snippet}`,
+        `Source ${index + 1}\ntitle: ${hit.title}\n${hit.sourceUrl ? `link: ${hit.sourceUrl}\n` : `path: ${hit.path}\n`}type: ${hit.sourceType}\nexcerpt: ${hit.snippet}`,
     )
     .join('\n\n');
 
@@ -345,9 +396,9 @@ function uniqueTopQuestions(rows: Array<{ normalizedQuestion: string | null; que
 export async function registerKnowledgeApi(app: FastifyInstance) {
   const askSchema = z.object({
     question: z.string().min(3),
-    userLabel: z.string().min(1).max(200).optional(),
     channel: z.string().min(1).max(120).optional(),
     languageHint: z.enum(['ru', 'en']).optional(),
+    inputMode: z.enum(['text', 'voice']).default('text'),
   });
 
   app.get('/api/knowledge/status', async () => {
@@ -378,6 +429,9 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
   });
 
   app.post('/api/knowledge/ask', async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+
     const parsed = askSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
@@ -391,8 +445,10 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
 
     const saved = await prisma.knowledgeQuery.create({
       data: {
-        userLabel: parsed.data.userLabel,
-        channel: parsed.data.channel,
+        userId: user.id,
+        userLabel: user.name,
+        channel: parsed.data.channel || 'web',
+        inputMode: parsed.data.inputMode,
         question: parsed.data.question,
         normalizedQuestion: normalizeQuery(parsed.data.question),
         answer: composed.answer,
@@ -406,6 +462,8 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
           title: hit.title,
           score: hit.score,
           rootLabel: hit.rootLabel,
+          sourceUrl: hit.sourceUrl,
+          sourceType: hit.sourceType,
         })),
       },
     });
@@ -423,14 +481,100 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     });
   });
 
-  app.get('/api/knowledge/queries', async (req: any) => {
-    const limit = Math.min(Number(req.query?.limit || 20), 100);
-    const rows = await prisma.knowledgeQuery.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit,
+  // Rating (1..5). A rating below 4 is the signal the UI uses to open feedback.
+  const ratingSchema = z.object({ rating: z.number().int().min(1).max(5) });
+
+  app.post('/api/knowledge/queries/:id/rating', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+
+    const parsed = ratingSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    const query = await prisma.knowledgeQuery.findUnique({ where: { id: String(req.params.id) } });
+    if (!query) return reply.code(404).send({ error: 'Query not found' });
+    if (query.userId && query.userId !== user.id && user.role !== 'admin') {
+      return reply.code(403).send({ error: 'Cannot rate another user\'s query' });
+    }
+
+    await prisma.knowledgeQuery.update({
+      where: { id: query.id },
+      data: { rating: parsed.data.rating, ratedAt: new Date() },
     });
 
-    return {
+    return reply.send({ ok: true, rating: parsed.data.rating, feedbackRequired: parsed.data.rating < 4 });
+  });
+
+  // Feedback (text or voice-transcribed) — typically opened when rating < 4.
+  const feedbackSchema = z.object({
+    kind: z.enum(['text', 'voice']).default('text'),
+    text: z.string().min(1).max(5000),
+    rating: z.number().int().min(1).max(5).optional(),
+  });
+
+  app.post('/api/knowledge/queries/:id/feedback', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+
+    const parsed = feedbackSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    const query = await prisma.knowledgeQuery.findUnique({ where: { id: String(req.params.id) } });
+    if (!query) return reply.code(404).send({ error: 'Query not found' });
+
+    const feedback = await prisma.knowledgeFeedback.create({
+      data: {
+        queryId: query.id,
+        userId: user.id,
+        kind: parsed.data.kind,
+        text: parsed.data.text,
+        rating: parsed.data.rating ?? query.rating ?? undefined,
+      },
+    });
+
+    // A low-rated answer with explicit feedback is a strong documentation signal.
+    await registerGapFromFeedback(query, parsed.data.text);
+
+    return reply.code(201).send({ ok: true, feedbackId: feedback.id });
+  });
+
+  // Correction / clarification proposed by the user for the received answer.
+  const correctionSchema = z.object({ text: z.string().min(1).max(8000) });
+
+  app.post('/api/knowledge/queries/:id/correction', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+
+    const parsed = correctionSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    const query = await prisma.knowledgeQuery.findUnique({ where: { id: String(req.params.id) } });
+    if (!query) return reply.code(404).send({ error: 'Query not found' });
+
+    const correction = await prisma.knowledgeCorrection.create({
+      data: { queryId: query.id, userId: user.id, text: parsed.data.text },
+    });
+
+    return reply.code(201).send({ ok: true, correctionId: correction.id });
+  });
+
+  // Current user's own history (hidden behind a drawer in the UI).
+  app.get('/api/knowledge/history', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+
+    const limit = Math.min(Number(req.query?.limit || 30), 100);
+    const rows = await prisma.knowledgeQuery.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        feedbacks: { orderBy: { createdAt: 'desc' } },
+        corrections: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    return reply.send({
       queries: rows.map((row: any) => ({
         id: row.id,
         createdAt: row.createdAt,
@@ -438,13 +582,74 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         answer: row.answer,
         intent: row.intent,
         confidence: row.confidence,
+        rating: row.rating,
+        inputMode: row.inputMode,
         sourceCount: row.sourceCount,
-        latencyMs: row.latencyMs,
+        sources: Array.isArray(row.sources) ? row.sources : [],
+        feedbackCount: row.feedbacks.length,
+        correctionCount: row.corrections.length,
       })),
-    };
+    });
   });
 
-  app.get('/api/knowledge/analytics', async () => {
+  // --- Admin-only: full history + analytics ---
+
+  app.get('/api/admin/knowledge/queries', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+
+    const limit = Math.min(Number(req.query?.limit || 200), 1000);
+    const rows = await prisma.knowledgeQuery.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        user: { select: { id: true, name: true, email: true, role: true } },
+        feedbacks: { orderBy: { createdAt: 'asc' } },
+        corrections: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+
+    return reply.send({
+      queries: rows.map((row: any) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        question: row.question,
+        answer: row.answer,
+        intent: row.intent,
+        confidence: row.confidence,
+        rating: row.rating,
+        ratedAt: row.ratedAt,
+        inputMode: row.inputMode,
+        sourceCount: row.sourceCount,
+        sources: Array.isArray(row.sources) ? row.sources : [],
+        user: row.user
+          ? { id: row.user.id, name: row.user.name, email: row.user.email, role: row.user.role }
+          : { name: row.userLabel || 'Unknown', email: null, role: null },
+        feedbacks: row.feedbacks.map((f: any) => ({
+          id: f.id,
+          kind: f.kind,
+          text: f.text,
+          rating: f.rating,
+          createdAt: f.createdAt,
+        })),
+        corrections: row.corrections.map((c: any) => ({
+          id: c.id,
+          text: c.text,
+          status: c.status,
+          createdAt: c.createdAt,
+        })),
+      })),
+    });
+  });
+
+  app.get('/api/admin/knowledge/analytics', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    return reply.send(await buildAnalytics());
+  });
+}
+
+async function buildAnalytics() {
     const [queries, gaps] = await Promise.all([
       prisma.knowledgeQuery.findMany({
         orderBy: { createdAt: 'desc' },
@@ -459,15 +664,23 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     const topQuestions = uniqueTopQuestions(queries);
     const intentMap = new Map<string, number>();
     const sourceMap = new Map<string, number>();
+    const ratingDist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let totalLatency = 0;
     let confidenceSum = 0;
     let confidenceCount = 0;
+    let ratingSum = 0;
+    let ratingCount = 0;
 
     for (const query of queries) {
       totalLatency += query.latencyMs ?? 0;
       if (typeof query.confidence === 'number') {
         confidenceSum += query.confidence;
         confidenceCount += 1;
+      }
+      if (typeof query.rating === 'number') {
+        ratingSum += query.rating;
+        ratingCount += 1;
+        ratingDist[query.rating] = (ratingDist[query.rating] || 0) + 1;
       }
       if (query.intent) intentMap.set(query.intent, (intentMap.get(query.intent) || 0) + 1);
 
@@ -484,7 +697,10 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         queries: queries.length,
         avgLatencyMs: queries.length ? Math.round(totalLatency / queries.length) : 0,
         avgConfidence: confidenceCount ? Number((confidenceSum / confidenceCount).toFixed(2)) : 0,
+        avgRating: ratingCount ? Number((ratingSum / ratingCount).toFixed(2)) : 0,
+        ratedQueries: ratingCount,
       },
+      ratingDistribution: ratingDist,
       topQuestions,
       intents: Array.from(intentMap.entries())
         .map(([intent, count]) => ({ intent, count }))
@@ -505,5 +721,40 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         updatedAt: gap.updatedAt,
       })),
     };
+}
+
+// A low-rated answer with written feedback is a strong signal that the
+// underlying documentation is missing or unclear — record it as a gap.
+async function registerGapFromFeedback(
+  query: { question: string; intent: string | null; confidence: number | null },
+  feedbackText: string,
+) {
+  const terms = queryTerms(query.question);
+  const topic = deriveTopic(query.question, terms);
+  const existing = await prisma.knowledgeGap.findUnique({ where: { topic } });
+  const reason = `User feedback: ${feedbackText.slice(0, 200)}`;
+
+  if (!existing) {
+    await prisma.knowledgeGap.create({
+      data: {
+        topic,
+        title: topic.slice(0, 120),
+        reason,
+        lastQuestion: query.question,
+        confidenceAvg: query.confidence ?? undefined,
+        metadata: { intent: query.intent, viaFeedback: true },
+      },
+    });
+    return;
+  }
+
+  await prisma.knowledgeGap.update({
+    where: { topic },
+    data: {
+      occurrences: { increment: 1 },
+      reason,
+      lastQuestion: query.question,
+      metadata: { intent: query.intent, viaFeedback: true },
+    },
   });
 }

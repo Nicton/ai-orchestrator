@@ -14,6 +14,7 @@ import { wfCreateTask, wfEnqueueJob, wfSetStatus } from './workflow.js';
 import { readRecentEvents } from './bus/sink.js';
 import { registerIntakeApi } from './intake.js';
 import { registerKnowledgeApi } from './knowledge.js';
+import { registerAuthApi, seedDefaultAdmin } from './auth.js';
 import { TaskStatus, WfJobType, WfTaskStatus } from './prismaEnums.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,6 +34,7 @@ app.register(fastifyMultipart, {
   },
 });
 
+await registerAuthApi(app);
 await registerIntakeApi(app);
 await registerKnowledgeApi(app);
 
@@ -791,11 +793,29 @@ app.post('/api/youtrack/poll', async (req: any, reply) => {
   }
 });
 
+// --- Page routes ---
+// Knowledge Assistant (Google-style) is the primary product at `/`.
 app.get('/', async (_, reply) => {
   return reply.sendFile('index.html');
 });
 
+// SPA handles the login view; deep-link friendly.
+app.get('/login', async (_, reply) => {
+  return reply.sendFile('index.html');
+});
+
+// Admin console (access enforced by the admin APIs it calls).
+app.get('/admin', async (_, reply) => {
+  return reply.sendFile('admin.html');
+});
+
+// Legacy internal orchestrator dashboard (engineering use).
+app.get('/internal', async (_, reply) => {
+  return reply.sendFile('internal.html');
+});
+
 async function start() {
+  await seedDefaultAdmin().catch((e) => app.log.error(e, 'admin seed failed'));
   await app.listen({ host: '0.0.0.0', port: config.port });
   app.log.info(`app listening on :${config.port}`);
 }

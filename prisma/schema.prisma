@@ -564,11 +564,88 @@ model KnowledgeQuery {
   latencyMs          Int?
   sourceCount        Int      @default(0)
   rating             Int?
+  ratedAt            DateTime?
+  inputMode          String?  // text|voice
   sources            Json?
+
+  userId String?
+  user   AppUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  feedbacks   KnowledgeFeedback[]
+  corrections KnowledgeCorrection[]
 
   @@index([createdAt])
   @@index([intent, createdAt])
   @@index([normalizedQuestion])
+  @@index([userId, createdAt])
+}
+
+// --- Auth & accounts (email/password login, roles user|admin) ---
+
+model AppUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         String    @default("user") // user|admin
+  passwordHash String
+  passwordSalt String
+  isActive     Boolean   @default(true)
+  mustReset    Boolean   @default(false)
+  inviteToken  String?   @unique
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions    AppSession[]
+  queries     KnowledgeQuery[]
+  feedbacks   KnowledgeFeedback[]
+  corrections KnowledgeCorrection[]
+
+  @@index([role])
+}
+
+model AppSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  userAgent String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model KnowledgeFeedback {
+  id        String   @id @default(cuid())
+  queryId   String
+  userId    String?
+  kind      String   @default("text") // text|voice
+  text      String
+  rating    Int?
+  createdAt DateTime @default(now())
+
+  query KnowledgeQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  user  AppUser?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([queryId, createdAt])
+  @@index([createdAt])
+}
+
+model KnowledgeCorrection {
+  id        String   @id @default(cuid())
+  queryId   String
+  userId    String?
+  text      String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+
+  query KnowledgeQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  user  AppUser?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([queryId, createdAt])
+  @@index([status, createdAt])
 }
 
 model KnowledgeGap {
