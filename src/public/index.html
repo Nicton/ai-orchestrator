@@ -1,1402 +1,713 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Orchestrator (agentic QA)</title>
-  <style>
-    body { font-family: Inter, system-ui, Arial, sans-serif; margin: 0; background:#0b1020; color:#eaf0ff; }
-    .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
-    h1 { margin: 0 0 12px; font-size: 26px; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
-    .card { background:#141b34; border:1px solid #23305f; border-radius:14px; padding:16px; }
-    input, textarea { width:100%; box-sizing:border-box; margin-top:6px; margin-bottom:12px; background:#0b1020; color:#eaf0ff; border:1px solid #314275; border-radius:10px; padding:10px; }
-    button { background:#5f7cff; border:none; color:white; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
-    table { width:100%; border-collapse: collapse; font-size:14px; }
-    th, td { text-align:left; padding:8px; border-bottom:1px solid #24325f; vertical-align: top; }
-    .pill { padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
-    .PENDING{ background:#545f89; } .RUNNING{ background:#776300; } .DONE{ background:#0a6a44; } .FAILED{ background:#7a2030; } .SKIPPED{ background:#4f4f4f; }
-    .muted { color:#9fb0e6; font-size:13px; }
-    pre { white-space: pre-wrap; background:#0b1020; border:1px solid #273467; border-radius:10px; padding:10px; max-height:320px; overflow:auto; }
-    .knowledge-answer { margin-top:8px; background:#0b1020; border:1px solid #273467; border-radius:10px; padding:14px; max-height:420px; overflow:auto; line-height:1.55; }
-    .knowledge-answer h4 { margin:16px 0 8px; font-size:14px; color:#cfe1ff; }
-    .knowledge-answer h4:first-child { margin-top:0; }
-    .knowledge-answer p { margin:0 0 10px; }
-    .knowledge-answer ul { margin:0 0 12px 18px; padding:0; }
-    .knowledge-answer li { margin:0 0 8px; }
-    .knowledge-answer .ka-lead { font-size:15px; color:#f4f7ff; }
-    .knowledge-answer .ka-meta { margin-top:14px; padding-top:12px; border-top:1px solid #24325f; color:#9fb0e6; font-size:13px; }
-    .knowledge-answer .ka-sources { margin-top:14px; padding-top:12px; border-top:1px solid #24325f; }
-    .knowledge-answer .ka-source { margin-top:8px; padding:10px; border:1px solid #24325f; border-radius:10px; background:#111831; }
-    .knowledge-answer .ka-source-path { font-weight:700; word-break:break-word; }
-    .knowledge-answer .ka-source-score { color:#9fb0e6; font-size:12px; margin-top:4px; }
-    .voice-controls { margin-top:4px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .voice-status-dot { width:10px; height:10px; border-radius:999px; background:#4c5f95; display:inline-block; }
-    .voice-status-dot.recording { background:#ff6767; box-shadow:0 0 0 6px rgba(255, 103, 103, 0.16); }
-    code { color:#cfe1ff; }
-    @media (max-width: 950px){ .grid{ grid-template-columns: 1fr; } }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Knowledge Assistant</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #202124;
+    --muted: #5f6368;
+    --line: #dfe1e5;
+    --line-soft: #ecedef;
+    --blue: #1a73e8;
+    --blue-dark: #1557b0;
+    --bg-soft: #f8f9fa;
+    --shadow: 0 1px 6px rgba(32,33,36,.18);
+    --shadow-lg: 0 4px 24px rgba(32,33,36,.18);
+    --radius: 24px;
+    --green: #188038;
+    --amber: #e37400;
+    --red: #d93025;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Roboto, Arial, system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .hidden { display: none !important; }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 18px; padding: 14px 22px; font-size: 14px;
+    position: sticky; top: 0; background: var(--bg); z-index: 20;
+  }
+  .topbar .spacer { flex: 1; }
+  .toplink { color: var(--muted); cursor: pointer; padding: 6px 8px; border-radius: 6px; }
+  .toplink:hover { background: var(--bg-soft); color: var(--ink); }
+  .usermenu { position: relative; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%; border: none;
+    background: var(--blue); color: #fff; font-weight: 600; font-size: 15px;
+  }
+  .menu {
+    position: absolute; right: 0; top: 44px; background: #fff; min-width: 230px;
+    border: 1px solid var(--line-soft); border-radius: 12px; box-shadow: var(--shadow-lg);
+    padding: 8px; z-index: 30;
+  }
+  .menu .who { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); margin-bottom: 6px; }
+  .menu .who .nm { font-weight: 600; }
+  .menu .who .em { color: var(--muted); font-size: 13px; }
+  .menu .role-pill { display:inline-block; margin-top:6px; font-size:11px; padding:2px 8px; border-radius:10px; background:#e8f0fe; color:var(--blue-dark); }
+  .menu button {
+    display: block; width: 100%; text-align: left; border: none; background: none;
+    padding: 10px 12px; border-radius: 8px; font-size: 14px; color: var(--ink);
+  }
+  .menu button:hover { background: var(--bg-soft); }
+
+  /* ---------- login ---------- */
+  .login-wrap { min-height: 78vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-card {
+    width: 100%; max-width: 400px; border: 1px solid var(--line-soft); border-radius: 16px;
+    padding: 40px 36px; box-shadow: var(--shadow); text-align: center;
+  }
+  .login-card .logo { margin-bottom: 6px; }
+  .login-card h1 { font-size: 22px; font-weight: 400; margin: 14px 0 4px; }
+  .login-card p.sub { color: var(--muted); margin: 0 0 26px; font-size: 14px; }
+  .field { text-align: left; margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .field input {
+    width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 15px; outline: none;
+  }
+  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(26,115,232,.15); }
+  .btn-primary {
+    width: 100%; background: var(--blue); color: #fff; border: none; border-radius: 8px;
+    padding: 12px; font-size: 15px; font-weight: 500; margin-top: 6px;
+  }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-primary:disabled { opacity: .6; cursor: default; }
+  .err { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 16px; }
+  .login-hint { margin-top: 20px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* ---------- logo ---------- */
+  .glogo { font-size: 46px; font-weight: 500; letter-spacing: -1px; user-select: none; }
+  .glogo .c1{color:#4285F4}.glogo .c2{color:#EA4335}.glogo .c3{color:#FBBC05}.glogo .c4{color:#4285F4}.glogo .c5{color:#34A853}.glogo .c6{color:#EA4335}
+  .gtag { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  /* ---------- search home ---------- */
+  .home { display: flex; flex-direction: column; align-items: center; padding: 0 20px; }
+  .home.centered { justify-content: center; min-height: 64vh; }
+  .home.results { padding-top: 14px; }
+  .home-logo { text-align: center; margin-bottom: 26px; }
+  .home.results .home-logo { display: none; }
+
+  .searchbar {
+    width: 100%; max-width: 620px; display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 18px;
+    transition: box-shadow .15s, border-color .15s;
+  }
+  .searchbar:focus-within { box-shadow: var(--shadow); border-color: transparent; }
+  .searchbar .ico { width: 20px; height: 20px; flex: none; color: var(--muted); }
+  .searchbar input {
+    flex: 1; border: none; outline: none; font-size: 16px; color: var(--ink); background: transparent;
+    min-width: 0;
+  }
+  .mic {
+    border: none; background: none; padding: 6px; border-radius: 50%; display: flex; align-items: center;
+  }
+  .mic:hover { background: var(--bg-soft); }
+  .mic svg { width: 22px; height: 22px; }
+  .mic.recording { background: #fce8e6; }
+  .mic.recording svg { color: var(--red); }
+  .home.results .searchbar { max-width: 690px; margin-left: 0; }
+
+  .home-actions { margin-top: 26px; display: flex; gap: 10px; }
+  .home-actions button {
+    background: var(--bg-soft); border: 1px solid var(--bg-soft); color: #3c4043;
+    padding: 9px 16px; border-radius: 6px; font-size: 14px;
+  }
+  .home-actions button:hover { border-color: var(--line); box-shadow: var(--shadow); }
+  .voicehint { margin-top: 14px; font-size: 13px; color: var(--muted); min-height: 18px; }
+
+  /* ---------- results ---------- */
+  .results-area { width: 100%; max-width: 720px; margin: 22px 0 80px; }
+  .answer-meta { color: var(--muted); font-size: 13px; margin-bottom: 14px; display:flex; gap:14px; flex-wrap:wrap; align-items:center; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:12px; background:var(--bg-soft); font-size:12px; color:#3c4043; }
+  .conf-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+
+  .answer {
+    font-size: 16px; line-height: 1.7; color: #1f1f1f;
+    border: 1px solid var(--line-soft); border-radius: 14px; padding: 22px 24px; background: #fff;
+    box-shadow: var(--shadow);
+  }
+  .answer h1,.answer h2,.answer h3,.answer h4 { font-weight:600; line-height:1.3; margin:18px 0 8px; }
+  .answer h1{font-size:20px}.answer h2{font-size:18px}.answer h3,.answer h4{font-size:16px}
+  .answer p { margin: 0 0 12px; }
+  .answer ul,.answer ol { margin: 0 0 12px; padding-left: 22px; }
+  .answer li { margin: 4px 0; }
+  .answer code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+  .answer strong { font-weight: 600; }
+
+  .sources { margin-top: 22px; }
+  .sources h3 { font-size: 14px; color: var(--muted); font-weight: 500; margin: 0 0 12px; text-transform: uppercase; letter-spacing:.4px; }
+  .source {
+    border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+    transition: box-shadow .12s; background:#fff;
+  }
+  .source:hover { box-shadow: var(--shadow); }
+  .source .s-top { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .source .s-title { font-size: 16px; color: var(--blue); }
+  .source-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; }
+  .badge-confluence { background:#deebff; color:#0747a6; }
+  .badge-jira { background:#deebff; color:#0747a6; }
+  .badge-web { background:#e6f4ea; color:#188038; }
+  .badge-local { background:#f1f3f4; color:#5f6368; }
+  .source .s-url { font-size: 13px; color: var(--green); word-break: break-all; }
+  .source .s-path { font-size: 12px; color: var(--muted); }
+  .source .s-snippet { font-size: 14px; color: #3c4043; margin-top: 6px; line-height:1.5; }
+
+  /* ---------- rating + actions ---------- */
+  .feedback-row {
+    margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line-soft);
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .rate-label { font-size: 14px; color: var(--muted); }
+  .emojis { display: flex; gap: 4px; }
+  .emoji {
+    border: none; background: none; font-size: 26px; line-height: 1; padding: 4px; border-radius: 8px;
+    filter: grayscale(1); opacity: .55; transition: transform .1s, filter .1s, opacity .1s;
+  }
+  .emoji:hover { transform: scale(1.18); filter: grayscale(0); opacity: 1; }
+  .emoji.selected { filter: grayscale(0); opacity: 1; transform: scale(1.12); }
+  .rate-thanks { font-size: 13px; color: var(--green); }
+  .action-btn {
+    border: 1px solid var(--line); background: #fff; color: #3c4043; border-radius: 18px;
+    padding: 7px 14px; font-size: 13px; display:inline-flex; align-items:center; gap:6px;
+  }
+  .action-btn:hover { background: var(--bg-soft); }
+  .loading { color: var(--muted); font-size: 15px; padding: 30px 0; display:flex; align-items:center; gap:10px; }
+  .spinner { width:18px;height:18px;border:2px solid var(--line); border-top-color: var(--blue); border-radius:50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- drawer (history) ---------- */
+  .drawer-bg { position: fixed; inset: 0; background: rgba(0,0,0,.32); z-index: 40; }
+  .drawer {
+    position: fixed; right: 0; top: 0; bottom: 0; width: 420px; max-width: 92vw; background: #fff;
+    z-index: 41; box-shadow: -4px 0 24px rgba(0,0,0,.18); display: flex; flex-direction: column;
+  }
+  .drawer header { padding: 18px 20px; border-bottom: 1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between; }
+  .drawer header h2 { font-size: 17px; font-weight: 500; margin: 0; }
+  .drawer .body { overflow-y: auto; padding: 12px 16px; }
+  .hist-item { padding: 12px 8px; border-bottom: 1px solid var(--line-soft); cursor: pointer; border-radius:8px; }
+  .hist-item:hover { background: var(--bg-soft); }
+  .hist-q { font-size: 14px; color: var(--ink); margin-bottom: 4px; }
+  .hist-meta { font-size: 12px; color: var(--muted); display:flex; gap:10px; flex-wrap:wrap; }
+  .iconbtn { border:none; background:none; color:var(--muted); font-size:22px; line-height:1; padding:4px 8px; border-radius:8px; }
+  .iconbtn:hover { background: var(--bg-soft); }
+  .empty { color: var(--muted); font-size: 14px; padding: 24px 8px; text-align:center; }
+
+  /* ---------- modal ---------- */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; display:flex; align-items:center; justify-content:center; padding: 20px; }
+  .modal { background: #fff; border-radius: 16px; width: 100%; max-width: 480px; box-shadow: var(--shadow-lg); }
+  .modal header { padding: 20px 24px 0; }
+  .modal header h2 { font-size: 19px; font-weight: 500; margin: 0 0 4px; }
+  .modal header p { color: var(--muted); font-size: 14px; margin: 0; }
+  .modal .content { padding: 18px 24px; }
+  .modal textarea {
+    width: 100%; min-height: 110px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    font-size: 15px; font-family: inherit; resize: vertical; outline: none;
+  }
+  .modal textarea:focus { border-color: var(--blue); }
+  .modal .footer { padding: 0 24px 22px; display: flex; justify-content: flex-end; gap: 10px; align-items:center; }
+  .btn-text { background: none; border: none; color: var(--blue); padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; }
+  .btn-text:hover { background: #f0f6ff; }
+  .btn-fill { background: var(--blue); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; }
+  .btn-fill:hover { background: var(--blue-dark); }
+  .modal-mic { margin-right: auto; display:flex; align-items:center; gap:10px; }
+  .mic-lg { border:1px solid var(--line); background:#fff; border-radius:50%; width:42px; height:42px; display:flex; align-items:center; justify-content:center; }
+  .mic-lg.recording { background:#fce8e6; border-color:#fce8e6; }
+  .mic-lg svg { width:22px; height:22px; color:var(--muted); }
+  .mic-lg.recording svg { color: var(--red); }
+  .mic-state { font-size: 12px; color: var(--muted); }
+  .toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); background:#202124; color:#fff; padding:12px 20px; border-radius:8px; font-size:14px; z-index:60; box-shadow: var(--shadow-lg); }
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>AI Orchestrator</h1>
-    <div class="muted">Prototype: pipeline runs (multi-agent) + workflow tasks (long-running) + legacy single tasks</div>
 
-    <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-      <button id="tabBtn-dashboard" onclick="setTab('dashboard')">Dashboard</button>
-      <button id="tabBtn-knowledge" onclick="setTab('knowledge')">Knowledge</button>
-      <button id="tabBtn-office" onclick="setTab('office')">Office (read-only)</button>
-      <a class="muted" href="/pixel/" style="margin-left:6px;">Pixel Office →</a>
-      <button id="tabBtn-workflow" onclick="setTab('workflow')">Workflow tasks</button>
-      <span class="muted">Tab:</span>
-      <code id="activeTabLabel">dashboard</code>
+<!-- ============ TOP BAR ============ -->
+<div class="topbar" id="topbar" style="display:none">
+  <span class="spacer"></span>
+  <span class="toplink" id="histBtn">History</span>
+  <span class="toplink" id="adminBtn" style="display:none">Admin</span>
+  <div class="usermenu">
+    <button class="avatar" id="avatarBtn">U</button>
+    <div class="menu hidden" id="userMenu">
+      <div class="who">
+        <div class="nm" id="menuName">—</div>
+        <div class="em" id="menuEmail">—</div>
+        <span class="role-pill" id="menuRole">user</span>
+      </div>
+      <button id="menuChangePw">Change password</button>
+      <button id="menuLogout">Sign out</button>
     </div>
-
-    <!-- DASHBOARD TAB -->
-    <div id="tab-dashboard">
-      <div class="grid" style="margin-top:16px;">
-        <div class="card">
-          <h3>Create pipeline run</h3>
-        <label>Title (optional)</label>
-        <input id="runTitle" placeholder="YouTrack: PROJ-123" />
-        <label>Pipeline path (optional)</label>
-        <input id="pipelinePath" value="core/orchestration/pipeline.v1.yaml" />
-        <label>Input text (ticket context / request)</label>
-        <textarea id="runInput" rows="7" placeholder="Describe what to test / context..."></textarea>
-        <label>External ref (optional)</label>
-        <input id="externalRef" placeholder="YouTrack:PROJ-123" />
-        <div style="display:flex; gap:10px;">
-          <button onclick="createRun()">Create</button>
-        </div>
-        <div class="muted" style="margin-top:10px;">
-          After creation, click “Start” on a run. Worker will pick up stages.
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Limits (placeholder)</h3>
-        <div id="limits">Loading...</div>
-        <div class="muted" style="margin-top:8px;">Provider limits endpoint is still stubbed.</div>
-
-        <hr style="border:0; border-top:1px solid #24325f; margin:14px 0;" />
-
-        <h3 style="margin-top:0;">YouTrack trigger (manual check)</h3>
-        <div class="muted">Calls <code>POST /api/youtrack/poll</code> and shows what issues were picked up.</div>
-        <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button onclick="youtrackPoll()">Check YouTrack now</button>
-          <span class="muted">(looks for <code>[AI]</code> issues in <code>In Progress</code>)</span>
-        </div>
-        <pre id="youtrackPollOut" style="margin-top:10px; max-height:200px;"></pre>
-      </div>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h3>Agents & teams</h3>
-      <div class="muted">Skills discovered from <code>skills/*/SKILL.md</code>. Shows what exists and what duplicates in current runs.</div>
-      <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <button onclick="loadAgents()">Refresh agents</button>
-        <span class="muted">Team:</span>
-        <input id="teamFilter" style="width:220px; margin:0;" placeholder="qa_automation | docs | unknown" />
-      </div>
-      <div id="agents" style="margin-top:10px;"></div>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h3>Pipeline graph</h3>
-      <div class="muted">Rendered Mermaid graph. When you open a run, the graph switches to run-aware view (statuses).</div>
-      <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <button onclick="loadGraph()">Refresh pipeline graph</button>
-        <button onclick="renderLastRunGraph()">Render last opened run graph</button>
-        <span class="muted">(Mermaid is rendered client-side)</span>
-      </div>
-      <div id="graph" style="margin-top:10px; overflow:auto; border:1px solid #273467; border-radius:10px; padding:10px; background:#0b1020;">
-        <div class="muted">Loading…</div>
-      </div>
-      <details style="margin-top:10px;">
-        <summary>Raw Mermaid source</summary>
-        <pre id="graphSrc" style="margin-top:10px; max-height:240px;"></pre>
-      </details>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h3>Pipeline runs</h3>
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Pipeline</th><th>Status</th><th>Stages</th><th>Created</th><th></th></tr>
-        </thead>
-        <tbody id="runs"></tbody>
-      </table>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h3>Selected run</h3>
-      <div id="runDetails" class="muted">Click “Open” in the runs table.</div>
-    </div>
-
-    <div class="card" style="margin-top:24px; opacity:0.9;">
-      <h3>Legacy: single tasks</h3>
-      <div class="muted">Kept for backward compatibility. Prefer pipeline runs.</div>
-      <div class="grid" style="margin-top:10px;">
-        <div>
-          <label>Role</label>
-          <input id="role" value="Analyst" />
-          <label>Prompt</label>
-          <textarea id="prompt" rows="5"></textarea>
-          <button onclick="createTask()">Submit legacy task</button>
-        </div>
-        <div>
-          <table>
-            <thead>
-              <tr><th>ID</th><th>Role</th><th>Status</th><th>Tokens</th><th></th></tr>
-            </thead>
-            <tbody id="tasks"></tbody>
-          </table>
-        </div>
-      </div>
-      <div style="margin-top:12px;">
-        <div id="taskDetails" class="muted">Click “Open” in the legacy tasks table.</div>
-      </div>
-    </div>
-      
-    </div> <!-- /tab-dashboard -->
-
-    <!-- KNOWLEDGE TAB -->
-    <div id="tab-knowledge" style="display:none; margin-top:16px;">
-      <div class="grid">
-        <div class="card">
-          <h3>Knowledge Assistant</h3>
-          <div class="muted">Asks across local documentation sources and stores every query for later analytics.</div>
-          <label>Your question</label>
-          <textarea id="knowledgeQuestion" rows="7" placeholder="What will be affected if we change carrier billing rules in TMS?"></textarea>
-          <div class="voice-controls">
-            <button id="knowledgeVoiceBtn" type="button" onclick="toggleKnowledgeVoice()">Start voice</button>
-            <label for="knowledgeVoiceLang" class="muted" style="display:flex; align-items:center; gap:6px;">
-              Voice language
-              <select id="knowledgeVoiceLang">
-                <option value="ru-RU" selected>Russian</option>
-                <option value="en-US">English</option>
-                <option value="auto">Auto</option>
-              </select>
-            </label>
-            <span class="muted"><span id="knowledgeVoiceDot" class="voice-status-dot"></span> <span id="knowledgeVoiceStatus">Voice input is idle.</span></span>
-          </div>
-          <label>User label (optional)</label>
-          <input id="knowledgeUserLabel" placeholder="BA | PM | Support | Aleh" />
-          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <button onclick="askKnowledge()">Ask</button>
-            <button onclick="reindexKnowledge()">Reindex docs</button>
-          </div>
-          <div id="knowledgeStatus" class="muted" style="margin-top:10px;"></div>
-          <div style="margin-top:12px;">
-            <div style="font-weight:800;">Answer</div>
-            <div id="knowledgeAnswer" class="knowledge-answer">Ask a question to see the grounded response here.</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>Index Status</h3>
-          <div id="knowledgeRoots" class="muted">Loading…</div>
-
-          <hr style="border:0; border-top:1px solid #24325f; margin:14px 0;" />
-
-          <h3 style="margin-top:0;">Top Sources</h3>
-          <div id="knowledgeTopSources" class="muted">Loading…</div>
-        </div>
-      </div>
-
-      <div class="grid" style="margin-top:16px;">
-        <div class="card">
-          <h3>Recent Queries</h3>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <button onclick="loadKnowledgeQueries()">Refresh</button>
-          </div>
-          <div id="knowledgeQueries" style="margin-top:10px;"></div>
-        </div>
-
-        <div class="card">
-          <h3>Analytics & Gaps</h3>
-          <div id="knowledgeAnalytics" class="muted">Loading…</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- OFFICE TAB (read-only activity) -->
-    <div id="tab-office" style="display:none; margin-top:16px;">
-      <div class="grid">
-        <div class="card">
-          <h3>Office board (by run)</h3>
-          <div class="muted">Read-only snapshot built from <code>/api/runs</code> + recent <code>/api/events</code>. (MVP)</div>
-          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <button onclick="loadOfficeBoard()">Refresh</button>
-            <span class="muted">Runs:</span>
-            <input id="officeRunsLimit" style="width:120px; margin:0;" value="20" />
-          </div>
-
-          <hr style="border:0; border-top:1px solid #24325f; margin:14px 0;" />
-
-          <h3 style="margin:0;">Ad-hoc agent run</h3>
-          <div class="muted">(B) Run a single agent/skill immediately. Creates a 1-stage pipeline run so it appears in Office.</div>
-          <div style="margin-top:10px;">
-            <label>Role/Skill</label>
-            <input id="adhoc_role" placeholder="00-manager" />
-            <label>Prompt</label>
-            <textarea id="adhoc_prompt" rows="5" placeholder="What should the agent do?"></textarea>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <button onclick="createAdhoc()">Run ad-hoc</button>
-            </div>
-            <div id="adhoc_out" class="muted" style="margin-top:8px;"></div>
-          </div>
-
-          <div id="officeBoard" style="margin-top:12px;"></div>
-        </div>
-
-        <div class="card">
-          <h3>Live activity feed</h3>
-          <div class="muted">Tail of orchestrator events from <code>/api/events</code> (JSONL log shared between app & worker).</div>
-          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <button onclick="loadEvents()">Refresh</button>
-            <span class="muted">Limit:</span>
-            <input id="eventsLimit" style="width:120px; margin:0;" value="200" />
-            <span class="muted">Filter:</span>
-            <input id="eventsFilter" style="width:260px; margin:0;" placeholder="runId / stageId / agent id / text" />
-          </div>
-          <div id="events" style="margin-top:12px;"></div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:16px;">
-        <h3>Selected event</h3>
-        <div id="eventDetails" class="muted">Click an event line to inspect raw JSON.</div>
-      </div>
-    </div>
-
-    <!-- WORKFLOW TASKS TAB -->
-    <div id="tab-workflow" style="display:none; margin-top:16px;">
-      <div class="grid">
-        <div class="card">
-          <h3>Create workflow task</h3>
-          <div class="muted">Creates a long-running task with clarification loop (TZ 2026-04-28). Use this for real work; pipeline runs are execution primitives.</div>
-          <label>External source (optional)</label>
-          <input id="wf_externalSource" placeholder="youtrack | github | telegram | api" />
-          <label>External task id (optional)</label>
-          <input id="wf_externalTaskId" placeholder="PROJ-123" />
-          <label>Title</label>
-          <input id="wf_title" placeholder="Add validation for order creation" />
-          <label>Description</label>
-          <textarea id="wf_description" rows="6" placeholder="Context, requirements, links..."></textarea>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <label style="display:flex; gap:8px; align-items:center; margin:0;">
-              <input id="wf_autoAnalyze" type="checkbox" checked style="width:auto; margin:0;" />
-              <span class="muted">autoAnalyze</span>
-            </label>
-            <button onclick="createWfTask()">Create</button>
-          </div>
-          <div id="wf_createResult" class="muted" style="margin-top:10px;"></div>
-        </div>
-
-        <div class="card">
-          <h3>Workflow tasks</h3>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <button onclick="loadWfTasks()">Refresh</button>
-            <span class="muted">Status filter:</span>
-            <input id="wf_statusFilter" style="width:220px; margin:0;" placeholder="ANALYZING | WAITING_FOR_HUMAN | ..." />
-          </div>
-          <table style="margin-top:10px;">
-            <thead>
-              <tr><th>ID</th><th>External</th><th>Title</th><th>Status</th><th>Open Q</th><th>Next ping</th><th></th></tr>
-            </thead>
-            <tbody id="wf_tasks"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:16px;">
-        <h3>Selected workflow task</h3>
-        <div id="wf_taskDetails" class="muted">Open a task from the table.</div>
-      </div>
-    </div> <!-- /tab-workflow -->
-
   </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-  <script>
-    let lastOpenedRunId = null;
-
-    // Allow deep-linking from Pixel Office, etc.
-    function getQueryParam(name){
-      try {
-        const u = new URL(window.location.href);
-        return u.searchParams.get(name);
-      } catch { return null; }
-    }
-    let activeTab = 'dashboard';
-
-    function initMermaid() {
-      if (!window.mermaid) return;
-      window.mermaid.initialize({ startOnLoad: false, theme: 'dark' });
-    }
-
-    function setTab(tab) {
-      activeTab = tab;
-      document.getElementById('activeTabLabel').textContent = tab;
-      document.getElementById('tab-dashboard').style.display = tab === 'dashboard' ? '' : 'none';
-      document.getElementById('tab-knowledge').style.display = tab === 'knowledge' ? '' : 'none';
-      document.getElementById('tab-office').style.display = tab === 'office' ? '' : 'none';
-      document.getElementById('tab-workflow').style.display = tab === 'workflow' ? '' : 'none';
-
-      document.getElementById('tabBtn-dashboard').style.opacity = tab === 'dashboard' ? '1' : '0.75';
-      document.getElementById('tabBtn-knowledge').style.opacity = tab === 'knowledge' ? '1' : '0.75';
-      document.getElementById('tabBtn-office').style.opacity = tab === 'office' ? '1' : '0.75';
-      document.getElementById('tabBtn-workflow').style.opacity = tab === 'workflow' ? '1' : '0.75';
-
-      if (tab === 'knowledge') {
-        loadKnowledgeStatus();
-        loadKnowledgeQueries();
-        loadKnowledgeAnalytics();
-      }
-      if (tab === 'workflow') loadWfTasks();
-      if (tab === 'office') {
-        loadOfficeBoard();
-        loadEvents();
-      }
-    }
-
-    async function fetchLimits() {
-      const res = await fetch('/api/limits');
-      const data = await res.json();
-      document.getElementById('limits').innerHTML = `<b>${data.used}</b> / <b>${data.total}</b> (${data.placeholder ? 'stub' : 'live'})`;
-    }
-
-    async function loadKnowledgeStatus() {
-      const res = await fetch('/api/knowledge/status');
-      const data = await res.json();
-      const root = document.getElementById('knowledgeRoots');
-      const status = document.getElementById('knowledgeStatus');
-      status.innerHTML = `Indexed <b>${data.totalDocs || 0}</b> docs. Last scan: <code>${escapeHtml(data.scannedAt || '-')}</code>`;
-      root.innerHTML = `
-        ${(data.roots || []).map(r => `
-          <div style="margin-top:8px; padding:10px; border:1px solid #273467; border-radius:10px; background:#0b1020;">
-            <div style="font-weight:800;">${escapeHtml(r.label)}</div>
-            <div class="muted"><code>${escapeHtml(r.path)}</code></div>
-            <div class="muted" style="margin-top:4px;">files: <b>${r.files}</b></div>
-          </div>
-        `).join('')}
-      `;
-    }
-
-    async function askKnowledge() {
-      const question = document.getElementById('knowledgeQuestion').value.trim();
-      const userLabel = document.getElementById('knowledgeUserLabel').value.trim() || undefined;
-      const languageHint = getKnowledgeAnswerLanguageHint();
-      if (!question) {
-        alert('Question is required');
-        return;
-      }
-
-      document.getElementById('knowledgeAnswer').textContent = 'Thinking…';
-      const res = await fetch('/api/knowledge/ask', {
-        method: 'POST',
-        headers: {'content-type':'application/json'},
-        body: JSON.stringify({ question, userLabel, channel: 'web-ui', languageHint }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        document.getElementById('knowledgeAnswer').textContent = 'Failed: ' + JSON.stringify(data);
-        return;
-      }
-
-      document.getElementById('knowledgeAnswer').innerHTML = renderKnowledgeAnswer(data);
-      document.getElementById('knowledgeVoiceStatus').textContent = data.language === 'ru'
-        ? 'Ответ сформирован на языке вопроса.'
-        : 'Answer language matched the question.';
-      document.getElementById('knowledgeVoiceDot').classList.remove('recording');
-
-      await loadKnowledgeQueries();
-      await loadKnowledgeAnalytics();
-    }
-
-    let knowledgeSpeechRecognition = null;
-    let knowledgeVoiceActive = false;
-    let knowledgeVoiceTranscript = '';
-
-    function getKnowledgeSpeechRecognition() {
-      if (knowledgeSpeechRecognition) return knowledgeSpeechRecognition;
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return null;
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        knowledgeVoiceActive = true;
-        knowledgeVoiceTranscript = '';
-        document.getElementById('knowledgeVoiceBtn').textContent = 'Stop voice';
-        document.getElementById('knowledgeVoiceDot').classList.add('recording');
-        document.getElementById('knowledgeVoiceStatus').textContent = 'Listening… speak your question.';
-      };
-
-      recognition.onresult = (event) => {
-        let interimTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const part = event.results[i][0]?.transcript?.trim();
-          if (!part) continue;
-          if (event.results[i].isFinal) {
-            knowledgeVoiceTranscript = `${knowledgeVoiceTranscript} ${part}`.trim();
-          } else {
-            interimTranscript = `${interimTranscript} ${part}`.trim();
-          }
-        }
-        const textarea = document.getElementById('knowledgeQuestion');
-        textarea.value = [knowledgeVoiceTranscript, interimTranscript].filter(Boolean).join(' ').trim();
-        document.getElementById('knowledgeVoiceStatus').textContent = interimTranscript
-          ? 'Listening… checking live transcript.'
-          : 'Voice question captured. You can edit the text before sending.';
-      };
-
-      recognition.onerror = (event) => {
-        knowledgeVoiceActive = false;
-        document.getElementById('knowledgeVoiceBtn').textContent = 'Start voice';
-        document.getElementById('knowledgeVoiceDot').classList.remove('recording');
-        document.getElementById('knowledgeVoiceStatus').textContent = `Voice input failed: ${event.error || 'unknown error'}`;
-      };
-
-      recognition.onend = () => {
-        knowledgeVoiceActive = false;
-        document.getElementById('knowledgeVoiceBtn').textContent = 'Start voice';
-        document.getElementById('knowledgeVoiceDot').classList.remove('recording');
-        const status = document.getElementById('knowledgeVoiceStatus');
-        if (status.textContent === 'Listening… speak your question.') {
-          status.textContent = 'Voice input stopped.';
-        }
-      };
-
-      knowledgeSpeechRecognition = recognition;
-      return recognition;
-    }
-
-    function detectBrowserSpeechLang(text) {
-      const sample = String(text || '').trim();
-      if (/[А-Яа-яЁёІіЎў]/.test(sample)) return 'ru-RU';
-      return navigator.language || 'en-US';
-    }
-
-    function getKnowledgeVoiceLang() {
-      const selected = document.getElementById('knowledgeVoiceLang').value;
-      if (selected && selected !== 'auto') return selected;
-      return detectBrowserSpeechLang(document.getElementById('knowledgeQuestion').value);
-    }
-
-    function getKnowledgeAnswerLanguageHint() {
-      const speechLang = getKnowledgeVoiceLang().toLowerCase();
-      if (speechLang.startsWith('ru')) return 'ru';
-      return 'en';
-    }
-
-    function toggleKnowledgeVoice() {
-      const recognition = getKnowledgeSpeechRecognition();
-      if (!recognition) {
-        document.getElementById('knowledgeVoiceStatus').textContent = 'This browser does not support built-in voice input. Try Chrome or Edge.';
-        return;
-      }
-
-      if (knowledgeVoiceActive) {
-        recognition.stop();
-        return;
-      }
-
-      recognition.lang = getKnowledgeVoiceLang();
-      recognition.start();
-    }
-
-    async function reindexKnowledge() {
-      document.getElementById('knowledgeStatus').textContent = 'Reindexing…';
-      const res = await fetch('/api/knowledge/reindex', { method: 'POST' });
-      const data = await res.json();
-      document.getElementById('knowledgeStatus').innerHTML = `Reindexed <b>${data.totalDocs || 0}</b> docs.`;
-      await loadKnowledgeStatus();
-      await loadKnowledgeAnalytics();
-    }
-
-    async function loadKnowledgeQueries() {
-      const res = await fetch('/api/knowledge/queries?limit=12');
-      const data = await res.json();
-      const root = document.getElementById('knowledgeQueries');
-      root.innerHTML = '';
-
-      if (!(data.queries || []).length) {
-        root.innerHTML = '<div class="muted">No queries yet.</div>';
-        return;
-      }
-
-      for (const item of data.queries) {
-        const div = document.createElement('div');
-        div.className = 'card';
-        div.style.background = '#0b1020';
-        div.style.border = '1px solid #273467';
-        div.style.marginTop = '10px';
-        div.innerHTML = `
-          <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-            <div style="font-weight:800;">${escapeHtml(item.question)}</div>
-            <div class="muted"><code>${escapeHtml(new Date(item.createdAt).toLocaleString())}</code></div>
-          </div>
-          <div class="muted" style="margin-top:6px;">intent: <b>${escapeHtml(item.intent || '-')}</b> • confidence: <b>${item.confidence ?? '-'}</b> • sources: <b>${item.sourceCount ?? 0}</b></div>
-          <pre style="margin-top:8px; max-height:180px;">${escapeHtml(item.answer || '')}</pre>
-        `;
-        root.appendChild(div);
-      }
-    }
-
-    async function loadKnowledgeAnalytics() {
-      const res = await fetch('/api/knowledge/analytics');
-      const data = await res.json();
-      const analytics = document.getElementById('knowledgeAnalytics');
-      const topSources = document.getElementById('knowledgeTopSources');
-
-      topSources.innerHTML = (data.topSources || []).length
-        ? (data.topSources || []).map(s => `<div class="muted" style="margin-top:6px;"><code>${escapeHtml(s.path)}</code> • ${s.count}</div>`).join('')
-        : '<div class="muted">No source usage yet.</div>';
-
-      analytics.innerHTML = `
-        <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:10px;">
-          <div class="card" style="background:#0b1020; border:1px solid #273467;">
-            <div class="muted">queries</div>
-            <div style="font-size:24px; font-weight:900;">${data.totals?.queries ?? 0}</div>
-          </div>
-          <div class="card" style="background:#0b1020; border:1px solid #273467;">
-            <div class="muted">avg latency</div>
-            <div style="font-size:24px; font-weight:900;">${data.totals?.avgLatencyMs ?? 0}ms</div>
-          </div>
-          <div class="card" style="background:#0b1020; border:1px solid #273467;">
-            <div class="muted">avg confidence</div>
-            <div style="font-size:24px; font-weight:900;">${data.totals?.avgConfidence ?? 0}</div>
-          </div>
+<!-- ============ LOGIN ============ -->
+<div id="view-login">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="logo glogo" style="font-size:34px"><span class="c1">K</span><span class="c2">n</span><span class="c3">o</span><span class="c4">w</span><span class="c5">i</span></div>
+      <h1>Knowledge Assistant</h1>
+      <p class="sub">Sign in with your work email</p>
+      <form id="loginForm">
+        <div class="field">
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" type="email" autocomplete="username" placeholder="you@company.com" required />
         </div>
-        <h4 style="margin-top:16px;">Top Questions</h4>
-        <div>${(data.topQuestions || []).map(q => `<div class="muted" style="margin-top:6px;">${escapeHtml(q.question)} • <b>${q.count}</b></div>`).join('') || '<div class="muted">No data yet.</div>'}</div>
-        <h4 style="margin-top:16px;">Top Intents</h4>
-        <div>${(data.intents || []).map(i => `<div class="muted" style="margin-top:6px;">${escapeHtml(i.intent)} • <b>${i.count}</b></div>`).join('') || '<div class="muted">No data yet.</div>'}</div>
-        <h4 style="margin-top:16px;">Knowledge Gaps</h4>
-        <div>${(data.gaps || []).map(g => `
-          <div style="margin-top:8px; padding:10px; border:1px solid #273467; border-radius:10px; background:#0b1020;">
-            <div style="font-weight:800;">${escapeHtml(g.title || g.topic)}</div>
-            <div class="muted">status: <b>${escapeHtml(g.status || 'OPEN')}</b> • occurrences: <b>${g.occurrences ?? 0}</b> • confidence: <b>${g.confidenceAvg ?? '-'}</b></div>
-            <div class="muted" style="margin-top:4px;">${escapeHtml(g.lastQuestion || '')}</div>
-          </div>
-        `).join('') || '<div class="muted">No gaps detected yet.</div>'}</div>
-      `;
-    }
-
-    // --- Office (read-only activity) ---
-    function fmtTs(iso) {
-      try { return new Date(iso).toLocaleString(); } catch { return String(iso || ''); }
-    }
-
-    async function loadEvents() {
-      const root = document.getElementById('events');
-      const limit = Math.min(Number(document.getElementById('eventsLimit')?.value || 200), 2000);
-      const filter = String(document.getElementById('eventsFilter')?.value || '').trim().toLowerCase();
-
-      root.innerHTML = '<div class="muted">Loading…</div>';
-      const res = await fetch('/api/events?limit=' + encodeURIComponent(String(limit)));
-      const data = await res.json();
-      const events = (data.events || []).slice().reverse(); // newest first
-
-      const filtered = filter ? events.filter(ev => {
-        const hay = [ev.type, ev.runId, ev.stageId, ev.actor?.id, ev.actor?.name, ev.message, ev.level, ev.result?.summary]
-          .filter(Boolean).join(' ').toLowerCase();
-        return hay.includes(filter);
-      }) : events;
-
-      const list = document.createElement('div');
-
-      const style = document.createElement('style');
-      style.textContent = `
-        .evLine { padding:10px; border-radius:12px; border:1px solid #273467; background:#0b1020; margin-top:10px; cursor:pointer; }
-        .evTop { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-        .evType { font-weight:900; }
-        .evMeta { color:#9fb0e6; font-size:12px; }
-        .evMsg { margin-top:6px; color:#cfe1ff; font-size:13px; }
-      `;
-      list.appendChild(style);
-
-      if (!filtered.length) {
-        root.innerHTML = '<div class="muted">No events yet. Run a pipeline stage to generate activity.</div>';
-        return;
-      }
-
-      for (const ev of filtered.slice(0, 500)) {
-        const div = document.createElement('div');
-        div.className = 'evLine';
-
-        const tag = ev.type === 'stage.status' ? (ev.status || '') : (ev.level || '');
-        const pill = tag ? `<span class="pill">${escapeHtml(tag)}</span>` : '';
-
-        div.innerHTML = `
-          <div class="evTop">
-            <span class="evType">${escapeHtml(ev.type || '-')}</span>
-            ${pill}
-            <span class="evMeta mono">${escapeHtml(fmtTs(ev.ts))}</span>
-            ${ev.actor?.id ? `<span class="evMeta">actor: <code>${escapeHtml(ev.actor.id)}</code></span>` : ''}
-            ${ev.runId ? `<span class="evMeta">run: <code>${escapeHtml(String(ev.runId).slice(0,8))}</code></span>` : ''}
-            ${ev.stageId ? `<span class="evMeta">stage: <code>${escapeHtml(ev.stageId)}</code></span>` : ''}
-            ${ev.llm?.model ? `<span class="evMeta">model: <code>${escapeHtml(ev.llm.model)}</code></span>` : ''}
-          </div>
-          <div class="evMsg">${escapeHtml(ev.message || ev.result?.summary || '')}</div>
-        `;
-
-        div.addEventListener('click', () => {
-          document.getElementById('eventDetails').innerHTML = `<pre>${escapeHtml(JSON.stringify(ev, null, 2))}</pre>`;
-          if (ev.runId) lastOpenedRunId = ev.runId;
-        });
-
-        list.appendChild(div);
-      }
-
-      root.innerHTML = '';
-      root.appendChild(list);
-    }
-
-    async function createAdhoc() {
-      const roleOrSkill = document.getElementById('adhoc_role').value.trim();
-      const prompt = document.getElementById('adhoc_prompt').value;
-      const out = document.getElementById('adhoc_out');
-      out.textContent = 'Running…';
-
-      if (!roleOrSkill || !prompt.trim()) {
-        out.textContent = 'roleOrSkill and prompt are required';
-        return;
-      }
-
-      const res = await fetch('/api/adhoc', {
-        method: 'POST',
-        headers: {'content-type':'application/json'},
-        body: JSON.stringify({ roleOrSkill, prompt }),
-      });
-
-      if (!res.ok) {
-        const e = await res.text();
-        out.textContent = 'Failed: ' + e;
-        return;
-      }
-
-      const run = await res.json();
-      out.innerHTML = `Created run: <code>${escapeHtml(run.id)}</code>`;
-      document.getElementById('adhoc_prompt').value = '';
-      await loadOfficeBoard();
-      await loadEvents();
-    }
-
-    async function loadOfficeBoard() {
-      const root = document.getElementById('officeBoard');
-      const runsLimit = Math.min(Number(document.getElementById('officeRunsLimit')?.value || 20), 100);
-      root.innerHTML = '<div class="muted">Loading…</div>';
-
-      const [runsRes, evRes] = await Promise.all([
-        fetch('/api/runs?limit=' + encodeURIComponent(String(runsLimit))),
-        fetch('/api/events?limit=500'),
-      ]);
-      const runsData = await runsRes.json();
-      const evData = await evRes.json();
-
-      const runs = runsData.runs || [];
-      const events = evData.events || [];
-
-      const lastByRun = new Map();
-      for (const ev of events) {
-        if (!ev.runId) continue;
-        const prev = lastByRun.get(ev.runId);
-        if (!prev || String(ev.ts) > String(prev.ts)) lastByRun.set(ev.runId, ev);
-      }
-
-      const style = document.createElement('style');
-      style.textContent = `
-        .runCard { background:#0b1020; border:1px solid #273467; border-radius:14px; padding:12px; margin-top:12px; }
-        .runTop { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-        .runTitle { font-weight:900; }
-        .kv { color:#9fb0e6; font-size:12px; margin-top:4px; }
-        .stageRow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
-        .tiny { font-size:12px; }
-      `;
-
-      const wrap = document.createElement('div');
-      wrap.appendChild(style);
-
-      if (!runs.length) {
-        root.innerHTML = '<div class="muted">No runs yet. Create a run in Dashboard first.</div>';
-        return;
-      }
-
-      for (const r of runs) {
-        const done = (r.stages || []).filter(s => s.status === 'DONE' || s.status === 'SKIPPED').length;
-        const total = (r.stages || []).length;
-        const lastEv = lastByRun.get(r.id);
-
-        const card = document.createElement('div');
-        card.className = 'runCard';
-        card.innerHTML = `
-          <div class="runTop">
-            <div>
-              <div class="runTitle">${escapeHtml(r.title || '(no title)')}</div>
-              <div class="kv">run: <code>${escapeHtml(String(r.id).slice(0,8))}</code> • pipeline: <code>${escapeHtml(r.pipelineId)}</code></div>
-              <div class="kv">created: <span class="mono">${escapeHtml(new Date(r.createdAt).toLocaleString())}</span>${r.externalRef ? ' • ext: <code>' + escapeHtml(r.externalRef) + '</code>' : ''}</div>
-            </div>
-            <div style="text-align:right;">
-              <div><span class="pill ${escapeHtml(r.status)}">${escapeHtml(r.status)}</span></div>
-              <div class="kv">stages: <b>${done}/${total}</b></div>
-            </div>
-          </div>
-          <div class="stageRow">
-            ${(r.stages || []).slice(0, 12).map(s => `<span class="pill ${escapeHtml(s.status)} tiny">${escapeHtml(s.stageId)}:${escapeHtml(s.status)}</span>`).join(' ')}
-            ${total > 12 ? `<span class="kv">+${total-12} more…</span>` : ''}
-          </div>
-          <div class="kv" style="margin-top:10px;">last event: ${lastEv ? ('<code>' + escapeHtml(lastEv.type) + '</code> @ ' + escapeHtml(fmtTs(lastEv.ts)) + (lastEv.message ? (' — ' + escapeHtml(lastEv.message)) : '')) : '—'}</div>
-          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="linkBtn" onclick="openRun('${r.id}')">Open run</button>
-            <button class="linkBtn" onclick="retryRun('${r.id}')">Retry run</button>
-          </div>
-        `;
-
-        wrap.appendChild(card);
-      }
-
-      root.innerHTML = '';
-      root.appendChild(wrap);
-    }
-
-    async function youtrackPoll() {
-      const out = document.getElementById('youtrackPollOut');
-      out.textContent = 'Polling…';
-      const res = await fetch('/api/youtrack/poll', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const txt = await res.text();
-      try {
-        out.textContent = JSON.stringify(JSON.parse(txt), null, 2);
-      } catch {
-        out.textContent = txt;
-      }
-    }
-
-    async function createRun() {
-      const payload = {
-        title: document.getElementById('runTitle').value || undefined,
-        pipelinePath: document.getElementById('pipelinePath').value || undefined,
-        inputText: document.getElementById('runInput').value,
-        externalRef: document.getElementById('externalRef').value || undefined,
-      };
-      const res = await fetch('/api/runs', {
-        method: 'POST',
-        headers: {'content-type':'application/json'},
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        alert('Failed: ' + JSON.stringify(e));
-        return;
-      }
-      document.getElementById('runInput').value = '';
-      await loadRuns();
-    }
-
-    // --- Workflow tasks UI ---
-    async function createWfTask() {
-      const payload = {
-        externalSource: document.getElementById('wf_externalSource').value.trim() || undefined,
-        externalTaskId: document.getElementById('wf_externalTaskId').value.trim() || undefined,
-        title: document.getElementById('wf_title').value.trim(),
-        description: document.getElementById('wf_description').value,
-        autoAnalyze: !!document.getElementById('wf_autoAnalyze').checked,
-      };
-
-      const res = await fetch('/api/wf/tasks', {
-        method: 'POST',
-        headers: {'content-type':'application/json'},
-        body: JSON.stringify(payload),
-      });
-      const out = document.getElementById('wf_createResult');
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        out.textContent = 'Failed: ' + JSON.stringify(e);
-        return;
-      }
-      const data = await res.json();
-      out.innerHTML = `Created: <code>${data.taskId}</code>`;
-      await loadWfTasks();
-      await openWfTask(data.taskId);
-    }
-
-    async function loadWfTasks() {
-      const status = document.getElementById('wf_statusFilter').value.trim();
-      const url = '/api/wf/tasks' + (status ? ('?status=' + encodeURIComponent(status)) : '');
-      const res = await fetch(url);
-      const data = await res.json();
-      const tbody = document.getElementById('wf_tasks');
-      tbody.innerHTML = '';
-
-      for (const t of (data.tasks || [])) {
-        const tr = document.createElement('tr');
-        const ext = [t.externalSource, t.externalTaskId].filter(Boolean).join(':');
-        const nextPing = t.nextPingAt ? new Date(t.nextPingAt).toLocaleString() : '';
-        tr.innerHTML = `
-          <td class="mono">${t.id}</td>
-          <td class="mono">${ext}</td>
-          <td>${escapeHtml(t.title || '')}</td>
-          <td><span class="pill ${t.status}">${t.status}</span></td>
-          <td>${t.openQuestions ?? ''}</td>
-          <td class="mono">${nextPing}</td>
-          <td><button onclick="openWfTask('${t.id}')">Open</button></td>
-        `;
-        tbody.appendChild(tr);
-      }
-    }
-
-    async function openWfTask(id) {
-      const res = await fetch('/api/wf/tasks/' + id);
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        document.getElementById('wf_taskDetails').textContent = 'Failed: ' + JSON.stringify(e);
-        return;
-      }
-      const t = await res.json();
-
-      const openQs = (t.questions || []).filter(q => q.status === 'OPEN');
-
-      const qHtml = openQs.length ? openQs.map(q => {
-        return `
-          <div class="card" style="margin-top:10px; background:#0b1020; border:1px solid #273467;">
-            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
-              <div>
-                <div style="font-weight:800;">${escapeHtml(q.questionText)}</div>
-                <div class="muted" style="margin-top:6px;">${escapeHtml(q.reason || '')}</div>
-                <div class="muted" style="margin-top:6px;">priority: <code>${escapeHtml(q.priority || '')}</code> targetRole: <code>${escapeHtml(q.targetRole || '')}</code></div>
-              </div>
-              <span class="pill ${q.status}">${q.status}</span>
-            </div>
-            <div style="margin-top:10px;">
-              <textarea id="wf_answer_${q.id}" rows="3" placeholder="Answer..."></textarea>
-              <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button onclick="submitWfAnswer('${t.id}','${q.id}')">Send answer</button>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('\n') : '<div class="muted">No open questions.</div>';
-
-      const events = (t.events || []).slice(-50).map(ev => {
-        const ts = ev.createdAt ? new Date(ev.createdAt).toLocaleString() : '';
-        return `<div class="muted"><span class="mono">${ts}</span> <b>${escapeHtml(ev.eventType)}</b> <span class="mono">${escapeHtml(ev.actorType || '')}</span></div>`;
-      }).join('\n');
-
-      document.getElementById('wf_taskDetails').innerHTML = `
-        <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <div>
-            <div style="font-size:18px; font-weight:900;">${escapeHtml(t.title)}</div>
-            <div class="muted">${escapeHtml(t.description || '')}</div>
-            <div class="muted" style="margin-top:6px;">External: <code>${escapeHtml([t.externalSource, t.externalTaskId].filter(Boolean).join(':'))}</code></div>
-          </div>
-          <div>
-            <div><span class="pill ${t.status}">${t.status}</span></div>
-            <div class="muted" style="margin-top:6px;">openQuestions: <b>${t.openQuestions}</b></div>
-          </div>
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
         </div>
+        <button class="btn-primary" id="loginSubmit" type="submit">Sign in</button>
+        <div class="err" id="loginErr"></div>
+      </form>
+      <div class="login-hint">Accounts are created by an administrator. Ask your admin to send you access.</div>
+    </div>
+  </div>
+</div>
 
-        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-          <button onclick="executeWfTask('${t.id}')">Execute</button>
-          <button onclick="loadWfTasks()">Refresh list</button>
+<!-- ============ SEARCH / HOME ============ -->
+<div id="view-home" style="display:none">
+  <div class="home centered" id="home">
+    <div class="home-logo">
+      <div class="glogo"><span class="c1">K</span><span class="c2">n</span><span class="c3">o</span><span class="c4">w</span><span class="c5">l</span><span class="c6">y</span></div>
+      <div class="gtag">Ask anything about our products, processes and docs</div>
+    </div>
+
+    <div class="searchbar">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="q" type="text" placeholder="Ask a question…" autocomplete="off" />
+      <button class="mic" id="micBtn" title="Search by voice" aria-label="Search by voice">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V23h2v-3.06A9 9 0 0 0 21 11h-2z" fill="currentColor"/></svg>
+      </button>
+    </div>
+    <div class="voicehint" id="voicehint"></div>
+
+    <div class="home-actions" id="homeActions">
+      <button id="askBtn">Ask Knowly</button>
+      <button id="luckyBtn">I'm feeling curious</button>
+    </div>
+
+    <div class="results-area" id="resultsArea" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ============ HISTORY DRAWER (mount point) ============ -->
+<div id="drawerMount"></div>
+<!-- ============ MODAL (mount point) ============ -->
+<div id="modalMount"></div>
+<div id="toastMount"></div>
+
+<script>
+const API = {
+  me: () => fetch('/api/auth/me').then(r => r.ok ? r.json() : null),
+  login: (email, password) => fetch('/api/auth/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email, password}) }),
+  logout: () => fetch('/api/auth/logout', { method:'POST' }),
+  changePw: (currentPassword, newPassword) => fetch('/api/auth/change-password', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({currentPassword, newPassword}) }),
+  ask: (question, inputMode) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode}) }),
+  rate: (id, rating) => fetch(`/api/knowledge/queries/${id}/rating`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({rating}) }),
+  feedback: (id, kind, text, rating) => fetch(`/api/knowledge/queries/${id}/feedback`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({kind, text, rating}) }),
+  correction: (id, text) => fetch(`/api/knowledge/queries/${id}/correction`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({text}) }),
+  history: () => fetch('/api/knowledge/history').then(r => r.ok ? r.json() : {queries:[]}),
+};
+
+let currentUser = null;
+let lastQuery = null; // { id, rating }
+
+// ---------- helpers ----------
+function $(id){ return document.getElementById(id); }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function initials(name){ return (name||'U').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+
+function toast(msg){
+  const m = $('toastMount');
+  m.innerHTML = `<div class="toast">${escapeHtml(msg)}</div>`;
+  setTimeout(()=>{ m.innerHTML=''; }, 2600);
+}
+
+// Minimal, safe markdown -> HTML (escape first, then format)
+function renderMarkdown(src){
+  const esc = escapeHtml(src);
+  const lines = esc.split(/\r?\n/);
+  let html = '', inUl = false, inOl = false;
+  const closeLists = () => { if(inUl){html+='</ul>';inUl=false;} if(inOl){html+='</ol>';inOl=false;} };
+  const inline = (t) => t
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  for (let raw of lines){
+    const line = raw.trimEnd();
+    let m;
+    if ((m = line.match(/^(#{1,4})\s+(.*)$/))){ closeLists(); html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; continue; }
+    if ((m = line.match(/^\s*[-*]\s+(.*)$/))){ if(!inUl){closeLists();html+='<ul>';inUl=true;} html += `<li>${inline(m[1])}</li>`; continue; }
+    if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))){ if(!inOl){closeLists();html+='<ol>';inOl=true;} html += `<li>${inline(m[1])}</li>`; continue; }
+    if (line.trim() === ''){ closeLists(); continue; }
+    closeLists(); html += `<p>${inline(line)}</p>`;
+  }
+  closeLists();
+  return html;
+}
+
+function confColor(c){ if(c>=0.6) return 'var(--green)'; if(c>=0.4) return 'var(--amber)'; return 'var(--red)'; }
+
+// ---------- voice (Web Speech API) ----------
+function makeRecognizer(onText, onState){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const rec = new SR();
+  rec.lang = (navigator.language || 'en-US');
+  rec.interimResults = true;
+  rec.continuous = false;
+  let finalText = '';
+  rec.onresult = (e) => {
+    let interim = '';
+    finalText = '';
+    for (let i=0;i<e.results.length;i++){
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t; else interim += t;
+    }
+    onText(finalText || interim, !!finalText);
+  };
+  rec.onerror = (e) => onState('error', e.error);
+  rec.onstart = () => onState('start');
+  rec.onend = () => onState('end');
+  return rec;
+}
+
+// ===================================================================
+// AUTH FLOW
+// ===================================================================
+async function boot(){
+  const res = await API.me();
+  if (res && res.user){ currentUser = res.user; showApp(); }
+  else { showLogin(); }
+}
+
+function showLogin(){
+  $('view-login').style.display = '';
+  $('view-home').style.display = 'none';
+  $('topbar').style.display = 'none';
+  $('loginEmail').focus();
+  // Pre-fill email from ?email= (access link)
+  const params = new URLSearchParams(location.search);
+  if (params.get('email')) $('loginEmail').value = params.get('email');
+}
+
+function showApp(){
+  $('view-login').style.display = 'none';
+  $('view-home').style.display = '';
+  $('topbar').style.display = 'flex';
+  $('avatarBtn').textContent = initials(currentUser.name);
+  $('menuName').textContent = currentUser.name;
+  $('menuEmail').textContent = currentUser.email;
+  $('menuRole').textContent = currentUser.role;
+  $('adminBtn').style.display = currentUser.role === 'admin' ? '' : 'none';
+  $('q').focus();
+}
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('loginSubmit'); const err = $('loginErr');
+  err.textContent = ''; btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const r = await API.login($('loginEmail').value.trim(), $('loginPassword').value);
+    const data = await r.json().catch(()=>({}));
+    if (!r.ok){ err.textContent = data.error || 'Sign in failed'; return; }
+    currentUser = data.user; showApp();
+  } catch(_){ err.textContent = 'Network error'; }
+  finally { btn.disabled = false; btn.textContent = 'Sign in'; }
+});
+
+// ---------- user menu ----------
+$('avatarBtn').addEventListener('click', (e) => { e.stopPropagation(); $('userMenu').classList.toggle('hidden'); });
+document.addEventListener('click', () => $('userMenu').classList.add('hidden'));
+$('userMenu').addEventListener('click', (e) => e.stopPropagation());
+$('menuLogout').addEventListener('click', async () => { await API.logout(); currentUser = null; location.href = '/'; });
+$('adminBtn').addEventListener('click', () => location.href = '/admin');
+$('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add('hidden'); openChangePassword(); });
+
+// ===================================================================
+// SEARCH
+// ===================================================================
+let pendingInputMode = 'text';
+
+async function runSearch(){
+  const q = $('q').value.trim();
+  if (q.length < 3) { toast('Type a longer question'); return; }
+  const inputMode = pendingInputMode; pendingInputMode = 'text';
+  $('home').classList.remove('centered'); $('home').classList.add('results');
+  const area = $('resultsArea');
+  area.style.display = '';
+  area.innerHTML = `<div class="loading"><span class="spinner"></span> Searching the knowledge base…</div>`;
+  try {
+    const r = await API.ask(q, inputMode);
+    if (r.status === 401){ showLogin(); return; }
+    const data = await r.json();
+    if (!r.ok){ area.innerHTML = `<div class="empty">${escapeHtml(data.error||'Something went wrong')}</div>`; return; }
+    lastQuery = { id: data.queryId, rating: null };
+    renderAnswer(data);
+  } catch(_){ area.innerHTML = `<div class="empty">Network error. Please try again.</div>`; }
+}
+
+function sourceBadge(type){
+  const t = (type||'local');
+  const label = t === 'confluence' ? 'Confluence' : t === 'jira' ? 'Jira' : t === 'web' ? 'Web' : 'Local doc';
+  return `<span class="source-badge badge-${t}">${label}</span>`;
+}
+
+function renderAnswer(data){
+  const area = $('resultsArea');
+  const conf = typeof data.confidence === 'number' ? data.confidence : 0;
+  const sources = (data.sources || []);
+  const sourcesHtml = sources.length ? `
+    <div class="sources">
+      <h3>Sources</h3>
+      ${sources.map(s => {
+        const hasUrl = !!s.sourceUrl;
+        const titleHtml = hasUrl
+          ? `<a class="s-title" href="${escapeHtml(s.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>`
+          : `<span class="s-title">${escapeHtml(s.title)}</span>`;
+        return `<div class="source">
+          <div class="s-top">${sourceBadge(s.sourceType)} ${titleHtml}</div>
+          ${hasUrl ? `<div class="s-url">${escapeHtml(s.sourceUrl)}</div>` : `<div class="s-path">${escapeHtml(s.path||'')}</div>`}
+          ${s.snippet ? `<div class="s-snippet">${escapeHtml(s.snippet)}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  area.innerHTML = `
+    <div class="answer-meta">
+      <span class="chip"><span class="conf-dot" style="background:${confColor(conf)}"></span> ${Math.round(conf*100)}% confidence</span>
+      ${data.intent ? `<span class="chip">${escapeHtml(data.intent)}</span>` : ''}
+      <span class="chip">${data.latencyMs||0} ms</span>
+      <span class="chip">${sources.length} source${sources.length===1?'':'s'}</span>
+    </div>
+    <div class="answer">${renderMarkdown(data.answer||'')}</div>
+    ${sourcesHtml}
+    <div class="feedback-row">
+      <span class="rate-label">Was this helpful?</span>
+      <div class="emojis" id="emojis">
+        ${[1,2,3,4,5].map(n => `<button class="emoji" data-rating="${n}" title="${['Very unhappy','Unhappy','Neutral','Happy','Very happy'][n-1]}">${['😣','🙁','😐','🙂','😄'][n-1]}</button>`).join('')}
+      </div>
+      <span class="rate-thanks" id="rateThanks"></span>
+      <span style="flex:1"></span>
+      <button class="action-btn" id="suggestBtn">✏️ Suggest a correction</button>
+    </div>
+  `;
+
+  area.querySelectorAll('.emoji').forEach(btn => {
+    btn.addEventListener('click', () => onRate(parseInt(btn.dataset.rating,10)));
+  });
+  $('suggestBtn').addEventListener('click', openCorrection);
+  area.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+async function onRate(rating){
+  if (!lastQuery) return;
+  lastQuery.rating = rating;
+  document.querySelectorAll('#emojis .emoji').forEach(b => {
+    b.classList.toggle('selected', parseInt(b.dataset.rating,10) === rating);
+  });
+  $('rateThanks').textContent = 'Thanks for the feedback';
+  try {
+    const r = await API.rate(lastQuery.id, rating);
+    const data = await r.json().catch(()=>({}));
+    if (r.ok && data.feedbackRequired) openFeedback(rating);
+  } catch(_){}
+}
+
+$('askBtn').addEventListener('click', runSearch);
+$('luckyBtn').addEventListener('click', () => {
+  const samples = ['Which systems are affected when we add a new carrier type in TMS?','How do carrier billing rules get resolved?','What is the production deployment runbook?','How do I onboard a new engineer?'];
+  $('q').value = samples[Math.floor(Math.random()*samples.length)];
+  runSearch();
+});
+$('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+
+// ---------- voice search ----------
+const voiceHint = $('voicehint');
+let searchRec = null, searchRecording = false;
+$('micBtn').addEventListener('click', () => {
+  if (searchRecording && searchRec){ searchRec.stop(); return; }
+  searchRec = makeRecognizer(
+    (text) => { $('q').value = text; },
+    (state) => {
+      if (state === 'start'){ searchRecording = true; $('micBtn').classList.add('recording'); voiceHint.textContent = '🎙️ Listening… speak your question'; }
+      if (state === 'end'){ searchRecording = false; $('micBtn').classList.remove('recording'); voiceHint.textContent = $('q').value ? '' : ''; if($('q').value.trim().length>=3){ pendingInputMode='voice'; setTimeout(runSearch, 250);} }
+      if (state === 'error'){ searchRecording = false; $('micBtn').classList.remove('recording'); voiceHint.textContent = 'Voice input unavailable in this browser.'; }
+    }
+  );
+  if (!searchRec){ voiceHint.textContent = 'Voice input is not supported in this browser. Try Chrome.'; return; }
+  searchRec.start();
+});
+
+// ===================================================================
+// FEEDBACK MODAL (auto-opens when rating < 4)
+// ===================================================================
+function openFeedback(rating){
+  const mount = $('modalMount');
+  mount.innerHTML = `
+    <div class="modal-bg" id="fbBg">
+      <div class="modal">
+        <header>
+          <h2>Help us improve this answer</h2>
+          <p>You rated this ${['very unhappy','unhappy','neutral'][rating-1]||'low'}. Tell us what was wrong — by voice or text.</p>
+        </header>
+        <div class="content">
+          <textarea id="fbText" placeholder="What was missing, wrong, or unclear?"></textarea>
         </div>
-
-        <h4 style="margin-top:16px;">Open questions</h4>
-        ${qHtml}
-
-        <h4 style="margin-top:16px;">History (last 50 events)</h4>
-        <div style="margin-top:8px;">${events || '<div class="muted">No events.</div>'}</div>
-      `;
-    }
-
-    async function submitWfAnswer(taskId, questionId) {
-      const txt = document.getElementById('wf_answer_' + questionId).value;
-      const res = await fetch('/api/wf/tasks/' + taskId + '/answers', {
-        method: 'POST',
-        headers: {'content-type':'application/json'},
-        body: JSON.stringify({ questionId, answer: txt, source: 'web-ui' }),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        alert('Failed: ' + JSON.stringify(e));
-        return;
-      }
-      await openWfTask(taskId);
-      await loadWfTasks();
-    }
-
-    async function executeWfTask(taskId) {
-      const res = await fetch('/api/wf/tasks/' + taskId + '/execute', { method: 'POST' });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        alert('Failed: ' + JSON.stringify(e));
-        return;
-      }
-      await openWfTask(taskId);
-      await loadWfTasks();
-    }
-
-    function escapeHtml(s) {
-      return String(s || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-    }
-
-    async function startRun(id) {
-      const res = await fetch('/api/runs/' + id + '/start', { method: 'POST' });
-      if (!res.ok) {
-        const e = await res.json();
-        alert('Failed: ' + JSON.stringify(e));
-        return;
-      }
-      await loadRuns();
-      await openRun(id);
-    }
-
-    async function loadAgents() {
-      const team = document.getElementById('teamFilter').value.trim();
-      const url = '/api/agents/activity' + (team ? ('?team=' + encodeURIComponent(team)) : '');
-
-      const res = await fetch(url);
-      const data = await res.json();
-
-      const root = document.getElementById('agents');
-      root.innerHTML = '';
-
-      const style = document.createElement('style');
-      style.textContent = `
-        .agentGrid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
-        @media (max-width: 950px){ .agentGrid{ grid-template-columns: 1fr; } }
-        .agentCard { background:#0b1020; border:1px solid #273467; border-radius:14px; padding:12px; }
-        .agentTop { display:flex; align-items:center; gap:10px; }
-        .agentIcon { width:34px; height:34px; border-radius:12px; background:#5f7cff; display:flex; align-items:center; justify-content:center; font-weight:900; color:white; }
-        .agentName { font-weight:800; }
-        .agentMeta { color:#9fb0e6; font-size:12px; }
-        .badge { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #314275; background:#141b34; font-size:12px; font-weight:800; margin-left:6px; }
-        .agentBody { margin-top:10px; color:#cfe1ff; font-size:13px; }
-        details { margin-top:10px; }
-        summary { cursor:pointer; font-weight:800; }
-        .taskLine { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px; }
-        .linkBtn { background:#23305f; border:none; color:#eaf0ff; padding:6px 10px; border-radius:10px; font-weight:700; cursor:pointer; }
-        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px; }
-      `;
-      root.appendChild(style);
-
-      const grid = document.createElement('div');
-      grid.className = 'agentGrid';
-
-      for (const a of (data.agents || [])) {
-        const card = document.createElement('div');
-        card.className = 'agentCard';
-
-        const iconText = String(a.id || '?').replace(/[^0-9]/g,'').slice(0,2) || 'AI';
-        const busy = (a.counts?.running || 0) + (a.counts?.pending || 0);
-
-        card.innerHTML = `
-          <div class="agentTop">
-            <div class="agentIcon">${escapeHtml(iconText)}</div>
-            <div style="flex:1; min-width:0;">
-              <div class="agentName">${escapeHtml(a.id)} <span class="badge">busy ${busy}</span>
-                ${a.counts?.running ? `<span class="badge">RUN ${a.counts.running}</span>` : ''}
-                ${a.counts?.pending ? `<span class="badge">PEND ${a.counts.pending}</span>` : ''}
-              </div>
-              <div class="agentMeta">${escapeHtml(a.teamTitle || a.team || '')} • ${escapeHtml(a.type || '-')}${a.maturity ? ' • ' + escapeHtml(a.maturity) : ''}${a.humanReviewRequired ? ' • human-review' : ''}</div>
-            </div>
+        <div class="footer">
+          <div class="modal-mic">
+            <button class="mic-lg" id="fbMic" title="Dictate feedback">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V23h2v-3.06A9 9 0 0 0 21 11h-2z"/></svg>
+            </button>
+            <span class="mic-state" id="fbMicState">or type below</span>
           </div>
-          <div class="agentBody">${escapeHtml(a.description || '')}</div>
-        `;
-
-        const det = document.createElement('details');
-        det.innerHTML = `<summary>Details</summary>`;
-
-        const outputs = (a.outputs && a.outputs.length) ? a.outputs.join(', ') : '-';
-        const outDiv = document.createElement('div');
-        outDiv.style.marginTop = '8px';
-        outDiv.innerHTML = `<div class="agentMeta"><b>Outputs:</b> ${escapeHtml(outputs)}</div>`;
-        det.appendChild(outDiv);
-
-        const active = a.active || [];
-        const activeWrap = document.createElement('div');
-        activeWrap.style.marginTop = '10px';
-        activeWrap.innerHTML = `<div class="agentMeta"><b>Active tasks (from StageRuns):</b></div>`;
-
-        if (!active.length) {
-          const empty = document.createElement('div');
-          empty.className = 'agentMeta';
-          empty.style.marginTop = '6px';
-          empty.textContent = '— none';
-          activeWrap.appendChild(empty);
-        } else {
-          for (const t of active) {
-            const line = document.createElement('div');
-            line.className = 'taskLine';
-            const who = t.createdBy ? ` by ${t.createdBy}` : '';
-            const ext = t.externalRef ? ` ext=${t.externalRef}` : '';
-            line.innerHTML = `
-              <span class="badge">${escapeHtml(t.status)}</span>
-              <span class="mono">run ${escapeHtml(String(t.runId).slice(0,8))}</span>
-              <span class="mono">stage ${escapeHtml(t.stageId)}</span>
-              <span class="agentMeta">${escapeHtml((t.runTitle || '') + who + ext)}</span>
-              <button class="linkBtn" data-runid="${escapeHtml(t.runId)}">Open run</button>
-            `;
-            line.querySelector('button')?.addEventListener('click', () => openRun(t.runId));
-            activeWrap.appendChild(line);
-          }
-        }
-
-        det.appendChild(activeWrap);
-        card.appendChild(det);
-        grid.appendChild(card);
-      }
-
-      root.appendChild(grid);
-    }
-
-    async function renderMermaid(targetEl, srcEl, mermaidText) {
-      const graphEl = document.getElementById(targetEl);
-      const src = document.getElementById(srcEl);
-      if (src) src.textContent = mermaidText;
-
-      if (!window.mermaid) {
-        graphEl.innerHTML = `<div class="muted">Mermaid library not loaded (CDN blocked). Raw source is available below.</div>`;
-        return;
-      }
-
-      const id = 'm' + Math.random().toString(16).slice(2);
-      try {
-        const { svg } = await window.mermaid.render(id, mermaidText);
-        graphEl.innerHTML = svg;
-      } catch (e) {
-        graphEl.innerHTML = `<div class="muted">Failed to render Mermaid: ${escapeHtml(e?.message || String(e))}</div>`;
-      }
-    }
-
-    async function loadGraph() {
-      const pipelinePath = document.getElementById('pipelinePath').value || 'core/orchestration/pipeline.v1.yaml';
-      const res = await fetch('/api/pipelines/graph?pipelinePath=' + encodeURIComponent(pipelinePath));
-      const text = await res.text();
-      await renderMermaid('graph', 'graphSrc', text);
-    }
-
-    async function renderLastRunGraph() {
-      if (!lastOpenedRunId) {
-        alert('No run opened yet. Click Open on a run first.');
-        return;
-      }
-      const res = await fetch('/api/runs/' + lastOpenedRunId + '/graph');
-      const text = await res.text();
-      await renderMermaid('graph', 'graphSrc', text);
-    }
-
-    async function loadRuns() {
-      // If opened with a deep-link param, prefer it and then clean the URL.
-      const openRunId = getQueryParam('openRun');
-      const openStageId = getQueryParam('openStage');
-      if (openRunId) {
-        try {
-          await openRun(openRunId);
-          if (openStageId) await openStage(openRunId, openStageId);
-          const u = new URL(window.location.href);
-          u.searchParams.delete('openRun');
-          u.searchParams.delete('openStage');
-          window.history.replaceState({}, '', u.toString());
-        } catch (e) {
-          console.warn('Deep-link openRun failed', e);
-        }
-      }
-
-      const res = await fetch('/api/runs?limit=50');
-      const data = await res.json();
-      const tbody = document.getElementById('runs');
-      tbody.innerHTML = '';
-      for (const r of data.runs) {
-        const stagesDone = (r.stages || []).filter(s => s.status === 'DONE' || s.status === 'SKIPPED').length;
-        const stagesTotal = (r.stages || []).length;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><code>${r.id.slice(0,8)}</code></td>
-          <td>${escapeHtml(r.pipelineId)}</td>
-          <td><span class="pill ${r.status}">${r.status}</span></td>
-          <td>${stagesDone}/${stagesTotal}</td>
-          <td>${new Date(r.createdAt).toLocaleString()}</td>
-          <td style="white-space:nowrap; display:flex; gap:8px;">
-            <button onclick="openRun('${r.id}')">Open</button>
-            ${r.status === 'PENDING' ? `<button onclick="startRun('${r.id}')">Start</button>` : ''}
-          </td>
-        `;
-        tbody.appendChild(tr);
-      }
-    }
-
-    async function retryRun(id) {
-      const res = await fetch('/api/runs/' + id + '/retry', { method: 'POST' });
-      if (!res.ok) {
-        const e = await res.text();
-        alert('Retry failed: ' + e);
-        return;
-      }
-      await loadRuns();
-      await loadOfficeBoard();
-      await openRun(id);
-    }
-
-    async function retryStage(stageRunId) {
-      const res = await fetch('/api/stages/' + stageRunId + '/retry', { method: 'POST' });
-      if (!res.ok) {
-        const e = await res.text();
-        alert('Retry stage failed: ' + e);
-        return;
-      }
-      if (lastOpenedRunId) await openRun(lastOpenedRunId);
-      await loadOfficeBoard();
-    }
-
-    async function skipStage(stageRunId) {
-      const res = await fetch('/api/stages/' + stageRunId + '/skip', { method: 'POST' });
-      if (!res.ok) {
-        const e = await res.text();
-        alert('Skip stage failed: ' + e);
-        return;
-      }
-      if (lastOpenedRunId) await openRun(lastOpenedRunId);
-      await loadOfficeBoard();
-    }
-
-    async function openRun(id) {
-      lastOpenedRunId = id;
-      const res = await fetch('/api/runs/' + id);
-      const r = await res.json();
-
-      const stages = (r.stages || []).map(s => {
-        const deps = (s.dependsOn || []).join(', ');
-        return `<tr>
-          <td><code>${escapeHtml(s.stageId)}</code></td>
-          <td>${escapeHtml(s.roleOrSkill)}</td>
-          <td>${deps ? escapeHtml(deps) : '-'}</td>
-          <td><span class="pill ${s.status}">${s.status}</span></td>
-          <td>${s.totalTokens ?? '-'}</td>
-          <td style="white-space:nowrap; display:flex; gap:8px;">
-            <button onclick="openStage('${r.id}','${s.id}')">View</button>
-            <button onclick="retryStage('${s.id}')">Retry</button>
-            <button onclick="skipStage('${s.id}')">Skip</button>
-          </td>
-        </tr>`;
-      }).join('');
-
-      document.getElementById('runDetails').innerHTML = `
-        <div><b>ID:</b> <code>${escapeHtml(r.id)}</code></div>
-        <div><b>Title:</b> ${escapeHtml(r.title ?? '-')}</div>
-        <div><b>Status:</b> <span class="pill ${r.status}">${r.status}</span></div>
-        <div><b>External ref:</b> ${escapeHtml(r.externalRef ?? '-')}</div>
-        <div style="margin-top:10px;"><b>Input</b></div>
-        <pre>${escapeHtml(r.inputText ?? '')}</pre>
-        <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <b>Stages</b>
-          <button class="linkBtn" onclick="renderLastRunGraph()">Render this run in graph</button>
+          <button class="btn-text" id="fbSkip">Skip</button>
+          <button class="btn-fill" id="fbSend">Send feedback</button>
         </div>
-        <table>
-          <thead><tr><th>Stage</th><th>Role/Skill</th><th>Depends</th><th>Status</th><th>Tokens</th><th>Actions</th></tr></thead>
-          <tbody>${stages || '<tr><td colspan="6" class="muted">No stages</td></tr>'}</tbody>
-        </table>
-        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="linkBtn" onclick="retryRun('${r.id}')">Retry full run</button>
-        </div>
-        <div id="stageDetails" class="muted" style="margin-top:12px;">Select a stage to view details.</div>
-      `;
-
-      // auto-render run graph
-      try { await renderLastRunGraph(); } catch {}
-    }
-
-    async function openStage(runId, stageRunId) {
-      const res = await fetch('/api/runs/' + runId);
-      const r = await res.json();
-      const s = (r.stages || []).find(x => x.id === stageRunId);
-      if (!s) return;
-      document.getElementById('stageDetails').innerHTML = `
-        <div><b>Stage:</b> <code>${escapeHtml(s.stageId)}</code> (${escapeHtml(s.stageName)})</div>
-        <div><b>Status:</b> <span class="pill ${s.status}">${s.status}</span></div>
-        <div><b>Role/Skill:</b> ${escapeHtml(s.roleOrSkill)}</div>
-        <div><b>Model:</b> ${escapeHtml(s.model ?? '-')}</div>
-        <div style="margin-top:8px;"><b>Result (raw)</b></div>
-        <pre>${escapeHtml(s.resultText ?? '')}</pre>
-        ${s.errorMessage ? `<div style="margin-top:8px;"><b>Error</b><pre>${escapeHtml(s.errorMessage)}</pre></div>` : ''}
-      `;
-    }
-
-    // Legacy tasks
-    async function createTask() {
-      const payload = {
-        role: document.getElementById('role').value,
-        prompt: document.getElementById('prompt').value,
-      };
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: {'content-type':'application/json'},
-        body: JSON.stringify(payload),
+      </div>
+    </div>`;
+  let fbKind = 'text';
+  $('fbText').focus();
+  $('fbSkip').addEventListener('click', closeModal);
+  $('fbBg').addEventListener('click', (e)=>{ if(e.target.id==='fbBg') closeModal(); });
+  $('fbSend').addEventListener('click', async () => {
+    const text = $('fbText').value.trim();
+    if (!text){ $('fbText').focus(); return; }
+    try { await API.feedback(lastQuery.id, fbKind, text, rating); toast('Feedback saved — thank you'); } catch(_){}
+    closeModal();
+  });
+  // voice feedback
+  let rec=null, recording=false;
+  $('fbMic').addEventListener('click', () => {
+    if (recording && rec){ rec.stop(); return; }
+    rec = makeRecognizer(
+      (t)=>{ $('fbText').value = t; fbKind='voice'; },
+      (state)=>{
+        if(state==='start'){ recording=true; $('fbMic').classList.add('recording'); $('fbMicState').textContent='Listening…'; }
+        if(state==='end'){ recording=false; $('fbMic').classList.remove('recording'); $('fbMicState').textContent = $('fbText').value ? 'Captured by voice' : 'or type below'; }
+        if(state==='error'){ recording=false; $('fbMic').classList.remove('recording'); $('fbMicState').textContent='Voice unavailable'; }
       });
-      if (!res.ok) {
-        const e = await res.json();
-        alert('Failed: ' + JSON.stringify(e));
-        return;
-      }
-      document.getElementById('prompt').value = '';
-      await loadTasks();
-    }
+    if(!rec){ $('fbMicState').textContent='Voice not supported (try Chrome)'; return; }
+    rec.start();
+  });
+}
 
-    async function loadTasks() {
-      const res = await fetch('/api/tasks?limit=50');
-      const data = await res.json();
-      const tbody = document.getElementById('tasks');
-      tbody.innerHTML = '';
-      for (const t of data.tasks) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><code>${t.id.slice(0,8)}</code></td>
-          <td>${escapeHtml(t.role)}</td>
-          <td><span class="pill ${t.status}">${t.status}</span></td>
-          <td>${t.totalTokens ?? '-'}</td>
-          <td><button onclick="openTask('${t.id}')">Open</button></td>
-        `;
-        tbody.appendChild(tr);
-      }
-    }
-
-    async function openTask(id) {
-      const res = await fetch('/api/tasks/' + id);
-      const t = await res.json();
-      document.getElementById('taskDetails').innerHTML = `
-        <div><b>ID:</b> <code>${escapeHtml(t.id)}</code></div>
-        <div><b>Role:</b> ${escapeHtml(t.role)}</div>
-        <div><b>Status:</b> <span class="pill ${t.status}">${t.status}</span></div>
-        <div><b>Model:</b> ${escapeHtml(t.model ?? '-')}</div>
-        <div><b>Total tokens:</b> ${t.totalTokens ?? '-'}</div>
-        <div style="margin-top:8px;"><b>Prompt</b></div>
-        <pre>${escapeHtml(t.prompt ?? '')}</pre>
-        <div style="margin-top:8px;"><b>Result</b></div>
-        <pre>${escapeHtml(t.resultText ?? '')}</pre>
-        ${t.errorMessage ? `<div style="margin-top:8px;"><b>Error</b><pre>${escapeHtml(t.errorMessage)}</pre></div>` : ''}
-      `;
-    }
-
-    function escapeHtml(s){ return String(s)
-      .replaceAll('&','&amp;').replaceAll('<','&lt;')
-      .replaceAll('>','&gt;').replaceAll('"','&quot;')
-      .replaceAll("'",'&#39;'); }
-
-    function formatInline(text) {
-      return escapeHtml(text)
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>');
-    }
-
-    function renderKnowledgeBody(answerText) {
-      const text = String(answerText || '').trim();
-      if (!text) return '<div class="muted">No answer returned.</div>';
-
-      const sections = text
-        .split(/\n\s*\n/)
-        .map((block) => block.trim())
-        .filter(Boolean);
-
-      const html = [];
-      for (let i = 0; i < sections.length; i++) {
-        const block = sections[i];
-        const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-        if (!lines.length) continue;
-
-        if (i === 0) {
-          html.push(`<p class="ka-lead">${formatInline(lines.join(' '))}</p>`);
-          continue;
-        }
-
-        const firstLine = lines[0];
-        const looksLikeHeading = lines.length === 1 && /:$/.test(firstLine);
-        const allBullets = lines.every((line) => line.startsWith('- '));
-
-        if (/^Sources:/i.test(firstLine)) {
-          continue;
-        }
-
-        if (looksLikeHeading) {
-          html.push(`<h4>${formatInline(firstLine.replace(/:$/, ''))}</h4>`);
-          continue;
-        }
-
-        if (allBullets) {
-          html.push(`<ul>${lines.map((line) => `<li>${formatInline(line.slice(2))}</li>`).join('')}</ul>`);
-          continue;
-        }
-
-        if (/^[A-Z][A-Za-z0-9 /_-]{1,60}:$/.test(firstLine) && lines.slice(1).every((line) => line.startsWith('- '))) {
-          html.push(`<h4>${formatInline(firstLine.replace(/:$/, ''))}</h4>`);
-          html.push(`<ul>${lines.slice(1).map((line) => `<li>${formatInline(line.slice(2))}</li>`).join('')}</ul>`);
-          continue;
-        }
-
-        html.push(`<p>${lines.map((line) => formatInline(line)).join('<br />')}</p>`);
-      }
-
-      return html.join('');
-    }
-
-    function renderKnowledgeAnswer(data) {
-      const sources = Array.isArray(data.sources) ? data.sources : [];
-      const meta = `
-        <div class="ka-meta">
-          Intent: <b>${escapeHtml(data.intent || '-')}</b>
-          &nbsp;•&nbsp; Confidence: <b>${data.confidence ?? '-'}</b>
-          &nbsp;•&nbsp; Latency: <b>${data.latencyMs ?? '-'}ms</b>
-          &nbsp;•&nbsp; Language: <b>${escapeHtml(data.language || 'auto')}</b>
+// ===================================================================
+// CORRECTION MODAL
+// ===================================================================
+function openCorrection(){
+  if (!lastQuery) return;
+  const mount = $('modalMount');
+  mount.innerHTML = `
+    <div class="modal-bg" id="crBg">
+      <div class="modal">
+        <header>
+          <h2>Suggest a correction</h2>
+          <p>Propose a fix or clarification for this answer. It will be logged for the docs team.</p>
+        </header>
+        <div class="content">
+          <textarea id="crText" placeholder="The correct answer / what should change…"></textarea>
         </div>
-      `;
+        <div class="footer">
+          <button class="btn-text" id="crCancel">Cancel</button>
+          <button class="btn-fill" id="crSend">Submit correction</button>
+        </div>
+      </div>
+    </div>`;
+  $('crText').focus();
+  $('crCancel').addEventListener('click', closeModal);
+  $('crBg').addEventListener('click', (e)=>{ if(e.target.id==='crBg') closeModal(); });
+  $('crSend').addEventListener('click', async () => {
+    const text = $('crText').value.trim();
+    if (!text){ $('crText').focus(); return; }
+    try { await API.correction(lastQuery.id, text); toast('Correction submitted — thank you'); } catch(_){}
+    closeModal();
+  });
+}
 
-      const sourcesHtml = sources.length
-        ? `
-          <div class="ka-sources">
-            <h4>Sources</h4>
-            ${sources.map((source) => `
-              <div class="ka-source">
-                <div class="ka-source-path"><code>${escapeHtml(source.path || '-')}</code></div>
-                <div class="ka-source-score">score: ${escapeHtml(source.score ?? '-')}</div>
-              </div>
-            `).join('')}
-          </div>
-        `
-        : '';
+// ===================================================================
+// CHANGE PASSWORD MODAL
+// ===================================================================
+function openChangePassword(){
+  const mount = $('modalMount');
+  mount.innerHTML = `
+    <div class="modal-bg" id="pwBg">
+      <div class="modal">
+        <header><h2>Change password</h2><p>Update your account password.</p></header>
+        <div class="content">
+          <div class="field"><label>Current password</label><input id="pwCur" type="password" /></div>
+          <div class="field"><label>New password (min 6 chars)</label><input id="pwNew" type="password" /></div>
+          <div class="err" id="pwErr"></div>
+        </div>
+        <div class="footer">
+          <button class="btn-text" id="pwCancel">Cancel</button>
+          <button class="btn-fill" id="pwSend">Update</button>
+        </div>
+      </div>
+    </div>`;
+  $('pwCur').focus();
+  $('pwCancel').addEventListener('click', closeModal);
+  $('pwBg').addEventListener('click', (e)=>{ if(e.target.id==='pwBg') closeModal(); });
+  $('pwSend').addEventListener('click', async () => {
+    const cur = $('pwCur').value, nw = $('pwNew').value;
+    if (nw.length < 6){ $('pwErr').textContent = 'New password too short'; return; }
+    const r = await API.changePw(cur, nw);
+    const data = await r.json().catch(()=>({}));
+    if (!r.ok){ $('pwErr').textContent = data.error || 'Failed'; return; }
+    closeModal(); toast('Password updated');
+  });
+}
 
-      return `${renderKnowledgeBody(data.answer)}${meta}${sourcesHtml}`;
-    }
+function closeModal(){ $('modalMount').innerHTML = ''; }
 
-    initMermaid();
-    fetchLimits();
-    loadAgents();
-    loadGraph();
-    loadRuns();
-    loadTasks();
-    loadKnowledgeStatus();
-    loadKnowledgeQueries();
-    loadKnowledgeAnalytics();
-    setTab('dashboard');
+// ===================================================================
+// HISTORY DRAWER
+// ===================================================================
+$('histBtn').addEventListener('click', openHistory);
+async function openHistory(){
+  const mount = $('drawerMount');
+  mount.innerHTML = `
+    <div class="drawer-bg" id="drBg"></div>
+    <div class="drawer">
+      <header><h2>Your history</h2><button class="iconbtn" id="drClose">×</button></header>
+      <div class="body" id="drBody"><div class="loading"><span class="spinner"></span> Loading…</div></div>
+    </div>`;
+  $('drClose').addEventListener('click', closeDrawer);
+  $('drBg').addEventListener('click', closeDrawer);
+  const data = await API.history();
+  const body = $('drBody');
+  if (!data.queries || !data.queries.length){ body.innerHTML = `<div class="empty">No questions yet.</div>`; return; }
+  body.innerHTML = data.queries.map(q => `
+    <div class="hist-item" data-q="${escapeHtml(q.question)}">
+      <div class="hist-q">${escapeHtml(q.question)}</div>
+      <div class="hist-meta">
+        <span>${new Date(q.createdAt).toLocaleString()}</span>
+        ${q.rating ? `<span>${['😣','🙁','😐','🙂','😄'][q.rating-1]}</span>` : ''}
+        <span>${q.sourceCount} src</span>
+        ${q.inputMode==='voice' ? '<span>🎙️ voice</span>' : ''}
+      </div>
+    </div>`).join('');
+  body.querySelectorAll('.hist-item').forEach(el => {
+    el.addEventListener('click', () => { $('q').value = el.dataset.q; closeDrawer(); runSearch(); });
+  });
+}
+function closeDrawer(){ $('drawerMount').innerHTML = ''; }
 
-    setInterval(() => {
-      // Keep dashboard fresh; workflow/office refresh only when tab is open.
-      loadRuns();
-      loadTasks();
-      if (activeTab === 'knowledge') {
-        loadKnowledgeQueries();
-        loadKnowledgeAnalytics();
-      }
-      if (activeTab === 'workflow') loadWfTasks();
-      if (activeTab === 'office') loadEvents();
-    }, 3000);
-  </script>
+// go
+boot();
+</script>
 </body>
 </html>
