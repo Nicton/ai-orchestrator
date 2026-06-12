@@ -637,8 +637,21 @@ model KnowledgeCorrection {
   id        String   @id @default(cuid())
   queryId   String
   userId    String?
-  text      String
-  status    String   @default("OPEN")
+  kind      String   @default("text") // text|voice
+
+  // Structured correction capture (master spec §8):
+  text       String // free-form correction (what was wrong + how it should be)
+  whatWrong  String? // what specifically was wrong in the answer
+  corrected  String? // the corrected knowledge ("how it should be")
+  topic      String? // topic / entity / process the correction relates to
+
+  // Knowledge update workflow: a correction is reviewed and applied so that
+  // later answers are built on the corrected truth (not left in logs).
+  status         String    @default("OPEN") // OPEN|APPLIED|REJECTED
+  appliedAt      DateTime?
+  appliedEntryId String? // resulting KnowledgeEntry id once applied
+  reviewedById   String?
+
   createdAt DateTime @default(now())
 
   query KnowledgeQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
@@ -646,6 +659,70 @@ model KnowledgeCorrection {
 
   @@index([queryId, createdAt])
   @@index([status, createdAt])
+}
+
+// --- Operational knowledge store (DB-backed, master spec §9) ---
+// First-class, controllable knowledge unit. Indexed for retrieval alongside
+// files. Applied corrections and curated facts live here so answers can be
+// updated without editing markdown.
+model KnowledgeEntry {
+  id         String   @id @default(cuid())
+  title      String
+  body       String
+  language   String? // ru|en|...
+  sourceType String   @default("operational") // operational|correction|manual|confluence|jira|web
+  sourceUrl  String?
+  status     String   @default("APPROVED") // DRAFT|APPROVED|DEPRECATED
+  origin     String? // correction|manual|import
+  topic      String?
+  weight     Float    @default(1.5)
+
+  correctionId String?
+  createdById  String?
+
+  entityId String?
+  entity   KnowledgeEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([topic])
+  @@index([entityId])
+}
+
+// --- Graph knowledge model (master spec §10/§11) ---
+model KnowledgeEntity {
+  id        String   @id @default(cuid())
+  name      String
+  type      String // feature|module|process|api|requirement|role|document|integration|entity
+  summary   String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries       KnowledgeEntry[]
+  relationsFrom KnowledgeRelation[] @relation("relFrom")
+  relationsTo   KnowledgeRelation[] @relation("relTo")
+
+  @@unique([type, name])
+  @@index([type])
+}
+
+model KnowledgeRelation {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  type      String // uses|depends_on|part_of|documented_by|covered_by|exposes|corrects|relates_to
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  from KnowledgeEntity @relation("relFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   KnowledgeEntity @relation("relTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId, type])
+  @@index([fromId])
+  @@index([toId])
 }
 
 model KnowledgeGap {

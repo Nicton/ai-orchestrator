@@ -89,6 +89,7 @@
   <span class="title">Knowledge Assistant <small>Admin console</small></span>
   <span class="spacer"></span>
   <span class="who" id="who"></span>
+  <a class="ghost" href="/graph">Graph</a>
   <a class="ghost" href="/">← Back to search</a>
   <button class="ghost" id="logout">Sign out</button>
 </header>
@@ -126,6 +127,7 @@ function renderShell(){
     <div class="tabs">
       <button class="tab" data-tab="overview">Overview</button>
       <button class="tab" data-tab="history">Query history</button>
+      <button class="tab" data-tab="corrections">Corrections</button>
       <button class="tab" data-tab="users">Users</button>
     </div>
     <div id="tabBody"></div>`;
@@ -137,7 +139,60 @@ function loadTab(tab){
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   if (tab==='overview') renderOverview();
   if (tab==='history') renderHistory();
+  if (tab==='corrections') renderCorrections();
   if (tab==='users') renderUsers();
+}
+
+// ---------------- CORRECTIONS (review / apply / reject) ----------------
+async function renderCorrections(){
+  const body = $('tabBody');
+  body.innerHTML = `<div class="muted" style="padding:20px">Loading corrections…</div>`;
+  const data = await fetch('/api/admin/knowledge/corrections').then(r=>r.json());
+  const rows = data.corrections || [];
+  if (!rows.length){ body.innerHTML = `<div class="panel"><div class="pad muted">No corrections submitted yet.</div></div>`; return; }
+  body.innerHTML = `
+    <div class="panel">
+      <h3>Corrections — review &amp; apply to the knowledge base (${rows.length})</h3>
+      <div class="pad muted" style="border-bottom:1px solid var(--line)">Applying a correction writes the corrected knowledge into the operational store, so future answers use the corrected truth.</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>When</th><th>Author</th><th>Topic</th><th>What was wrong → correction</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>
+        ${rows.map((c,i)=>`<tr>
+          <td class="muted" style="white-space:nowrap">${new Date(c.createdAt).toLocaleString()}</td>
+          <td>${escapeHtml(c.author?.name||'—')}</td>
+          <td>${escapeHtml(c.topic||'—')}</td>
+          <td class="truncate">
+            ${c.whatWrong?`<div class="muted">✗ ${escapeHtml(c.whatWrong)}</div>`:''}
+            <div>✓ ${escapeHtml(c.corrected||c.text)}</div>
+            <div class="muted" style="font-size:12px;margin-top:4px">Q: ${escapeHtml(c.question||'')}</div>
+          </td>
+          <td><span class="pill ${c.status==='APPLIED'?'pill-on':(c.status==='REJECTED'?'pill-off':'pill-user')}">${c.status.toLowerCase()}</span></td>
+          <td style="white-space:nowrap">
+            ${c.status==='OPEN'
+              ? `<button class="btn-fill" data-apply="${c.id}" style="padding:6px 12px;font-size:12px">Apply</button>
+                 <button class="ghost" data-reject="${c.id}" style="padding:6px 10px;font-size:12px">Reject</button>`
+              : (c.appliedEntryId?`<span class="muted" style="font-size:12px">entry ${escapeHtml(c.appliedEntryId.slice(0,8))}</span>`:'<span class="muted">—</span>')}
+          </td>
+        </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>`;
+  body.querySelectorAll('[data-apply]').forEach(b => b.addEventListener('click', () => applyCorrection(b.dataset.apply)));
+  body.querySelectorAll('[data-reject]').forEach(b => b.addEventListener('click', () => rejectCorrection(b.dataset.reject)));
+}
+
+async function applyCorrection(id){
+  const r = await fetch(`/api/admin/knowledge/corrections/${id}/apply`, { method:'POST', headers:{'content-type':'application/json'}, body:'{}' });
+  const data = await r.json().catch(()=>({}));
+  if (!r.ok){ toast(typeof data.error==='string'?data.error:'Apply failed'); return; }
+  toast('Applied — knowledge base updated');
+  renderCorrections();
+}
+async function rejectCorrection(id){
+  if (!confirm('Reject this correction?')) return;
+  const r = await fetch(`/api/admin/knowledge/corrections/${id}/reject`, { method:'POST' });
+  if (!r.ok){ toast('Reject failed'); return; }
+  toast('Rejected'); renderCorrections();
 }
 
 // ---------------- OVERVIEW ----------------

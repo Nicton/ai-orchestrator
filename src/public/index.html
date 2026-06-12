@@ -102,23 +102,28 @@
   .home.results .home-logo { display: none; }
 
   .searchbar {
-    width: 100%; max-width: 620px; display: flex; align-items: center; gap: 10px;
-    border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 18px;
+    width: 100%; max-width: 620px; display: flex; align-items: flex-start; gap: 10px;
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 18px;
     transition: box-shadow .15s, border-color .15s;
   }
   .searchbar:focus-within { box-shadow: var(--shadow); border-color: transparent; }
-  .searchbar .ico { width: 20px; height: 20px; flex: none; color: var(--muted); }
-  .searchbar input {
+  .searchbar .ico { width: 20px; height: 20px; flex: none; color: var(--muted); margin-top: 3px; }
+  .searchbar textarea {
     flex: 1; border: none; outline: none; font-size: 16px; color: var(--ink); background: transparent;
-    min-width: 0;
+    min-width: 0; resize: none; font-family: inherit; line-height: 1.5; max-height: 240px; overflow-y: auto;
+    padding: 0; margin: 0;
   }
   .mic {
     border: none; background: none; padding: 6px; border-radius: 50%; display: flex; align-items: center;
+    flex: none; align-self: flex-start;
   }
   .mic:hover { background: var(--bg-soft); }
   .mic svg { width: 22px; height: 22px; }
-  .mic.recording { background: #fce8e6; }
+  .mic.recording { background: #fce8e6; animation: pulse 1.2s ease-in-out infinite; }
   .mic.recording svg { color: var(--red); }
+  .mic.processing { opacity: .55; }
+  @keyframes pulse { 0%,100%{ box-shadow:0 0 0 0 rgba(217,48,37,.4);} 50%{ box-shadow:0 0 0 6px rgba(217,48,37,0);} }
+  .voicehint .spinner { display:inline-block; vertical-align:middle; margin-right:6px; }
   .home.results .searchbar { max-width: 690px; margin-left: 0; }
 
   .home-actions { margin-top: 26px; display: flex; gap: 10px; }
@@ -237,6 +242,7 @@
 <!-- ============ TOP BAR ============ -->
 <div class="topbar" id="topbar" style="display:none">
   <span class="spacer"></span>
+  <span class="toplink" id="graphBtn">Graph</span>
   <span class="toplink" id="histBtn">History</span>
   <span class="toplink" id="adminBtn" style="display:none">Admin</span>
   <div class="usermenu">
@@ -287,8 +293,8 @@
 
     <div class="searchbar">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="q" type="text" placeholder="Ask a question…" autocomplete="off" />
-      <button class="mic" id="micBtn" title="Search by voice" aria-label="Search by voice">
+      <textarea id="q" rows="1" placeholder="Ask a question…" autocomplete="off"></textarea>
+      <button class="mic" id="micBtn" title="Record your question" aria-label="Record your question">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V23h2v-3.06A9 9 0 0 0 21 11h-2z" fill="currentColor"/></svg>
       </button>
     </div>
@@ -318,8 +324,9 @@ const API = {
   ask: (question, inputMode) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode}) }),
   rate: (id, rating) => fetch(`/api/knowledge/queries/${id}/rating`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({rating}) }),
   feedback: (id, kind, text, rating) => fetch(`/api/knowledge/queries/${id}/feedback`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({kind, text, rating}) }),
-  correction: (id, text) => fetch(`/api/knowledge/queries/${id}/correction`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({text}) }),
+  correction: (id, payload) => fetch(`/api/knowledge/queries/${id}/correction`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) }),
   history: () => fetch('/api/knowledge/history').then(r => r.ok ? r.json() : {queries:[]}),
+  transcribe: (blob) => { const fd = new FormData(); fd.append('audio', blob, 'question.webm'); return fetch('/api/knowledge/transcribe', { method:'POST', body: fd }); },
 };
 
 let currentUser = null;
@@ -361,29 +368,49 @@ function renderMarkdown(src){
 
 function confColor(c){ if(c>=0.6) return 'var(--green)'; if(c>=0.4) return 'var(--amber)'; return 'var(--red)'; }
 
-// ---------- voice (Web Speech API) ----------
-function makeRecognizer(onText, onState){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return null;
-  const rec = new SR();
-  rec.lang = (navigator.language || 'en-US');
-  rec.interimResults = true;
-  rec.continuous = false;
-  let finalText = '';
-  rec.onresult = (e) => {
-    let interim = '';
-    finalText = '';
-    for (let i=0;i<e.results.length;i++){
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += t; else interim += t;
+// ---------- voice (server-side Whisper via MediaRecorder, manual start/stop) ----------
+// Manual control: caller starts recording, the user speaks the full question,
+// then the caller stops. On stop we upload the audio and transcribe server-side.
+function makeVoiceController(handlers){
+  // handlers: { onState(state), onTranscript(text) }
+  let mediaRecorder = null, chunks = [], stream = null, recording = false;
+
+  async function start(){
+    if (recording) return;
+    if (!navigator.mediaDevices || !window.MediaRecorder){
+      handlers.onState('unsupported'); return;
     }
-    onText(finalText || interim, !!finalText);
-  };
-  rec.onerror = (e) => onState('error', e.error);
-  rec.onstart = () => onState('start');
-  rec.onend = () => onState('end');
-  return rec;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch(_){ handlers.onState('denied'); return; }
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
+      handlers.onState('processing');
+      try {
+        const r = await API.transcribe(blob);
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok){ handlers.onState('error', data.error || 'Transcription failed'); return; }
+        handlers.onTranscript(data.text || '');
+        handlers.onState('done');
+      } catch(_){ handlers.onState('error', 'Network error during transcription'); }
+    };
+    mediaRecorder.start();
+    recording = true;
+    handlers.onState('recording');
+  }
+  function stop(){
+    if (!recording || !mediaRecorder) return;
+    recording = false;
+    try { mediaRecorder.stop(); } catch(_){}
+  }
+  return { start, stop, isRecording: () => recording };
 }
+
+function autoGrow(el){ el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; }
 
 // ===================================================================
 // AUTH FLOW
@@ -435,6 +462,7 @@ document.addEventListener('click', () => $('userMenu').classList.add('hidden'));
 $('userMenu').addEventListener('click', (e) => e.stopPropagation());
 $('menuLogout').addEventListener('click', async () => { await API.logout(); currentUser = null; location.href = '/'; });
 $('adminBtn').addEventListener('click', () => location.href = '/admin');
+$('graphBtn').addEventListener('click', () => location.href = '/graph');
 $('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add('hidden'); openChangePassword(); });
 
 // ===================================================================
@@ -533,23 +561,25 @@ $('luckyBtn').addEventListener('click', () => {
   $('q').value = samples[Math.floor(Math.random()*samples.length)];
   runSearch();
 });
-$('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+$('q').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); runSearch(); } });
+$('q').addEventListener('input', () => autoGrow($('q')));
 
-// ---------- voice search ----------
+// ---------- voice search: manual start/stop -> server transcription ----------
 const voiceHint = $('voicehint');
-let searchRec = null, searchRecording = false;
+const searchVoice = makeVoiceController({
+  onState: (state, detail) => {
+    const mic = $('micBtn');
+    if (state === 'recording'){ mic.classList.add('recording'); voiceHint.textContent = '🔴 Recording… press the mic again to stop'; }
+    else if (state === 'processing'){ mic.classList.remove('recording'); mic.classList.add('processing'); voiceHint.innerHTML = '<span class="spinner"></span> Transcribing your question…'; }
+    else if (state === 'done'){ mic.classList.remove('processing'); voiceHint.textContent = 'Transcribed. Review the text and press Ask.'; pendingInputMode = 'voice'; autoGrow($('q')); $('q').focus(); }
+    else if (state === 'denied'){ mic.classList.remove('recording','processing'); voiceHint.textContent = 'Microphone access was denied.'; }
+    else if (state === 'unsupported'){ voiceHint.textContent = 'Recording is not supported in this browser.'; }
+    else if (state === 'error'){ mic.classList.remove('recording','processing'); voiceHint.textContent = detail || 'Voice transcription failed.'; }
+  },
+  onTranscript: (text) => { $('q').value = text; },
+});
 $('micBtn').addEventListener('click', () => {
-  if (searchRecording && searchRec){ searchRec.stop(); return; }
-  searchRec = makeRecognizer(
-    (text) => { $('q').value = text; },
-    (state) => {
-      if (state === 'start'){ searchRecording = true; $('micBtn').classList.add('recording'); voiceHint.textContent = '🎙️ Listening… speak your question'; }
-      if (state === 'end'){ searchRecording = false; $('micBtn').classList.remove('recording'); voiceHint.textContent = $('q').value ? '' : ''; if($('q').value.trim().length>=3){ pendingInputMode='voice'; setTimeout(runSearch, 250);} }
-      if (state === 'error'){ searchRecording = false; $('micBtn').classList.remove('recording'); voiceHint.textContent = 'Voice input unavailable in this browser.'; }
-    }
-  );
-  if (!searchRec){ voiceHint.textContent = 'Voice input is not supported in this browser. Try Chrome.'; return; }
-  searchRec.start();
+  if (searchVoice.isRecording()) searchVoice.stop(); else searchVoice.start();
 });
 
 // ===================================================================
@@ -589,20 +619,20 @@ function openFeedback(rating){
     try { await API.feedback(lastQuery.id, fbKind, text, rating); toast('Feedback saved — thank you'); } catch(_){}
     closeModal();
   });
-  // voice feedback
-  let rec=null, recording=false;
-  $('fbMic').addEventListener('click', () => {
-    if (recording && rec){ rec.stop(); return; }
-    rec = makeRecognizer(
-      (t)=>{ $('fbText').value = t; fbKind='voice'; },
-      (state)=>{
-        if(state==='start'){ recording=true; $('fbMic').classList.add('recording'); $('fbMicState').textContent='Listening…'; }
-        if(state==='end'){ recording=false; $('fbMic').classList.remove('recording'); $('fbMicState').textContent = $('fbText').value ? 'Captured by voice' : 'or type below'; }
-        if(state==='error'){ recording=false; $('fbMic').classList.remove('recording'); $('fbMicState').textContent='Voice unavailable'; }
-      });
-    if(!rec){ $('fbMicState').textContent='Voice not supported (try Chrome)'; return; }
-    rec.start();
+  // voice feedback: manual start/stop -> server transcription
+  const fbVoice = makeVoiceController({
+    onState: (state, detail) => {
+      const m = $('fbMic');
+      if (state === 'recording'){ m.classList.add('recording'); $('fbMicState').textContent = 'Recording… click to stop'; }
+      else if (state === 'processing'){ m.classList.remove('recording'); $('fbMicState').innerHTML = '<span class="spinner"></span> Transcribing…'; }
+      else if (state === 'done'){ $('fbMicState').textContent = 'Captured by voice'; }
+      else if (state === 'denied'){ $('fbMicState').textContent = 'Mic access denied'; }
+      else if (state === 'unsupported'){ $('fbMicState').textContent = 'Recording not supported'; }
+      else if (state === 'error'){ m.classList.remove('recording'); $('fbMicState').textContent = detail || 'Voice failed'; }
+    },
+    onTranscript: (text) => { $('fbText').value = text; fbKind = 'voice'; },
   });
+  $('fbMic').addEventListener('click', () => { if (fbVoice.isRecording()) fbVoice.stop(); else fbVoice.start(); });
 }
 
 // ===================================================================
@@ -616,10 +646,19 @@ function openCorrection(){
       <div class="modal">
         <header>
           <h2>Suggest a correction</h2>
-          <p>Propose a fix or clarification for this answer. It will be logged for the docs team.</p>
+          <p>Tell us what was wrong and how it should be. Reviewed corrections are written back into the knowledge base so future answers improve.</p>
         </header>
         <div class="content">
+          <div class="field"><label>Topic / entity (optional)</label><input id="crTopic" placeholder="e.g. roles and permissions" /></div>
+          <div class="field"><label>What was wrong?</label><input id="crWrong" placeholder="The answer said X, but…" /></div>
+          <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">How should it be? (the corrected knowledge)</label>
           <textarea id="crText" placeholder="The correct answer / what should change…"></textarea>
+          <div class="modal-mic" style="margin-top:10px">
+            <button class="mic-lg" id="crMic" title="Dictate the correction">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V23h2v-3.06A9 9 0 0 0 21 11h-2z"/></svg>
+            </button>
+            <span class="mic-state" id="crMicState">or type above</span>
+          </div>
         </div>
         <div class="footer">
           <button class="btn-text" id="crCancel">Cancel</button>
@@ -627,15 +666,36 @@ function openCorrection(){
         </div>
       </div>
     </div>`;
+  let crKind = 'text';
   $('crText').focus();
   $('crCancel').addEventListener('click', closeModal);
   $('crBg').addEventListener('click', (e)=>{ if(e.target.id==='crBg') closeModal(); });
   $('crSend').addEventListener('click', async () => {
-    const text = $('crText').value.trim();
-    if (!text){ $('crText').focus(); return; }
-    try { await API.correction(lastQuery.id, text); toast('Correction submitted — thank you'); } catch(_){}
+    const corrected = $('crText').value.trim();
+    if (!corrected){ $('crText').focus(); return; }
+    const payload = {
+      text: corrected,
+      corrected,
+      whatWrong: $('crWrong').value.trim() || undefined,
+      topic: $('crTopic').value.trim() || undefined,
+      kind: crKind,
+    };
+    try { await API.correction(lastQuery.id, payload); toast('Correction submitted — thank you'); } catch(_){}
     closeModal();
   });
+  const crVoice = makeVoiceController({
+    onState: (state, detail) => {
+      const m = $('crMic');
+      if (state === 'recording'){ m.classList.add('recording'); $('crMicState').textContent = 'Recording… click to stop'; }
+      else if (state === 'processing'){ m.classList.remove('recording'); $('crMicState').innerHTML = '<span class="spinner"></span> Transcribing…'; }
+      else if (state === 'done'){ $('crMicState').textContent = 'Captured by voice'; }
+      else if (state === 'denied'){ $('crMicState').textContent = 'Mic access denied'; }
+      else if (state === 'unsupported'){ $('crMicState').textContent = 'Recording not supported'; }
+      else if (state === 'error'){ m.classList.remove('recording'); $('crMicState').textContent = detail || 'Voice failed'; }
+    },
+    onTranscript: (text) => { $('crText').value = text; crKind = 'voice'; },
+  });
+  $('crMic').addEventListener('click', () => { if (crVoice.isRecording()) crVoice.stop(); else crVoice.start(); });
 }
 
 // ===================================================================

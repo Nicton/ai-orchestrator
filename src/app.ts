@@ -13,7 +13,7 @@ import { hydrateIssue, searchAiTodos, addComment } from './youtrack.js';
 import { wfCreateTask, wfEnqueueJob, wfSetStatus } from './workflow.js';
 import { readRecentEvents } from './bus/sink.js';
 import { registerIntakeApi } from './intake.js';
-import { registerKnowledgeApi } from './knowledge.js';
+import { registerKnowledgeApi, seedKnowledgeGraph } from './knowledge.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
 import { TaskStatus, WfJobType, WfTaskStatus } from './prismaEnums.js';
 
@@ -809,6 +809,11 @@ app.get('/admin', async (_, reply) => {
   return reply.sendFile('admin.html');
 });
 
+// Knowledge graph + traceability visualization.
+app.get('/graph', async (_, reply) => {
+  return reply.sendFile('graph.html');
+});
+
 // Legacy internal orchestrator dashboard (engineering use).
 app.get('/internal', async (_, reply) => {
   return reply.sendFile('internal.html');
@@ -816,6 +821,7 @@ app.get('/internal', async (_, reply) => {
 
 async function start() {
   await seedDefaultAdmin().catch((e) => app.log.error(e, 'admin seed failed'));
+  await seedKnowledgeGraph().catch((e) => app.log.error(e, 'graph seed failed'));
   await app.listen({ host: '0.0.0.0', port: config.port });
   app.log.info(`app listening on :${config.port}`);
 }

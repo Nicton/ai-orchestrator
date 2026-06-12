@@ -3,7 +3,8 @@ import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from './db.js';
-import { runRolePrompt } from './llm.js';
+import { runRolePrompt, transcribeAudioFile } from './llm.js';
+import { config } from './config.js';
 import { requireAuth, requireAdmin } from './auth.js';
 
 type SourceType = 'confluence' | 'jira' | 'web' | 'local';
@@ -40,11 +41,25 @@ type KnowledgeRootConfig = {
 const searchableExts = new Set(['.md', '.mdx', '.txt']);
 const ignoredDirs = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.audio_temp']);
 const docRoots: KnowledgeRootConfig[] = [
-  { label: 'knowledge-base', relPath: '../../knowledge-base', weight: 1.35 },
+  // First-class authoritative knowledge base, indexed from the repo root.
+  { label: 'knowledge-base', relPath: 'knowledge-base', weight: 1.35 },
   { label: 'documentation', relPath: 'workspaces/documentation', weight: 1.15 },
   { label: 'docs', relPath: 'docs', weight: 1.0 },
   { label: 'product', relPath: 'product', weight: 0.95 },
 ];
+
+// Weight for sources that are not file roots (e.g. the DB-backed operational
+// knowledge store, including knowledge written back from applied corrections).
+// It is the highest weight so corrected/curated truth wins over raw files.
+const NON_FILE_ROOT_WEIGHTS: Record<string, number> = {
+  operational: 1.5,
+};
+
+function rootWeight(label: string): number {
+  const fileRoot = docRoots.find((root) => root.label === label);
+  if (fileRoot) return fileRoot.weight;
+  return NON_FILE_ROOT_WEIGHTS[label] ?? 1;
+}
 const pathScoreRules = [
   { pattern: /(^|\/)open-questions(\.md)?$/i, multiplier: 0.35 },
   { pattern: /(^|\/)todo(s)?(\.md)?$/i, multiplier: 0.45 },
@@ -261,10 +276,44 @@ async function loadKnowledgeDocs(force = false) {
     roots.push({ label: root.label, path: root.relPath, files: docs.length });
   }
 
+  // Operational knowledge store (DB-backed). This is where curated entries and
+  // knowledge written back from applied corrections live — highest priority.
+  const operationalDocs = await loadOperationalDocs();
+  allDocs.push(...operationalDocs);
+  roots.push({ label: 'operational', path: 'db:KnowledgeEntry', files: operationalDocs.length });
+
   scanCache.docs = allDocs;
   scanCache.scannedAt = now;
   scanCache.roots = roots;
   return scanCache;
+}
+
+// Load approved entries from the DB-backed operational knowledge store and
+// expose them as searchable docs. Failures (e.g. no DB) degrade to file-only.
+async function loadOperationalDocs(): Promise<KnowledgeDoc[]> {
+  try {
+    const entries = await prisma.knowledgeEntry.findMany({
+      where: { status: 'APPROVED' },
+      orderBy: { updatedAt: 'desc' },
+      take: 500,
+    });
+    return entries.map((entry) => {
+      const text = normalizeWhitespace(`${entry.title}. ${entry.body}`);
+      const sourceType = (entry.sourceType as SourceType) || 'local';
+      return {
+        path: `db:knowledge-entry/${entry.id}`,
+        rootLabel: 'operational',
+        title: entry.title,
+        text,
+        normalized: text.toLowerCase(),
+        mtimeMs: entry.updatedAt.getTime(),
+        sourceUrl: entry.sourceUrl || undefined,
+        sourceType: ['confluence', 'jira', 'web', 'local'].includes(sourceType) ? sourceType : 'local',
+      } satisfies KnowledgeDoc;
+    });
+  } catch {
+    return [];
+  }
 }
 
 async function searchKnowledge(query: string) {
@@ -289,8 +338,7 @@ async function searchKnowledge(query: string) {
       if (matchedTerms === terms.length && terms.length > 0) rawScore += 10;
       if (doc.title.toLowerCase().includes(terms[0] || '')) rawScore += 4;
 
-      const rootWeight = docRoots.find((root) => root.label === doc.rootLabel)?.weight || 1;
-      const weightedScore = rawScore * rootWeight * pathScoreMultiplier(doc.path);
+      const weightedScore = rawScore * rootWeight(doc.rootLabel) * pathScoreMultiplier(doc.path);
 
       return {
         path: doc.path,
@@ -331,16 +379,17 @@ async function composeAnswer(question: string, hits: KnowledgeSearchHit[], langu
     )
     .join('\n\n');
 
-  const prompt = `You are a product knowledge assistant inside an engineering workspace.
+  const prompt = `You are Searchify, a product knowledge assistant inside an engineering workspace.
 
-Answer the user's question using only the evidence below.
+Answer the user's question using ONLY the evidence below.
 
 Rules:
 - Be concrete and concise.
-- If evidence is partial or conflicting, say that explicitly.
-- Respond in the same language as the user's question. Current language: ${language}.
-- End with a short "Sources:" line listing the most relevant file paths.
-- Do not invent integrations, flows, or APIs that are not present in the evidence.
+- Ground every claim in the evidence. Do NOT invent entities, roles, processes, APIs, integrations, permissions, or limitations that are not present in the evidence.
+- If the evidence is partial, outdated, or conflicting, say so explicitly.
+- If the evidence does not actually answer the question, say honestly that the information is insufficient instead of guessing.
+- CRITICAL: Respond strictly in the SAME language the user used to ask the question (detected: ${language}). Mirror the user's language even if the evidence is in another language.
+- End with a short "Sources:" line listing the most relevant titles/paths.
 
 Question:
 ${question}
@@ -372,7 +421,7 @@ ${evidence}`;
   }
 
   try {
-    const result = await runRolePrompt('knowledge_assistant.answer', prompt);
+    const result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel);
     return { mode: 'llm', answer: result.text.trim() || hits[0].snippet };
   } catch {
     const intro =
@@ -588,8 +637,15 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     return reply.code(201).send({ ok: true, feedbackId: feedback.id });
   });
 
-  // Correction / clarification proposed by the user for the received answer.
-  const correctionSchema = z.object({ text: z.string().min(1).max(8000) });
+  // Correction proposed by the user for the received answer. Structured capture
+  // (master spec §8): what was wrong, the corrected knowledge, and the topic.
+  const correctionSchema = z.object({
+    text: z.string().min(1).max(8000),
+    whatWrong: z.string().max(4000).optional(),
+    corrected: z.string().max(8000).optional(),
+    topic: z.string().max(300).optional(),
+    kind: z.enum(['text', 'voice']).default('text'),
+  });
 
   app.post('/api/knowledge/queries/:id/correction', async (req: any, reply) => {
     const user = await requireAuth(req, reply);
@@ -605,10 +661,58 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     }
 
     const correction = await prisma.knowledgeCorrection.create({
-      data: { queryId: query.id, userId: user.id, text: parsed.data.text },
+      data: {
+        queryId: query.id,
+        userId: user.id,
+        kind: parsed.data.kind,
+        text: parsed.data.text,
+        whatWrong: parsed.data.whatWrong,
+        corrected: parsed.data.corrected,
+        topic: parsed.data.topic || deriveTopic(query.question, queryTerms(query.question)),
+      },
     });
 
     return reply.code(201).send({ ok: true, correctionId: correction.id });
+  });
+
+  // Server-side speech-to-text (Whisper). Manual-stop recordings are uploaded
+  // here; the transcript is returned for the user to edit before sending.
+  app.post('/api/knowledge/transcribe', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    if (!req.isMultipart || !req.isMultipart()) {
+      return reply.code(415).send({ error: 'Expected multipart/form-data with an "audio" file' });
+    }
+
+    let audioBuffer: Buffer | undefined;
+    let audioFilename = 'audio.webm';
+    let languageHint: string | undefined;
+    for await (const part of req.parts()) {
+      if (part.type === 'file' && part.fieldname === 'audio') {
+        audioFilename = part.filename || audioFilename;
+        audioBuffer = await part.toBuffer();
+      } else if (part.type === 'field' && part.fieldname === 'language') {
+        languageHint = String(part.value || '') || undefined;
+      }
+    }
+    if (!audioBuffer || !audioBuffer.length) {
+      return reply.code(400).send({ error: 'audio file is required (field name: audio)' });
+    }
+
+    const dir = path.resolve(process.cwd(), 'data', 'stt');
+    await fs.mkdir(dir, { recursive: true });
+    const ext = path.extname(audioFilename) || '.webm';
+    const dest = path.join(dir, `${Date.now()}-${Math.round(audioBuffer.length)}${ext}`);
+    await fs.writeFile(dest, audioBuffer);
+
+    try {
+      const result = await transcribeAudioFile(dest, languageHint);
+      return reply.send({ text: result.text, language: result.language, model: result.model });
+    } catch (e: any) {
+      return reply.code(e.statusCode || 502).send({ error: e.message || 'Transcription failed' });
+    } finally {
+      await fs.unlink(dest).catch(() => {});
+    }
   });
 
   // Current user's own history (hidden behind a drawer in the UI).
@@ -688,6 +792,9 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         corrections: row.corrections.map((c: any) => ({
           id: c.id,
           text: c.text,
+          whatWrong: c.whatWrong,
+          corrected: c.corrected,
+          topic: c.topic,
           status: c.status,
           createdAt: c.createdAt,
         })),
@@ -699,6 +806,177 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     return reply.send(await buildAnalytics());
+  });
+
+  // --- Correction review / apply workflow (master spec §8, Phase 3) ---
+
+  app.get('/api/admin/knowledge/corrections', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+
+    const status = req.query?.status ? String(req.query.status) : undefined;
+    const rows = await prisma.knowledgeCorrection.findMany({
+      where: status ? { status } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+      include: {
+        user: { select: { name: true, email: true } },
+        query: { select: { question: true, answer: true } },
+      },
+    });
+
+    return reply.send({
+      corrections: rows.map((c: any) => ({
+        id: c.id,
+        status: c.status,
+        kind: c.kind,
+        text: c.text,
+        whatWrong: c.whatWrong,
+        corrected: c.corrected,
+        topic: c.topic,
+        appliedAt: c.appliedAt,
+        appliedEntryId: c.appliedEntryId,
+        createdAt: c.createdAt,
+        author: c.user ? { name: c.user.name, email: c.user.email } : null,
+        question: c.query?.question,
+        answer: c.query?.answer,
+      })),
+    });
+  });
+
+  // Apply a correction: write the corrected knowledge into the operational
+  // store (KnowledgeEntry) so later answers are grounded on the corrected truth.
+  const applyCorrectionSchema = z.object({
+    title: z.string().min(3).max(300).optional(),
+    body: z.string().min(3).max(20000).optional(),
+    topic: z.string().max(300).optional(),
+    entityId: z.string().optional(),
+  });
+
+  app.post('/api/admin/knowledge/corrections/:id/apply', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+
+    const parsed = applyCorrectionSchema.safeParse(req.body || {});
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    const correction = await prisma.knowledgeCorrection.findUnique({
+      where: { id: String(req.params.id) },
+      include: { query: true },
+    });
+    if (!correction) return reply.code(404).send({ error: 'Correction not found' });
+    if (correction.status === 'APPLIED') return reply.code(409).send({ error: 'Already applied' });
+
+    const topic = parsed.data.topic || correction.topic || deriveTopic(correction.query.question, queryTerms(correction.query.question));
+    const title = parsed.data.title || `Correction: ${topic}`.slice(0, 280);
+    const body = parsed.data.body
+      || correction.corrected
+      || [
+        `Question: ${correction.query.question}`,
+        correction.whatWrong ? `What was wrong: ${correction.whatWrong}` : '',
+        `Correction: ${correction.text}`,
+      ].filter(Boolean).join('\n');
+
+    const entry = await prisma.knowledgeEntry.create({
+      data: {
+        title,
+        body,
+        topic,
+        sourceType: 'correction',
+        origin: 'correction',
+        status: 'APPROVED',
+        correctionId: correction.id,
+        createdById: admin.id,
+        entityId: parsed.data.entityId || undefined,
+      },
+    });
+
+    await prisma.knowledgeCorrection.update({
+      where: { id: correction.id },
+      data: { status: 'APPLIED', appliedAt: new Date(), appliedEntryId: entry.id, reviewedById: admin.id },
+    });
+
+    // Force a re-index so the new entry is immediately searchable.
+    await loadKnowledgeDocs(true);
+
+    return reply.send({ ok: true, entryId: entry.id });
+  });
+
+  app.post('/api/admin/knowledge/corrections/:id/reject', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const correction = await prisma.knowledgeCorrection.findUnique({ where: { id: String(req.params.id) } });
+    if (!correction) return reply.code(404).send({ error: 'Correction not found' });
+    await prisma.knowledgeCorrection.update({
+      where: { id: correction.id },
+      data: { status: 'REJECTED', reviewedById: admin.id },
+    });
+    return reply.send({ ok: true });
+  });
+
+  // --- Graph + traceability (master spec §10/§11/§12) ---
+
+  // Public-ish (authed) graph data for the visualization page.
+  app.get('/api/knowledge/graph', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+
+    const [entities, relations] = await Promise.all([
+      prisma.knowledgeEntity.findMany({
+        orderBy: { type: 'asc' },
+        include: { _count: { select: { entries: true } } },
+      }),
+      prisma.knowledgeRelation.findMany(),
+    ]);
+
+    return reply.send({
+      nodes: entities.map((e: any) => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        summary: e.summary,
+        entryCount: e._count.entries,
+      })),
+      edges: relations.map((r: any) => ({ id: r.id, from: r.fromId, to: r.toId, type: r.type })),
+    });
+  });
+
+  const createEntitySchema = z.object({
+    name: z.string().min(1).max(200),
+    type: z.string().min(1).max(60),
+    summary: z.string().max(2000).optional(),
+  });
+
+  app.post('/api/admin/knowledge/entities', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const parsed = createEntitySchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const entity = await prisma.knowledgeEntity.upsert({
+      where: { type_name: { type: parsed.data.type, name: parsed.data.name } },
+      update: { summary: parsed.data.summary },
+      create: { name: parsed.data.name, type: parsed.data.type, summary: parsed.data.summary },
+    });
+    return reply.code(201).send({ entity });
+  });
+
+  const createRelationSchema = z.object({
+    fromId: z.string().min(1),
+    toId: z.string().min(1),
+    type: z.string().min(1).max(60),
+  });
+
+  app.post('/api/admin/knowledge/relations', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const parsed = createRelationSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const relation = await prisma.knowledgeRelation.upsert({
+      where: { fromId_toId_type: { fromId: parsed.data.fromId, toId: parsed.data.toId, type: parsed.data.type } },
+      update: {},
+      create: parsed.data,
+    });
+    return reply.code(201).send({ relation });
   });
 }
 
@@ -811,4 +1089,49 @@ async function registerGapFromFeedback(
       metadata: { intent: query.intent, viaFeedback: true },
     },
   });
+}
+
+// Idempotently seed a small knowledge graph so the graph view and traceability
+// have content out of the box. Mirrors the seeded knowledge-base documents.
+export async function seedKnowledgeGraph() {
+  const entities: Array<{ type: string; name: string; summary: string }> = [
+    { type: 'module', name: 'TMS', summary: 'Transport Management System — core platform.' },
+    { type: 'feature', name: 'Carrier Types', summary: 'Carrier type registry and onboarding.' },
+    { type: 'module', name: 'Billing Engine', summary: 'Rating & billing rules keyed by carrier type.' },
+    { type: 'api', name: 'Booking API', summary: 'Validates carrier type on inbound bookings.' },
+    { type: 'requirement', name: 'Roles and Permissions', summary: 'Authoritative roles & permission matrix.' },
+    { type: 'process', name: 'Production Deployment', summary: 'Deploy / rollback / incident runbook.' },
+    { type: 'document', name: 'Confluence', summary: 'Primary documentation source.' },
+  ];
+
+  try {
+    const byName: Record<string, string> = {};
+    for (const e of entities) {
+      const row = await prisma.knowledgeEntity.upsert({
+        where: { type_name: { type: e.type, name: e.name } },
+        update: { summary: e.summary },
+        create: e,
+      });
+      byName[e.name] = row.id;
+    }
+
+    const relations: Array<[string, string, string]> = [
+      ['Carrier Types', 'TMS', 'part_of'],
+      ['Carrier Types', 'Billing Engine', 'depends_on'],
+      ['Booking API', 'Carrier Types', 'uses'],
+      ['Billing Engine', 'Confluence', 'documented_by'],
+      ['Roles and Permissions', 'Confluence', 'documented_by'],
+      ['Production Deployment', 'TMS', 'relates_to'],
+    ];
+    for (const [from, to, type] of relations) {
+      if (!byName[from] || !byName[to]) continue;
+      await prisma.knowledgeRelation.upsert({
+        where: { fromId_toId_type: { fromId: byName[from], toId: byName[to], type } },
+        update: {},
+        create: { fromId: byName[from], toId: byName[to], type },
+      });
+    }
+  } catch {
+    // No DB available — skip seeding silently.
+  }
 }

@@ -36,10 +36,43 @@ intent, confidence, input mode (text/voice) and rating. Feedback (`KnowledgeFeed
 and corrections (`KnowledgeCorrection`) are linked to the query and the user. Low ratings
 with feedback also feed the `KnowledgeGap` table as documentation signals.
 
-## Voice
+## Voice (server-side Whisper)
 
-Voice input (both the question and the feedback) uses the browser **Web Speech API**
-(`SpeechRecognition`). Best supported in Chrome/Edge. No server-side audio is required.
+Voice input (question, feedback, and correction) uses **server-side Whisper STT**, not
+browser speech. Flow: press the mic to start recording → speak the full question → press
+the mic again to stop (manual start/stop, never auto-stops) → a processing loader shows
+while the audio is uploaded to `POST /api/knowledge/transcribe` → the transcript is
+inserted into a full-width, auto-expanding input → the user edits it → presses Ask.
+
+Configure with `OPENAI_API_KEY` (+ optional `STT_BASE_URL`/`STT_MODEL`). With `MOCK_LLM=1`
+a mock transcript is returned for offline demos. Without a key and without mock, the
+transcribe endpoint returns a clear `503`.
+
+## Knowledge graph & traceability
+
+`/graph` renders an entity/relationship graph (features, modules, processes, APIs,
+requirements, documents) from the DB-backed graph model (`KnowledgeEntity` /
+`KnowledgeRelation`, seeded on startup). Click a node to trace what it depends on, what
+uses it, and where it is documented — surfacing coverage gaps.
+
+## Operational knowledge store & correction loop
+
+Knowledge also lives in the DB (`KnowledgeEntry`, the operational store) and is indexed
+for retrieval alongside files with the highest weight. When an admin **applies** a user
+correction (Admin → Corrections), the corrected knowledge is written into this store, so
+subsequent answers are grounded on the corrected truth — corrections are not left in logs.
+
+## Retrieval & confidence (Phase 1)
+
+The authoritative `knowledge-base/` directory is indexed as a first-class, highest-weight
+source; noisy files (`OPEN-QUESTIONS`, TODOs, drafts, READMEs) are down-weighted; and
+confidence is computed honestly from term coverage, top-score, evidence diversity and
+trusted-source ratio (capped lower for weak evidence) rather than an optimistic count.
+
+## Multilingual answers
+
+Answers are always returned in the language of the question (the model is instructed to
+mirror the user's language regardless of the documentation language).
 
 ## Sources & Confluence links
 

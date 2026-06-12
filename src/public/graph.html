@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Knowledge Graph — Searchify</title>
+<style>
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; --shadow:0 1px 4px rgba(32,33,36,.12); }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button { font-family:inherit; cursor:pointer; }
+  header.bar { background:var(--panel); border-bottom:1px solid var(--line); padding:14px 26px; display:flex; align-items:center; gap:16px; }
+  header.bar .title { font-size:18px; font-weight:600; }
+  header.bar .spacer { flex:1; }
+  .ghost { border:1px solid var(--line); background:#fff; color:#3c4043; padding:8px 14px; border-radius:8px; font-size:14px; }
+  .wrap { display:flex; height:calc(100vh - 57px); }
+  .canvas { flex:1; position:relative; overflow:hidden; }
+  svg { width:100%; height:100%; display:block; }
+  .edge { stroke:#c3c9d2; stroke-width:1.5; }
+  .edge.hl { stroke:var(--blue); stroke-width:2.5; }
+  .edge-label { fill:#9aa0a6; font-size:10px; }
+  .node circle { cursor:pointer; stroke:#fff; stroke-width:2; }
+  .node text { font-size:11px; fill:#202124; pointer-events:none; }
+  .node.dim { opacity:.25; }
+  .side { width:320px; border-left:1px solid var(--line); background:var(--panel); padding:18px; overflow-y:auto; }
+  .side h2 { font-size:16px; margin:0 0 4px; }
+  .side .muted { color:var(--muted); font-size:13px; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+  .legend .item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+  .rel { border-left:3px solid var(--blue); padding:6px 10px; margin:6px 0; background:#f3f8ff; border-radius:0 6px 6px 0; font-size:13px; }
+  .empty { padding:60px 20px; text-align:center; color:var(--muted); }
+  .pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; background:#eef1f5; color:#5f6368; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="title">Knowledge Graph <span class="pill">traceability</span></span>
+  <span class="spacer"></span>
+  <a class="ghost" href="/admin">Admin</a>
+  <a class="ghost" href="/">← Back to search</a>
+</header>
+<div class="wrap">
+  <div class="canvas" id="canvas"><div class="empty" id="msg">Loading graph…</div></div>
+  <div class="side" id="side">
+    <h2>Knowledge graph</h2>
+    <div class="muted">Entities and relationships across features, modules, processes, APIs, requirements and documents. Click a node to trace its connections.</div>
+    <div class="legend" id="legend"></div>
+    <div id="detail"></div>
+  </div>
+</div>
+<script>
+const TYPE_COLORS = { feature:'#1a73e8', module:'#34a853', process:'#a142f4', api:'#e37400', requirement:'#d93025', role:'#12b5cb', document:'#5f6368', integration:'#f439a0', entity:'#7b8794' };
+function colorFor(t){ return TYPE_COLORS[t] || '#7b8794'; }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+let NODES=[], EDGES=[], pos={};
+
+async function boot(){
+  const me = await fetch('/api/auth/me');
+  if (!me.ok){ location.href='/login'; return; }
+  const data = await fetch('/api/knowledge/graph').then(r=>r.json());
+  NODES = data.nodes || []; EDGES = data.edges || [];
+  renderLegend();
+  if (!NODES.length){ document.getElementById('msg').innerHTML = 'No entities yet.<br><span style="font-size:13px">Create entities and relations from the admin API, or apply corrections to grow the knowledge graph.</span>'; return; }
+  layout(); draw();
+}
+
+function renderLegend(){
+  const types = Array.from(new Set(NODES.map(n=>n.type)));
+  document.getElementById('legend').innerHTML = types.map(t=>`<span class="item"><span class="dot" style="background:${colorFor(t)}"></span>${escapeHtml(t)}</span>`).join('');
+}
+
+function layout(){
+  // Radial layout grouped so the graph is readable without a physics engine.
+  const cx = document.getElementById('canvas').clientWidth/2;
+  const cy = document.getElementById('canvas').clientHeight/2;
+  const R = Math.max(120, Math.min(cx, cy) - 90);
+  const n = NODES.length;
+  NODES.forEach((node,i)=>{
+    const a = (i / n) * Math.PI * 2 - Math.PI/2;
+    pos[node.id] = { x: cx + R*Math.cos(a), y: cy + R*Math.sin(a) };
+  });
+}
+
+function draw(sel){
+  const c = document.getElementById('canvas');
+  const W = c.clientWidth, H = c.clientHeight;
+  const connected = new Set();
+  if (sel){ EDGES.forEach(e=>{ if(e.from===sel||e.to===sel){ connected.add(e.from); connected.add(e.to); } }); }
+  const edgesSvg = EDGES.map(e=>{
+    const a = pos[e.from], b = pos[e.to]; if(!a||!b) return '';
+    const hl = sel && (e.from===sel || e.to===sel);
+    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    return `<line class="edge ${hl?'hl':''}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>${hl?`<text class="edge-label" x="${mx}" y="${my}">${escapeHtml(e.type)}</text>`:''}`;
+  }).join('');
+  const nodesSvg = NODES.map(node=>{
+    const p = pos[node.id]; if(!p) return '';
+    const dim = sel && node.id!==sel && !connected.has(node.id);
+    const r = 10 + Math.min(10, (node.entryCount||0)*2);
+    return `<g class="node ${dim?'dim':''}" data-id="${node.id}" transform="translate(${p.x},${p.y})">
+      <circle r="${r}" fill="${colorFor(node.type)}"></circle>
+      <text x="${r+4}" y="4">${escapeHtml(node.name)}</text>
+    </g>`;
+  }).join('');
+  c.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${edgesSvg}${nodesSvg}</svg>`;
+  c.querySelectorAll('.node').forEach(g => g.addEventListener('click', ()=>select(g.dataset.id)));
+}
+
+function select(id){
+  draw(id);
+  const node = NODES.find(n=>n.id===id);
+  const outgoing = EDGES.filter(e=>e.from===id).map(e=>({ type:e.type, other: NODES.find(n=>n.id===e.to) }));
+  const incoming = EDGES.filter(e=>e.to===id).map(e=>({ type:e.type, other: NODES.find(n=>n.id===e.from) }));
+  document.getElementById('detail').innerHTML = `
+    <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+    <h2>${escapeHtml(node.name)} <span class="pill" style="background:${colorFor(node.type)}22;color:${colorFor(node.type)}">${escapeHtml(node.type)}</span></h2>
+    ${node.summary?`<div class="muted" style="margin:6px 0">${escapeHtml(node.summary)}</div>`:''}
+    <div class="muted" style="margin:6px 0">${node.entryCount||0} knowledge entr${node.entryCount===1?'y':'ies'}</div>
+    ${outgoing.length?`<div style="margin-top:10px;font-size:12px;text-transform:uppercase;color:var(--muted)">Depends on / uses</div>${outgoing.map(o=>`<div class="rel">${escapeHtml(o.type)} → <b>${escapeHtml(o.other?.name||'?')}</b></div>`).join('')}`:''}
+    ${incoming.length?`<div style="margin-top:10px;font-size:12px;text-transform:uppercase;color:var(--muted)">Used by / documented in</div>${incoming.map(o=>`<div class="rel"><b>${escapeHtml(o.other?.name||'?')}</b> ${escapeHtml(o.type)} →</div>`).join('')}`:''}
+    ${(!outgoing.length&&!incoming.length)?'<div class="muted" style="margin-top:10px">No relations yet — a potential coverage gap.</div>':''}`;
+}
+
+window.addEventListener('resize', ()=>{ if(NODES.length){ layout(); draw(); } });
+boot();
+</script>
+</body>
+</html>
