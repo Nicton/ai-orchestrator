@@ -93,6 +93,10 @@
   .glogo { font-size: 46px; font-weight: 500; letter-spacing: -1px; user-select: none; }
   .glogo .c1{color:#4285F4}.glogo .c2{color:#EA4335}.glogo .c3{color:#FBBC05}.glogo .c4{color:#4285F4}.glogo .c5{color:#34A853}.glogo .c6{color:#EA4335}
   .gtag { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  /* Beta-режим: бейдж рядом с логотипом */
+  .glogo { position: relative; display: inline-block; }
+  .beta-badge { display:inline-block; vertical-align: super; margin-left: 6px; padding: 2px 7px; border-radius: 10px;
+    background: #fef0e6; color: #e37400; border: 1px solid #f7c89b; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
 
   /* ---------- search home ---------- */
   .home { display: flex; flex-direction: column; align-items: center; padding: 0 20px; }
@@ -299,7 +303,7 @@
 <div id="view-login">
   <div class="login-wrap">
     <div class="login-card">
-      <div class="logo glogo" style="font-size:34px"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span></div>
+      <div class="logo glogo" style="font-size:34px"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span><sup class="beta-badge">BETA</sup></div>
       <h1>Searchify</h1>
       <p class="sub">Sign in with your work email</p>
       <form id="loginForm">
@@ -323,7 +327,7 @@
 <div id="view-home" style="display:none">
   <div class="home centered" id="home">
     <div class="home-logo">
-      <div class="glogo"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span></div>
+      <div class="glogo"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span><sup class="beta-badge">BETA</sup></div>
       <div class="gtag">Ask anything about our products, processes and docs</div>
     </div>
 
