@@ -68,6 +68,33 @@ function reqTestMatch(reqText: string, domain: string, qa: ReturnType<typeof loa
   return { matched, automated };
 }
 
+// ── Автотесты репозитория (TestCafe) как слой Automation ────────────────────
+let _autoCache: any = null;
+function loadAuto(): { available: boolean; items: { tk: Set<string> }[] } {
+  if (_autoCache) return _autoCache;
+  const p = path.resolve(process.cwd(), 'docs/qa/autotests-index.json');
+  try {
+    const d = JSON.parse(readFileSync(p, 'utf8'));
+    const items = (d.items || []).map((it: any) => ({ tk: new Set<string>(it.tk || []) }));
+    _autoCache = { available: items.length > 0, items };
+  } catch { _autoCache = { available: false, items: [] }; }
+  return _autoCache;
+}
+// Матчинг требования с автотестами по токенам (без привязки к домену — публичные API
+// тесты покрывают разные модули). Возвращает число матчащих автотестов.
+function reqAutoMatch(reqText: string): number {
+  const rt = tokens(reqText);
+  if (rt.length < 1) return 0;
+  const auto = loadAuto();
+  let m = 0;
+  for (const it of auto.items) {
+    let n = 0;
+    for (const t of rt) { if (it.tk.has(t)) { n++; if (n >= 2) break; } }
+    if (n >= 2) m++;
+  }
+  return m;
+}
+
 // Quality Coverage Engine — единый движок расчёта покрытия поверх графа знаний
 // (Data Lake = KnowledgeEntity/Relation). Источник один, представлений несколько.
 
@@ -130,12 +157,13 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
 
   const qa = loadQa();
 
+  const auto = loadAuto();
   // Доступность слоёв = есть ли подключённый источник данных.
   const layersAvailable: Record<string, boolean> = {
     subreq: reqs.length > 0 || docs.length > 0,
     docs: docs.length > 0,
     tests: qa.available,
-    automation: qa.available,
+    automation: auto.available,
     execution: false,
     defects: false,
   };
@@ -171,16 +199,18 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
 
   // Tests/Automation по требованиям домена (текстовый матчинг title/desc ↔ name/summary).
   function reqLayers(reqIds: string[], domain: string): { tests: number | null; automation: number | null } {
-    if (!qa.available) return { tests: null, automation: null };
-    if (!reqIds.length) return { tests: 0, automation: 0 };
-    let matchedReqs = 0, mCases = 0, aCases = 0;
+    const tOn = qa.available, aOn = auto.available;
+    if (!reqIds.length) return { tests: tOn ? 0 : null, automation: aOn ? 0 : null };
+    let matchedT = 0, matchedA = 0;
     for (const rid of reqIds) {
-      const e = byId[rid];
-      const r = reqTestMatch((e?.name || '') + ' ' + (e?.summary || ''), domain, qa);
-      if (r.matched > 0) matchedReqs++;
-      mCases += r.matched; aCases += r.automated;
+      const txt = (byId[rid]?.name || '') + ' ' + (byId[rid]?.summary || '');
+      if (tOn && reqTestMatch(txt, domain, qa).matched > 0) matchedT++;
+      if (aOn && reqAutoMatch(txt) > 0) matchedA++;
     }
-    return { tests: Math.round((matchedReqs / reqIds.length) * 100), automation: mCases ? Math.round((aCases / mCases) * 100) : 0 };
+    return {
+      tests: tOn ? Math.round((matchedT / reqIds.length) * 100) : null,
+      automation: aOn ? Math.round((matchedA / reqIds.length) * 100) : null,
+    };
   }
 
   // Компоненты покрытия (0..100 / null) для модуля.
@@ -265,12 +295,14 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
     const domain = dlist.length ? docDomain(dlist[0]) : 'Прочее';
     const hasDoc = dlist.length > 0;
     const docsPct = hasDoc ? Math.round(Math.max(...dlist.map((d) => statusScore(d.metadata?.status))) * 100) : 0;
-    const tm = reqTestMatch((req.name || '') + ' ' + (req.summary || ''), domain, qa);
+    const reqText = (req.name || '') + ' ' + (req.summary || '');
+    const tm = reqTestMatch(reqText, domain, qa);
+    const am = reqAutoMatch(reqText);
     const comp: Comp = {
       subreq: hasDoc ? 100 : 0,
       docs: docsPct,
       tests: qa.available ? (tm.matched > 0 ? 100 : 0) : null,
-      automation: qa.available ? (tm.matched ? Math.round((tm.automated / tm.matched) * 100) : 0) : null,
+      automation: loadAuto().available ? (am > 0 ? 100 : 0) : null,
       execution: null,
       defects: null,
       bugs: null,
