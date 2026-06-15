@@ -72,7 +72,8 @@ function buildEntities(nodes: any): EntitySpec[] {
         summary = 'Страница Confluence';
         metadata.url = `https://shiptify.atlassian.net/wiki/spaces/TD/pages/${id}`;
       } else if (group === 'requirement') {
-        summary = 'Требование (RTM)';
+        summary = node.desc ? String(node.desc) : 'Требование (RTM)';
+        if (node.confluence) { metadata.confluence = node.confluence; metadata.url = `https://shiptify.atlassian.net/wiki/spaces/TD/pages/${node.confluence}`; }
       } else if (group === 'module') {
         summary = 'Модуль / домен';
       } else if (group === 'area') {

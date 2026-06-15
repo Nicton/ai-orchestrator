@@ -49,7 +49,7 @@
   <input class="search" id="search" placeholder="Найти узел…" autocomplete="off" />
   <select id="domain"><option value="">Все домены</option></select>
   <span class="layers" id="layers"></span>
-  <button class="ghost" id="risksBtn">⚠ Риски</button>
+  <button class="ghost" id="risksBtn" title="Подсветить узлы, где знание и реализация могут расходиться: документировано, но не реализовано (icebox/partial/not-implemented), либо изолированные узлы без связей. Клик раскрывает список с пояснениями.">⚠ Риски</button>
   <button class="ghost" id="relayoutBtn">↻ Раскладка</button>
   <span class="spacer"></span>
   <span class="muted" id="counts"></span>
@@ -123,7 +123,7 @@ function buildControls(){
   const dom=document.getElementById('domain');
   Array.from(new Set(NODES.map(n=>n.domain).filter(Boolean))).sort().forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d; dom.appendChild(o); });
   dom.addEventListener('change',relayout);
-  document.getElementById('risksBtn').addEventListener('click',()=>{ risksOn=!risksOn; document.getElementById('risksBtn').classList.toggle('active',risksOn); draw(true); renderStats(); });
+  document.getElementById('risksBtn').addEventListener('click',()=>{ risksOn=!risksOn; document.getElementById('risksBtn').classList.toggle('active',risksOn); draw(true); renderStats(); if(risksOn) renderRisks(); else document.getElementById('detail').innerHTML=''; });
   document.getElementById('relayoutBtn').addEventListener('click',()=>relayout());
   const s=document.getElementById('search'); s.addEventListener('change',()=>doSearch(s.value.trim().toLowerCase()));
 }
@@ -150,11 +150,28 @@ function radius(n){
   if(n.type==='document') return 4+Math.min(12,(n.codeRefs||0)*1.3);
   return 3.5+Math.min(8,(deg[n.id]||0)*0.5);
 }
-function isRisk(n){
-  if(n.type==='document' && (n.status==='not-implemented'||n.status==='icebox'||n.status==='partial')) return true;
-  if((deg[n.id]||0)===0) return true;
-  return false;
+// Человеческие пояснения типов связей (направление: from → to)
+const EDGE_DESC = {
+  belongs_to:'входит в модуль', relates_to:'связан с модулем', part_of:'часть области/модуля',
+  documents:'документирует код', references:'ссылается на', published_as:'опубликован как',
+  covered_by:'покрыто документом', has_feature:'содержит фичу', has_screen:'содержит экран',
+  has_modal:'содержит модалку', feature:'содержит фичу', screen:'содержит экран', modal:'содержит модалку',
+  code:'опирается на код', requirement:'покрывает требование', mentions:'упоминает (кросс-модуль)',
+  opens:'открывает модальное окно', verified_on:'проверяется на экране', child_of:'вложен в страницу',
+};
+function relLabel(t){ return EDGE_DESC[t] || t; }
+
+// Риски: почему узел помечен (пояснение раскрывается в панели)
+function riskReason(n){
+  if(n.type==='document'){
+    if(n.status==='not-implemented') return 'документировано, но НЕ реализовано в коде';
+    if(n.status==='icebox') return 'заморожено (icebox) — не в активной разработке';
+    if(n.status==='partial') return 'реализовано частично';
+  }
+  if((deg[n.id]||0)===0) return 'изолированный узел — нет связей (возможно, потерян или не привязан)';
+  return null;
 }
+function isRisk(n){ return !!riskReason(n); }
 
 // ── force-directed layout ────────────────────────────────────────────────
 function relayout(){
@@ -199,20 +216,13 @@ function tick(){
     const sp=Math.hypot(p.vx,p.vy), MX=42; if(sp>MX){p.vx*=MX/sp;p.vy*=MX/sp;}
     p.x+=p.vx; p.y+=p.vy; }
 }
+// Раскладка считается синхронно (без анимации) — узлы сразу на местах.
 function startSim(){
   if(sim.raf) cancelAnimationFrame(sim.raf);
-  sim.running=true; sim.alpha=1; let frame=0;
-  const big=sim.nodes.length>320, maxF=big?150:240;
-  document.getElementById('spin').style.display='block';
-  const loop=()=>{
-    const ticks=big?1:2; for(let i=0;i<ticks;i++) tick();
-    const drawEdges = !big || frame%3===0 || sim.alpha<0.15;
-    draw(drawEdges);
-    frame++; sim.alpha*=0.985;
-    if(frame<maxF && sim.alpha>0.015 && sim.running){ sim.raf=requestAnimationFrame(loop); }
-    else { sim.running=false; document.getElementById('spin').style.display='none'; draw(true); renderStats(); }
-  };
-  loop();
+  const n=sim.nodes.length, iters = n>600?170 : n>250?260 : 340;
+  for(let i=0;i<iters;i++){ sim.alpha=Math.max(0.02, 1 - i/iters); tick(); }
+  sim.alpha=0; sim.running=false;
+  draw(true); renderStats();
 }
 
 function draw(showEdges=true){
@@ -262,7 +272,7 @@ function attachInput(svg){
   window.addEventListener('mousemove',e=>{
     if(panning){ view.x=e.clientX-psx; view.y=e.clientY-psy; draw(true); return; }
     if(dragNode){ dragMoved=true; const r=svg.getBoundingClientRect(); const w=screenToWorld(e.clientX-r.left,e.clientY-r.top);
-      const p=pos[dragNode]; p.x=w.x; p.y=w.y; p.vx=0; p.vy=0; p.pinned=true; if(!sim.running){ sim.alpha=0.5; startSim(); } }
+      const p=pos[dragNode]; p.x=w.x; p.y=w.y; p.vx=0; p.vy=0; p.pinned=true; draw(true); }
   });
   window.addEventListener('mouseup',()=>{ panning=false; svg.classList.remove('drag'); if(dragNode){ const p=pos[dragNode]; if(p)p.pinned=false; } dragNode=null; setTimeout(()=>dragMoved=false,30); });
   svg.addEventListener('click',e=>{ if(!e.target.closest('.node')&&sel){ sel=null; draw(true); document.getElementById('detail').innerHTML=''; } });
@@ -276,16 +286,21 @@ function select(id){
   const inc=EDGES.filter(e=>e.to===id).map(e=>({type:e.type,o:BYID[e.from]}));
   const link=n.url?`<a href="${esc(n.url)}" target="_blank">Confluence ↗</a>`:(n.confluence?`<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(n.confluence)}" target="_blank">Confluence ↗</a>`:'');
   const spanInfo=(n.type==='feature'||n.type==='modal')&&span[id]>1?`<div class="muted">встречается в ${span[id]} доменах (кросс-модульно)</div>`:'';
+  const reason=riskReason(n);
+  const riskBox=reason?`<div class="rel" style="border-color:#d93025;background:#fff4f4">⚠ <b>Риск:</b> ${esc(reason)}</div>`:'';
+  const linkLine = link || (n.type==='requirement'?'<span class="muted">требование — см. RTM</span>':'');
   document.getElementById('detail').innerHTML=`
     <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
-    <h2>${esc(n.name)} <span class="pill" style="background:${colorFor(n)}22;color:${colorFor(n)}">${esc(n.type)}</span></h2>
+    <h2>${esc(n.name)} <span class="pill" style="background:${colorFor(n)}22;color:${colorFor(n)}">${esc((TYPE[n.type]||{}).label||n.type)}</span></h2>
     ${n.summary?`<div class="muted" style="margin:5px 0">${esc(n.summary)}</div>`:''}
     ${n.route?`<div class="muted">роут: <code>${esc(n.route)}</code></div>`:''}
     ${spanInfo}
-    <div style="margin:6px 0">${link}</div>
+    ${riskBox}
+    <div style="margin:6px 0">${linkLine}</div>
     <div class="muted">связей: ${out.length+inc.length}</div>
-    ${out.length?`<div style="margin-top:8px;font-size:11px;text-transform:uppercase;color:var(--muted)">Исходящие</div>${out.slice(0,40).map(o=>`<div class="rel">${esc(o.type)} → <b>${esc(o.o?.name||'?')}</b></div>`).join('')}`:''}
-    ${inc.length?`<div style="margin-top:8px;font-size:11px;text-transform:uppercase;color:var(--muted)">Входящие</div>${inc.slice(0,40).map(o=>`<div class="rel"><b>${esc(o.o?.name||'?')}</b> ${esc(o.type)} →</div>`).join('')}`:''}`;
+    ${out.length?`<div style="margin-top:8px;font-size:11px;text-transform:uppercase;color:var(--muted)">Исходящие связи</div>${out.slice(0,50).map(o=>`<div class="rel" data-fn="${esc(o.o?.id||'')}" style="cursor:pointer">${esc(relLabel(o.type))} → <b>${esc(o.o?.name||'?')}</b></div>`).join('')}`:''}
+    ${inc.length?`<div style="margin-top:8px;font-size:11px;text-transform:uppercase;color:var(--muted)">Входящие связи</div>${inc.slice(0,50).map(o=>`<div class="rel" data-fn="${esc(o.o?.id||'')}" style="cursor:pointer"><b>${esc(o.o?.name||'?')}</b> — ${esc(relLabel(o.type))} →</div>`).join('')}`:''}`;
+  document.querySelectorAll('#detail [data-fn]').forEach(el=>el.addEventListener('click',()=>{ if(el.dataset.fn) focusNode(el.dataset.fn); }));
 }
 
 function doSearch(q){
@@ -296,6 +311,21 @@ function doSearch(q){
   focusNode(hit.id);
 }
 function focusNode(id){ const p=pos[id]; if(p){ view.k=1.7; view.x=W/2-p.x*view.k; view.y=H/2-p.y*view.k; } select(id); }
+
+function renderRisks(){
+  const risky=NODES.filter(isRisk);
+  const byReason={}; risky.forEach(n=>{ const r=riskReason(n); (byReason[r]=byReason[r]||[]).push(n); });
+  let html=`<hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+    <h2>⚠ Потенциальные риски <span class="pill">${risky.length}</span></h2>
+    <div class="muted">Узлы, где знание и реализация могут расходиться: документировано, но не в коде (icebox / partial / not-implemented), либо изолированные узлы без связей. Это подсказки для ревью — что проверить или дочистить, а не баги. Клик — перейти к узлу.</div>`;
+  for(const [r,arr] of Object.entries(byReason).sort((a,b)=>b[1].length-a[1].length)){
+    html+=`<div style="margin-top:10px;font-size:12px;color:#d93025"><b>${arr.length}</b> · ${esc(r)}</div>`;
+    html+=arr.slice(0,30).map(n=>`<div class="rel" data-fn="${esc(n.id)}" style="border-color:#d93025;background:#fff4f4;cursor:pointer">${esc(n.name)} <span class="muted">(${esc((TYPE[n.type]||{}).label||n.type)})</span></div>`).join('');
+    if(arr.length>30) html+=`<div class="muted">…ещё ${arr.length-30}</div>`;
+  }
+  document.getElementById('detail').innerHTML=html;
+  document.querySelectorAll('#detail [data-fn]').forEach(el=>el.addEventListener('click',()=>focusNode(el.dataset.fn)));
+}
 
 function renderStats(){
   const {nodes,edges}=visible();

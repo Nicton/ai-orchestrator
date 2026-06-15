@@ -868,17 +868,61 @@ function buildDefinitionFallback(hits: KnowledgeSearchHit[], language: string, p
   return generic[lang];
 }
 
+// Токены запроса с транслитерацией кириллицы (тмс → tms) для сопоставления с узлами графа.
+function gcTokens(q: string): string[] {
+  const tr: Record<string, string> = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'i',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
+  const stop = new Set(['что','как','где','для','под','саб','sub','the','what','which','есть','модули','модуль','module','modules','подмодули']);
+  const out = new Set<string>();
+  for (const w of (q.toLowerCase().match(/[a-zа-я0-9]{3,}/gi) || [])) {
+    if (!stop.has(w)) out.add(w);
+    if (/[а-яё]/.test(w)) { const t = w.split('').map((c) => (c in tr ? tr[c] : c)).join(''); if (t.length >= 2 && !stop.has(t)) out.add(t); }
+  }
+  return [...out];
+}
+
+// Граф-навигация: для структурных вопросов («какие саб-модули/фичи/экраны в X»)
+// собираем авторитетный контекст прямо из графа знаний (KnowledgeEntity/Relation).
+async function graphContext(question: string, plan?: KnowledgeQueryPlan): Promise<string> {
+  try {
+    const terms = [...new Set([...(plan?.entities || []).map((s) => s.toLowerCase()), ...gcTokens(question)])].filter((t) => t.length >= 3);
+    if (!terms.length) return '';
+    const filters = terms.map((t) => ({ name: { contains: t, mode: 'insensitive' as const } }));
+    const roots = await prisma.knowledgeEntity.findMany({ where: { type: { in: ['module', 'area', 'feature'] }, OR: filters }, take: 40 });
+    if (!roots.length) return '';
+    const score = (e: any) => { const n = e.name.toLowerCase(); let s = ({ module: 3, area: 2, feature: 1 } as any)[e.type] || 0; if (terms.includes(n)) s += 6; else if (terms.some((t) => n.startsWith(t))) s += 2; else if (terms.some((t) => n.includes(t))) s += 1; return s; };
+    roots.sort((a: any, b: any) => score(b) - score(a));
+    const blocks: string[] = [];
+    for (const root of roots.slice(0, 2)) {
+      const rels = await prisma.knowledgeRelation.findMany({ where: { OR: [{ fromId: root.id }, { toId: root.id }] }, take: 500 });
+      const otherIds = [...new Set(rels.map((r: any) => (r.fromId === root.id ? r.toId : r.fromId)))];
+      const others = await prisma.knowledgeEntity.findMany({ where: { id: { in: otherIds } } });
+      const byId: Record<string, any> = Object.fromEntries(others.map((o: any) => [o.id, o]));
+      const cat: Record<string, Set<string>> = { area: new Set(), feature: new Set(), screen: new Set(), modal: new Set(), requirement: new Set(), document: new Set() };
+      for (const r of rels) { const o = byId[r.fromId === root.id ? r.toId : r.fromId]; if (o && cat[o.type]) cat[o.type].add(o.name); }
+      const fmt = (label: string, set: Set<string>) => (set.size ? `  ${label} (${set.size}): ${[...set].slice(0, 25).join(', ')}` : '');
+      const lines = [fmt('под-области', cat.area), fmt('фичи', cat.feature), fmt('экраны', cat.screen), fmt('модальные окна', cat.modal), fmt('требования', cat.requirement), fmt('документы', cat.document)].filter(Boolean);
+      const kind = root.type === 'module' ? 'Модуль' : root.type === 'area' ? 'Под-область' : 'Фича';
+      if (lines.length) blocks.push(`${kind} «${root.name}» содержит:\n${lines.join('\n')}`);
+    }
+    return blocks.join('\n\n');
+  } catch {
+    return '';
+  }
+}
+
 async function composeAnswer(
   question: string,
   hits: KnowledgeSearchHit[],
   language: string,
   plan?: KnowledgeQueryPlan,
   profile?: QueryProfile,
-): Promise<{ mode: 'llm' | 'fallback'; answer: string; fallbackKind?: 'definition' | 'generic' }> {
+): Promise<{ mode: 'llm' | 'fallback'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean }> {
   const lang = normalizeAnswerLanguage(language);
   const copy = localizedAnswerCopy(lang);
+  const graphCtx = await graphContext(question, plan);
+  const usedGraph = !!graphCtx;
 
-  if (!hits.length) {
+  if (!hits.length && !graphCtx) {
     return {
       mode: 'fallback',
       answer: copy.noAnswer[lang],
@@ -886,13 +930,14 @@ async function composeAnswer(
     };
   }
 
-  const evidence = hits
+  const docEvidence = hits
     .slice(0, 5)
     .map(
       (hit, index) =>
         `Source ${index + 1}\ntitle: ${hit.title}\n${hit.sourceUrl ? `link: ${hit.sourceUrl}\n` : `path: ${hit.path}\n`}type: ${hit.sourceType}\nexcerpt: ${hit.snippet}`,
     )
     .join('\n\n');
+  const evidence = (graphCtx ? `ГРАФ ЗНАНИЙ (структура проекта — авторитетно для вопросов «что входит в X / какие саб-модули, фичи, экраны»):\n${graphCtx}\n\n` : '') + docEvidence;
 
   const answerStyleBlock = profile?.isDefinitionQuery
     ? `This is a definitional question. Prefer the canonical definition flow:
@@ -914,6 +959,7 @@ Rules:
 - Preferred answer style for this question: ${plan?.answerStyle || inferAnswerStyle(question)}.
 - If the evidence supports only a partial answer, explicitly separate "What is clear" from "What is unclear".
 - When evidence contains URLs, include a short "Links:" section with the most relevant raw URLs.
+- If a "ГРАФ ЗНАНИЙ" block is present, treat it as AUTHORITATIVE for structural/inventory questions (what sub-modules / features / screens / modals / requirements a module or area contains). List its items directly and group them clearly.
 - Ground every claim in the evidence. Do NOT invent entities, roles, processes, APIs, integrations, permissions, or limitations that are not present in the evidence.
 - If the evidence is partial, outdated, or conflicting, say so explicitly.
 - If the evidence does not actually answer the question, say honestly that the information is insufficient instead of guessing.
@@ -942,21 +988,23 @@ ${evidence}`;
   try {
     const result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel);
     const answer = result.text.trim();
-    if (answer) return { mode: 'llm', answer };
-    if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition' };
-    return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic' };
+    if (answer) return { mode: 'llm', answer, usedGraph };
+    if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition', usedGraph };
+    return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic', usedGraph };
   } catch {
     if (profile?.isDefinitionQuery) {
       return {
         mode: 'fallback',
         answer: buildDefinitionFallback(hits, lang, profile),
         fallbackKind: 'definition',
+        usedGraph,
       };
     }
     return {
       mode: 'fallback',
       answer: copy.synthesisUnavailable[lang],
       fallbackKind: 'generic',
+      usedGraph,
     };
   }
 }
@@ -1058,7 +1106,9 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     const intent = plan.intent || inferIntent(parsed.data.question);
     const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile);
     const latencyMs = Date.now() - started;
-    const confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
+    let confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
+    // Ответ, построенный по графу знаний, — структурно достоверен: не занижаем уверенность.
+    if (composed.usedGraph && composed.mode === 'llm') confidence = Math.max(confidence, 0.8);
 
     const saved = await prisma.knowledgeQuery.create({
       data: {
