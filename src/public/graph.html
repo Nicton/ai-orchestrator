@@ -71,6 +71,7 @@
 <script>
 const TYPE = {
   module:      { color:'#34a853', label:'Модули',   on:true  },
+  area:        { color:'#827717', label:'Области',  on:true  },
   feature:     { color:'#1a73e8', label:'Фичи',     on:true  },
   modal:       { color:'#a142f4', label:'Модалки',  on:true  },
   screen:      { color:'#e37400', label:'Экраны',   on:false },
@@ -133,7 +134,7 @@ function visible(){
     const t=TYPE[n.type]; if(!t||!t.on) return false;
     if(dom){
       if(n.type==='module') return n.id===dom;
-      if(['document','feature','modal','screen'].includes(n.type)) return !n.domain || n.domain===dom;
+      if(['document','feature','modal','screen','area'].includes(n.type)) return !n.domain || n.domain===dom;
     }
     return true;
   });
@@ -144,6 +145,7 @@ function visible(){
 
 function radius(n){
   if(n.type==='module') return 8+Math.min(18,(deg[n.id]||0)*0.5);
+  if(n.type==='area') return 6+Math.min(14,(deg[n.id]||0)*0.4);
   if(n.type==='feature'||n.type==='modal') return 5+Math.min(16,(span[n.id]||1)*1.7);
   if(n.type==='document') return 4+Math.min(12,(n.codeRefs||0)*1.3);
   return 3.5+Math.min(8,(deg[n.id]||0)*0.5);
@@ -234,7 +236,7 @@ function draw(showEdges=true){
   }
   const nodeSvg=nodes.map(n=>{ const p=pos[n.id]; if(!p) return '';
     const dim=sel&&n.id!==sel&&!conn.has(n.id); const r=radius(n);
-    const showLabel=n.type==='module'||r>8.5||(sel&&conn.has(n.id));
+    const showLabel=n.type==='module'||n.type==='area'||r>8.5||(sel&&conn.has(n.id));
     const risk=risksOn&&isRisk(n);
     return `<g class="node ${dim?'dim':''} ${risk?'risk':''}" data-id="${esc(n.id)}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
       <circle r="${r.toFixed(1)}" fill="${colorFor(n)}"></circle>

@@ -20,6 +20,7 @@ const GRAPH_PATH = path.resolve(process.cwd(), 'workspaces/documentation/product
 const GROUP_TYPE: Record<string, string> = {
   doc: 'document',
   module: 'module',
+  area: 'area',
   code_file: 'code_file',
   requirement: 'requirement',
   confluence: 'confluence',
@@ -29,6 +30,7 @@ const GROUP_TYPE: Record<string, string> = {
 const GROUP_PREFIX: Record<string, string> = {
   doc: 'doc',
   module: 'module',
+  area: 'area',
   code_file: 'code',
   requirement: 'req',
   confluence: 'confluence',
@@ -73,6 +75,9 @@ function buildEntities(nodes: any): EntitySpec[] {
         summary = 'Требование (RTM)';
       } else if (group === 'module') {
         summary = 'Модуль / домен';
+      } else if (group === 'area') {
+        summary = 'Под-область';
+        if (node.domain) metadata.domain = node.domain;
       } else if (group === 'code_file') {
         summary = 'Файл кода';
       }
