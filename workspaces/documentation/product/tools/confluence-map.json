@@ -1,0 +1,1392 @@
+{
+  "root": "631046148",
+  "folders": {
+    "admin-app": "631504898",
+    "admin-app/accounts": "631701522",
+    "admin-app/dictionary": "631996433",
+    "admin-app/integrations": "632258561",
+    "admin-app/operations": "632127505",
+    "admin-app/users": "631767042",
+    "ai": "631308306",
+    "ai/features": "632356865",
+    "ai/orchestrator": "632455169",
+    "back-office": "631472132",
+    "back-office/account-management": "632061969",
+    "back-office/alerting": "632225825",
+    "back-office/am": "632586241",
+    "back-office/analytics": "632160322",
+    "back-office/billing-accounts": "631635970",
+    "back-office/bon-notifications": "632651777",
+    "back-office/dock": "631308322",
+    "back-office/messaging": "632717313",
+    "back-office/navigation": "632324113",
+    "back-office/onboarding": "632750097",
+    "back-office/operations": "631373826",
+    "back-office/sales-account-touchpoints": "632061985",
+    "back-office/sales-accounts": "631767074",
+    "business-vision": "631996465",
+    "carrier": "632881153",
+    "chat": "631767090",
+    "dock": "632389683",
+    "dock/business-vision": "632815651",
+    "dock/external": "631963715",
+    "dock/feature-docs": "632946705",
+    "dock/feature-docs/cargo-dgd": "632160338",
+    "dock/feature-docs/csv-uploads": "632913937",
+    "dock/feature-docs/dock-center": "632324145",
+    "dock/feature-docs/dock-doors": "632586257",
+    "dock/feature-docs/dock-orders": "632389716",
+    "dock/feature-docs/external-partners": "632487954",
+    "dock/feature-docs/load-view": "632291361",
+    "dock/feature-docs/master-location": "631341093",
+    "dock/feature-docs/order-management": "632848401",
+    "dock/feature-docs/partner-db": "632651793",
+    "dock/feature-docs/planning": "632094772",
+    "dock/feature-docs/platform": "632193058",
+    "dock/feature-docs/pml-settings": "632094804",
+    "dock/feature-docs/slot-booking": "633077761",
+    "dock/feature-docs/slot-validation": "632913953",
+    "dock/feature-docs/slotify-ui3": "632029235",
+    "dock/feature-docs/slotify": "631668771",
+    "dock/feature-docs/slots-core": "632848417",
+    "dock/feature-docs/tv-display": "632422467",
+    "dock/feature-docs/visits-management": "632651809",
+    "dock/feature-docs/zones": "632094820",
+    "dock/technical-view": "631963731",
+    "identity": "632782897",
+    "integrations": "632619041",
+    "integrations/architecture": "632258643",
+    "integrations/bic-desadv": "632062067",
+    "integrations/carriers": "632225890",
+    "integrations/edi": "631898196",
+    "integrations/erp": "631996497",
+    "integrations/public-api": "632193074",
+    "integrations/tracking": "632487970",
+    "integrations/webhooks": "631767156",
+    "microservices": "631341126",
+    "mini-apps": "631930978",
+    "mini-apps/carrier-portal": "632225906",
+    "mini-apps/customs-app": "631898228",
+    "mini-apps/driver-app": "632520756",
+    "mini-apps/quick-shipment": "632848449",
+    "mini-apps/slotify": "632422483",
+    "mini-apps/transport-requests": "632684579",
+    "onboarding": "632291377",
+    "tms": "631504948",
+    "tms/admin": "631046231",
+    "tms/buy-sell": "631767188",
+    "tms/carriers": "632455219",
+    "tms/claims": "631373858",
+    "tms/control-tower": "632684612",
+    "tms/cross-dock": "632324178",
+    "tms/customs": "632455235",
+    "tms/dashboards": "632782930",
+    "tms/doc-center": "631308386",
+    "tms/features": "632586273",
+    "tms/features/container": "631373874",
+    "tms/followers": "631668837",
+    "tms/free-tm": "632193124",
+    "tms/galaxy": "632913969",
+    "tms/grouping": "631636019",
+    "tms/implementation": "631636035",
+    "tms/implementation/backend": "631898244",
+    "tms/implementation/database": "632651858",
+    "tms/implementation/frontend": "633077811",
+    "tms/implementation/integrations": "631636051",
+    "tms/invoicing": "632946770",
+    "tms/master-data": "632488037",
+    "tms/metadata": "630390894",
+    "tms/milkrun": "633045058",
+    "tms/notifications": "630390910",
+    "tms/orders": "633143379",
+    "tms/parcels": "632225954",
+    "tms/procurement": "633143395",
+    "tms/rate-sheets": "632160421",
+    "tms/referrals": "632684679",
+    "tms/requests": "631668853",
+    "tms/sea-schedule": "632455285",
+    "tms/shipments": "632586321",
+    "tms/shipments/01_list": "632619074",
+    "tms/shipments/02_create-wizard": "632684695",
+    "tms/shipments/03_details": "633077844",
+    "tms/shipments/05_modals": "632225970",
+    "tms/shipments/rtm": "633077860",
+    "tms/slots": "632062149",
+    "tms/technical-view": "631308484",
+    "tms/technical-view/pages": "631701653",
+    "tms/templates": "631701669",
+    "tms/tracking": "633045108",
+    "tms/transport-requests": "633143427",
+    "tools": "633143443"
+  },
+  "docs": {
+    "AUDIT-PLAN.md": {
+      "id": "631930881",
+      "title": "План аудита полноты системы (bottom-up)"
+    },
+    "AUTOTEST_MAP.md": {
+      "id": "631963649",
+      "title": "Autotest Map — Карта автотестов UI"
+    },
+    "COVERAGE-PLAN.md": {
+      "id": "631898130",
+      "title": "План 100% покрытия: требования ↔ документация ↔ код"
+    },
+    "DASHBOARD.md": {
+      "id": "631996417",
+      "title": "📊 Документация Shiptify — дашборд покрытия и результатов"
+    },
+    "DEFECTS-CANDIDATES.md": {
+      "id": "632029185",
+      "title": "Код vs Требования — кандидаты в дефекты"
+    },
+    "GLOSSARY.md": {
+      "id": "632061953",
+      "title": "Глоссарий Shiptify TMS"
+    },
+    "GRAPH-METADATA-SPEC.md": {
+      "id": "630390793",
+      "title": "Граф-метаданные документации — спецификация"
+    },
+    "LINKS.md": {
+      "id": "631668738",
+      "title": "Links Registry — Реестр ссылок"
+    },
+    "PROJECT-MAP.md": {
+      "id": "632094721",
+      "title": "Карта продукта — Типы пользователей и сценарии использования"
+    },
+    "README.md": {
+      "id": "632094738",
+      "title": "Продуктовая документация Shiptify"
+    },
+    "REPO-VERIFICATION-2026-06-13.md": {
+      "id": "632127489",
+      "title": "Отчёт: проверка полноты документации по ВСЕМ репозиториям"
+    },
+    "RESPONSIBLE-PEOPLE.md": {
+      "id": "632160257",
+      "title": "Ответственные за модули, фичи и системы"
+    },
+    "RTM-MASTER.md": {
+      "id": "631308290",
+      "title": "RTM-MASTER — Карта требований и покрытие документацией · ."
+    },
+    "SCREENSHOTS-TODO.md": {
+      "id": "632160273",
+      "title": "Скриншоты — что снять (для последующего наполнения)"
+    },
+    "SYSTEM-MAP.md": {
+      "id": "632193025",
+      "title": "System Map — инвентаризация кода снизу вверх"
+    },
+    "TEMPLATE.md": {
+      "id": "631701506",
+      "title": "[Название домена / страницы]"
+    },
+    "WORK-REPORT-2026-06-11.md": {
+      "id": "631111685",
+      "title": "Отчёт о работе над документацией Shiptify"
+    },
+    "admin-app/OPEN-QUESTIONS.md": {
+      "id": "631799810",
+      "title": "Open Questions — Admin-App"
+    },
+    "admin-app/README.md": {
+      "id": "631111701",
+      "title": "Shiptify Admin-App"
+    },
+    "admin-app/accounts/README.md": {
+      "id": "632160289",
+      "title": "Управление аккаунтами · admin-app/accounts"
+    },
+    "admin-app/admin-app-modules.md": {
+      "id": "631930897",
+      "title": "Admin-App — конфигурация платформы · admin-app"
+    },
+    "admin-app/dictionary/README.md": {
+      "id": "632225793",
+      "title": "Управление справочниками (Dictionaries)"
+    },
+    "admin-app/integrations/README.md": {
+      "id": "632291329",
+      "title": "Управление интеграциями · admin-app/integrations"
+    },
+    "admin-app/operations/README.md": {
+      "id": "632160305",
+      "title": "Мониторинг и операции"
+    },
+    "admin-app/users/README.md": {
+      "id": "632193041",
+      "title": "Управление пользователями · admin-app/users"
+    },
+    "ai/OPEN-QUESTIONS.md": {
+      "id": "632324097",
+      "title": "AI Интеграции — Спорные вопросы и пробелы"
+    },
+    "ai/README.md": {
+      "id": "632225809",
+      "title": "AI в Shiptify — обзор"
+    },
+    "ai/external-services.md": {
+      "id": "631963665",
+      "title": "Внешние AI-сервисы"
+    },
+    "ai/features/ai-reader.md": {
+      "id": "632389633",
+      "title": "AI Reader / Dual Screen · ai/features"
+    },
+    "ai/features/co2-ecotransit.md": {
+      "id": "631504914",
+      "title": "CO2 / EcoTransit — расчёт углеродного следа"
+    },
+    "ai/features/quote-strategy.md": {
+      "id": "632422401",
+      "title": "Quote Strategy — автоматический выбор перевозчика"
+    },
+    "ai/features/vanna-analytics.md": {
+      "id": "631341060",
+      "title": "Vanna AI Analytics · ai/features"
+    },
+    "ai/orchestrator/README.md": {
+      "id": "632487937",
+      "title": "AI Orchestrator — архитектура и устройство"
+    },
+    "ai/orchestrator/intake-flow.md": {
+      "id": "632520705",
+      "title": "Intake Pipeline — голос/текст в задачу Jira"
+    },
+    "ai/orchestrator/skills.md": {
+      "id": "632553473",
+      "title": "Каталог скиллов AI Orchestrator"
+    },
+    "back-office/OPEN-QUESTIONS.md": {
+      "id": "632389650",
+      "title": "Open Questions — Back-Office"
+    },
+    "back-office/README.md": {
+      "id": "632389666",
+      "title": "Shiptify Back-Office — Обзор приложения"
+    },
+    "back-office/account-management/README.md": {
+      "id": "632029201",
+      "title": "Account Management — Управление аккаунтами, перевозчиками и организациями"
+    },
+    "back-office/account-management/account-owners-statuses.md": {
+      "id": "632127521",
+      "title": "BO Account Management — Owners и статусы аккаунта"
+    },
+    "back-office/account-management/accounts-operations.md": {
+      "id": "632553490",
+      "title": "BO Account Operations — аккаунты, компании, перевозчики"
+    },
+    "back-office/account-navigation-switcher.md": {
+      "id": "631767058",
+      "title": "Account Navigation Switcher — Переключение между типами аккаунтов"
+    },
+    "back-office/alerting/README.md": {
+      "id": "631930913",
+      "title": "BO Alerting — Система оповещений Back-Office"
+    },
+    "back-office/am/amopps.md": {
+      "id": "632258577",
+      "title": "AMOpps — Управление возможностями (Account Manager Opportunities)"
+    },
+    "back-office/analytics/README.md": {
+      "id": "631504931",
+      "title": "Analytics — Дашборды и аналитика в Back-Office"
+    },
+    "back-office/billing-accounts/README.md": {
+      "id": "632225841",
+      "title": "Billing Accounts — Управление биллингом и MRR"
+    },
+    "back-office/billing-accounts/billing-module.md": {
+      "id": "631898146",
+      "title": "Billing Accounts / MRR Lines — биллинг клиентов"
+    },
+    "back-office/bo-dictionaries.md": {
+      "id": "632619009",
+      "title": "BO Dictionaries & Settings — справочники Back-Office"
+    },
+    "back-office/bo-users-domains.md": {
+      "id": "631996449",
+      "title": "BO Users, Domains, Public Page & Engagement"
+    },
+    "back-office/bon-notifications/README.md": {
+      "id": "632258594",
+      "title": "BON (BO Notifications) — Система уведомлений Back-Office"
+    },
+    "back-office/crm-bo-dashboard.md": {
+      "id": "630390810",
+      "title": "CRM BO Dashboard — Дашборд мониторинга аккаунтов"
+    },
+    "back-office/dock/dock-door-assignment.md": {
+      "id": "632684545",
+      "title": "Dock Door Assignment — Назначение ворот"
+    },
+    "back-office/dock/dock-status-update.md": {
+      "id": "632422418",
+      "title": "Dock Status Update Modal — Упрощённый модал статусов"
+    },
+    "back-office/messaging/bo-notifications.md": {
+      "id": "632225858",
+      "title": "BO Messaging — Уведомления Back-Office (BON)"
+    },
+    "back-office/navigation/1cm-bar-bo.md": {
+      "id": "632750081",
+      "title": "1CM Navigation Bar — Навигация Back-Office"
+    },
+    "back-office/onboarding/onboard-module-v1.md": {
+      "id": "632717329",
+      "title": "Onboard Module v1.0 — Управление онбордингом клиентов"
+    },
+    "back-office/operations/README.md": {
+      "id": "631799826",
+      "title": "Operations — Просмотр операций в Back-Office"
+    },
+    "back-office/operations/operations-module.md": {
+      "id": "632324129",
+      "title": "BO Operations — NSM, Alerts, очереди онбординга"
+    },
+    "back-office/sales-account-touchpoints/README.md": {
+      "id": "631963682",
+      "title": "Sales Account Touchpoints — CRM для Account Managers"
+    },
+    "back-office/sales-accounts/README.md": {
+      "id": "632029218",
+      "title": "Sales Accounts — Модуль CRM для Account Managers"
+    },
+    "back-office/sales-accounts/sales-am-module.md": {
+      "id": "632782849",
+      "title": "Sales Accounts / Touchpoints / AM — управление продажами"
+    },
+    "back-office/vanna-ai-analytics.md": {
+      "id": "631701538",
+      "title": "Vanna AI — Аналитика Back-Office на естественном языке"
+    },
+    "business-vision/01_user-types.md": {
+      "id": "632782865",
+      "title": "Типы пользователей"
+    },
+    "business-vision/02_user-journeys.md": {
+      "id": "631930929",
+      "title": "User Journeys — Сценарии использования"
+    },
+    "business-vision/03_corner-cases.md": {
+      "id": "631046165",
+      "title": "Corner Cases — Граничные случаи"
+    },
+    "business-vision/04_user-flows-technical.md": {
+      "id": "632815617",
+      "title": "User Flows — Технические детали (с именами UI элементов)"
+    },
+    "business-vision/README.md": {
+      "id": "632848385",
+      "title": "Business Vision — Продуктовое видение"
+    },
+    "carrier/onboarding-first-login.md": {
+      "id": "632258610",
+      "title": "Carrier Onboarding — Первый вход"
+    },
+    "chat/OPEN-QUESTIONS.md": {
+      "id": "631930946",
+      "title": "Chat — Открытые вопросы"
+    },
+    "chat/README.md": {
+      "id": "632815634",
+      "title": "Shiptify Chat"
+    },
+    "dock/OPEN-QUESTIONS.md": {
+      "id": "631308338",
+      "title": "DOCK — Спорные вопросы и пробелы"
+    },
+    "dock/README.md": {
+      "id": "631963698",
+      "title": "DOCK — Управление воротами склада"
+    },
+    "dock/business-vision/01_user-types.md": {
+      "id": "632913921",
+      "title": "Типы пользователей — Dock модуль"
+    },
+    "dock/business-vision/02_user-journeys.md": {
+      "id": "632258626",
+      "title": "User Journeys — Сценарии использования Dock"
+    },
+    "dock/external/01_what-is-dock.md": {
+      "id": "631635986",
+      "title": "Что такое DOCK · dock/external"
+    },
+    "dock/external/02_who-is-it-for.md": {
+      "id": "632422434",
+      "title": "Для кого DOCK"
+    },
+    "dock/external/03_core-features.md": {
+      "id": "632946689",
+      "title": "Ключевые возможности DOCK"
+    },
+    "dock/external/04_how-it-works.md": {
+      "id": "631341076",
+      "title": "Как работает DOCK: полный процесс"
+    },
+    "dock/external/05_slotify-user-guide.md": {
+      "id": "632389699",
+      "title": "Руководство по бронированию через Slotify"
+    },
+    "dock/external/06_use-cases.md": {
+      "id": "632455185",
+      "title": "Сценарии использования DOCK"
+    },
+    "dock/external/07_faq.md": {
+      "id": "632062001",
+      "title": "Часто задаваемые вопросы (FAQ)"
+    },
+    "dock/external/README.md": {
+      "id": "631046181",
+      "title": "DOCK — Управление воротами склада · dock/external"
+    },
+    "dock/feature-docs/README.md": {
+      "id": "632291345",
+      "title": "DOCK Feature Docs — индекс"
+    },
+    "dock/feature-docs/cargo-dgd/README.md": {
+      "id": "631996481",
+      "title": "Cargo Types, Cargo Groups, Dangerous Goods — справочники груза и интеграция с Back-Office"
+    },
+    "dock/feature-docs/csv-uploads/README.md": {
+      "id": "632979457",
+      "title": "CSV Uploads — массовый импорт слотов и заказов"
+    },
+    "dock/feature-docs/dock-center/README.md": {
+      "id": "632062018",
+      "title": "Dock Center — главный экран склада"
+    },
+    "dock/feature-docs/dock-doors/README.md": {
+      "id": "632094755",
+      "title": "Dock Doors — Ворота склада"
+    },
+    "dock/feature-docs/dock-orders/README.md": {
+      "id": "631308354",
+      "title": "Dock Orders — Управление заказами на поставку"
+    },
+    "dock/feature-docs/external-partners/README.md": {
+      "id": "633012225",
+      "title": "External Partners & My Partners — партнёры площадки"
+    },
+    "dock/feature-docs/load-view/README.md": {
+      "id": "631373842",
+      "title": "Load View — визуализация загрузки склада"
+    },
+    "dock/feature-docs/master-location/README.md": {
+      "id": "631111718",
+      "title": "Master Location (PML) — Физическая мастер-локация"
+    },
+    "dock/feature-docs/order-management/README.md": {
+      "id": "631308370",
+      "title": "Order Management — модуль заказов склада"
+    },
+    "dock/feature-docs/partner-db/README.md": {
+      "id": "632389732",
+      "title": "Partner DB — База данных партнёров"
+    },
+    "dock/feature-docs/planning/README.md": {
+      "id": "632062034",
+      "title": "Planning — Страница планирования склада"
+    },
+    "dock/feature-docs/platform/auth-management.md": {
+      "id": "632750113",
+      "title": "Auth Management — доступы в DOCK"
+    },
+    "dock/feature-docs/platform/drivers-and-sms.md": {
+      "id": "633012241",
+      "title": "Slot Drivers & SMS — водители и уведомления"
+    },
+    "dock/feature-docs/platform/emailing.md": {
+      "id": "632094788",
+      "title": "Emailing — почтовые уведомления DOCK"
+    },
+    "dock/feature-docs/platform/localization.md": {
+      "id": "632422451",
+      "title": "Localization — языки Slotify/DOCK"
+    },
+    "dock/feature-docs/platform/managed-accounts.md": {
+      "id": "633044993",
+      "title": "Managed Accounts — влияние на систему"
+    },
+    "dock/feature-docs/platform/webhooks-dock.md": {
+      "id": "631767106",
+      "title": "Webhooks — события DOCK для внешних систем (инструкция)"
+    },
+    "dock/feature-docs/pml-settings/README.md": {
+      "id": "632782881",
+      "title": "PML Settings — настройки Public Master Location"
+    },
+    "dock/feature-docs/slot-booking/README.md": {
+      "id": "630390826",
+      "title": "Slot Booking — Бронирование слотов в основном приложении"
+    },
+    "dock/feature-docs/slot-sharing.md": {
+      "id": "631668755",
+      "title": "Slot Sharing — статус"
+    },
+    "dock/feature-docs/slot-validation/README.md": {
+      "id": "632062051",
+      "title": "Slot Validation — валидация бронирований"
+    },
+    "dock/feature-docs/slotify-ui3/README.md": {
+      "id": "632619025",
+      "title": "Slotify UI 3.0 / 3.1 — Редизайн публичного портала бронирования"
+    },
+    "dock/feature-docs/slotify/01_booking-flow.md": {
+      "id": "633110529",
+      "title": "Slotify — Поток бронирования (6 шагов)"
+    },
+    "dock/feature-docs/slotify/02_algorithm.md": {
+      "id": "631898162",
+      "title": "Slotify — Алгоритм расчёта слотов"
+    },
+    "dock/feature-docs/slotify/03_airport-screens.md": {
+      "id": "632979473",
+      "title": "Airport Screens — Экраны аэропортного типа"
+    },
+    "dock/feature-docs/slotify/README.md": {
+      "id": "631767123",
+      "title": "Slotify — Публичный портал бронирования"
+    },
+    "dock/feature-docs/slots-core/README.md": {
+      "id": "632520722",
+      "title": "Slots Core — слот как бизнес-сущность (общее для TMS и DOCK)"
+    },
+    "dock/feature-docs/tv-display/README.md": {
+      "id": "632225874",
+      "title": "TV Display — режим табло для склада"
+    },
+    "dock/feature-docs/visits-management/README.md": {
+      "id": "631898179",
+      "title": "Visits — Управление визитами и обновление статусов"
+    },
+    "dock/feature-docs/zones/README.md": {
+      "id": "631930962",
+      "title": "Zones — зоны площадки"
+    },
+    "dock/technical-view/README.md": {
+      "id": "631799842",
+      "title": "Техническая документация — Dock модуль"
+    },
+    "identity/OPEN-QUESTIONS.md": {
+      "id": "631767140",
+      "title": "Identity — Открытые вопросы"
+    },
+    "identity/README.md": {
+      "id": "632455202",
+      "title": "Shiptify Identity"
+    },
+    "integrations/OPEN-QUESTIONS.md": {
+      "id": "632848433",
+      "title": "Интеграции — Спорные вопросы и пробелы"
+    },
+    "integrations/README.md": {
+      "id": "631701555",
+      "title": "Интеграции Shiptify — Обзор"
+    },
+    "integrations/architecture/README.md": {
+      "id": "632520739",
+      "title": "Архитектура интеграций · integrations/architecture"
+    },
+    "integrations/bic-desadv/README.md": {
+      "id": "631701572",
+      "title": "BIC DESADV — Входящая EDI-интеграция"
+    },
+    "integrations/carriers/README.md": {
+      "id": "631668787",
+      "title": "Интеграции с перевозчиками"
+    },
+    "integrations/carriers/brinks.md": {
+      "id": "631341109",
+      "title": "Brinks — Интеграция (отдельный микросервис) · integrations/carriers"
+    },
+    "integrations/carriers/dhl.md": {
+      "id": "632946721",
+      "title": "DHL — Интеграции"
+    },
+    "integrations/carriers/heppner.md": {
+      "id": "631111735",
+      "title": "Heppner — Интеграция"
+    },
+    "integrations/carriers/ups.md": {
+      "id": "632782913",
+      "title": "UPS — Интеграция (отдельный микросервис) · integrations/carriers"
+    },
+    "integrations/edi/README.md": {
+      "id": "632160354",
+      "title": "EDI-интеграции"
+    },
+    "integrations/erp/README.md": {
+      "id": "632651825",
+      "title": "ERP и бизнес-системы"
+    },
+    "integrations/public-api/README.md": {
+      "id": "633143297",
+      "title": "Public API — Внешний REST API Shiptify · integrations/public-api"
+    },
+    "integrations/setup-guide.md": {
+      "id": "632684562",
+      "title": "Руководство по активации интеграции · integrations"
+    },
+    "integrations/tracking/README.md": {
+      "id": "632979489",
+      "title": "Трекинговые платформы"
+    },
+    "integrations/webhooks/README.md": {
+      "id": "631046198",
+      "title": "Вебхуки и события"
+    },
+    "microservices/README.md": {
+      "id": "633012257",
+      "title": "Микросервисы платформы — realtime, инфра, обзор · microservices"
+    },
+    "microservices/attachments-generate.md": {
+      "id": "632487986",
+      "title": "Generate — Генерация документов/вложений (отдельный сервис)"
+    },
+    "microservices/core-libs.md": {
+      "id": "631898212",
+      "title": "Core-Libs — Общие библиотеки Shiptify · microservices"
+    },
+    "microservices/email-sms-worker.md": {
+      "id": "632160371",
+      "title": "Emailing — Воркер Email/SMS (отдельный сервис) · microservices"
+    },
+    "microservices/stream-topics.md": {
+      "id": "632553506",
+      "title": "Stream-Topics — Реестр Kafka-событий (контракты)"
+    },
+    "mini-apps/OPEN-QUESTIONS.md": {
+      "id": "631767172",
+      "title": "Open Questions — Mini-Apps"
+    },
+    "mini-apps/README.md": {
+      "id": "632750129",
+      "title": "Mini-Apps — Обзор монорепозитория"
+    },
+    "mini-apps/carrier-portal/README.md": {
+      "id": "632062083",
+      "title": "Carrier Portal — Портал бронирования для перевозчика"
+    },
+    "mini-apps/customs-app/README.md": {
+      "id": "631668804",
+      "title": "Customs App — Портал для таможенного агента"
+    },
+    "mini-apps/driver-app/README.md": {
+      "id": "633143313",
+      "title": "Driver App — Мобильное приложение для водителя"
+    },
+    "mini-apps/mini-apps-modules.md": {
+      "id": "632225922",
+      "title": "Mini-Apps — внешние порталы по ссылке-токену"
+    },
+    "mini-apps/quick-shipment/README.md": {
+      "id": "631701589",
+      "title": "Quick Shipment — Быстрое создание заявки на перевозку"
+    },
+    "mini-apps/slotify/README.md": {
+      "id": "632750146",
+      "title": "Slotify — Публичный портал бронирования слотов"
+    },
+    "mini-apps/transport-requests/README.md": {
+      "id": "632094836",
+      "title": "Transport Requests — Ответ перевозчика на котировку"
+    },
+    "onboarding/01_main-app-walkthrough.md": {
+      "id": "632881169",
+      "title": "Часть 1 — Main App: Основной функционал"
+    },
+    "onboarding/02_features-deep-dive.md": {
+      "id": "632324161",
+      "title": "Часть 2 — Дополнительный функционал Main App"
+    },
+    "onboarding/03_admin-backoffice.md": {
+      "id": "633077777",
+      "title": "Часть 3 — Admin App, Back-Office, Public API"
+    },
+    "onboarding/04_mini-apps.md": {
+      "id": "632193090",
+      "title": "Часть 4 — Мини-приложения (Mini-Apps)"
+    },
+    "onboarding/05_slotify-algorithm.md": {
+      "id": "633077794",
+      "title": "Slotify — Алгоритм слотов"
+    },
+    "onboarding/06_integrations-technical.md": {
+      "id": "631930994",
+      "title": "Технические интеграции — Как включить и настроить"
+    },
+    "onboarding/README.md": {
+      "id": "631046215",
+      "title": "Онбординг в Shiptify TMS — Видео-руководство"
+    },
+    "tms/OPEN-QUESTIONS-VIDEO.md": {
+      "id": "632651842",
+      "title": "TMS — Спорные вопросы и пробелы (из видео-инструктажей)"
+    },
+    "tms/OPEN-QUESTIONS.md": {
+      "id": "632717345",
+      "title": "Открытые вопросы по документации TMS"
+    },
+    "tms/README.md": {
+      "id": "632979506",
+      "title": "TMS — Transport Management System"
+    },
+    "tms/admin/account-functions.md": {
+      "id": "633012273",
+      "title": "Account Functions — Флаги функций аккаунта и профиль пользователя"
+    },
+    "tms/admin/auth-sso.md": {
+      "id": "632684595",
+      "title": "Auth / SSO — Аутентификация и единый вход · tms/admin"
+    },
+    "tms/admin/navigation-account-types.md": {
+      "id": "631636003",
+      "title": "Навигация и типы аккаунтов · tms/admin"
+    },
+    "tms/admin/self-admin-rights.md": {
+      "id": "632291393",
+      "title": "Self-Admin / Rights / Roles / Teams — пользователи и доступы"
+    },
+    "tms/buy-sell/README.md": {
+      "id": "632160387",
+      "title": "Buy & Sell (TBS) — Аккаунт типа \"Покупатель и Продавец\""
+    },
+    "tms/buy-sell/billing-entities.md": {
+      "id": "632979523",
+      "title": "Billing Entities — Сущности для выставления счетов клиентам"
+    },
+    "tms/buy-sell/buysell-v3-qr-to-tr.md": {
+      "id": "632356881",
+      "title": "Buy & Sell V3 — Автоматическое создание TR из QR"
+    },
+    "tms/buy-sell/orders-transport-plan.md": {
+      "id": "631931011",
+      "title": "Orders (DO/SDO) и Transport Plan"
+    },
+    "tms/buy-sell/repeat-request.md": {
+      "id": "633045009",
+      "title": "Repeat Request — Дублирование Transport Request"
+    },
+    "tms/buy-sell/selling-rate-sheet.md": {
+      "id": "632062099",
+      "title": "Selling Rate Sheet — Тарифный лист для клиентов"
+    },
+    "tms/buy-sell/send-quotes.md": {
+      "id": "633143329",
+      "title": "Send Quotes — Отправка котировок клиентам"
+    },
+    "tms/buy-sell/sty-3-chat-spectators.md": {
+      "id": "631931028",
+      "title": "STY 3.0 — Чат, навигация BUY/SALES и Spectators"
+    },
+    "tms/carriers/README.md": {
+      "id": "632553522",
+      "title": "Carriers & Shipper-Carrier — перевозчики и связи"
+    },
+    "tms/claims/README.md": {
+      "id": "633012289",
+      "title": "Претензии (Claims)"
+    },
+    "tms/control-tower/README.md": {
+      "id": "630390843",
+      "title": "Control Tower — Башня управления"
+    },
+    "tms/control-tower/multivision-module.md": {
+      "id": "632094852",
+      "title": "Multivision / Control Tower — обзор по группе аккаунтов"
+    },
+    "tms/cross-dock/README.md": {
+      "id": "632291409",
+      "title": "Cross-Dock — кроссдок-консолидация"
+    },
+    "tms/customs/README.md": {
+      "id": "632422499",
+      "title": "Customs Invoices — таможенные декларации"
+    },
+    "tms/dashboards/README.md": {
+      "id": "632946738",
+      "title": "Дашборды (Dashboards)"
+    },
+    "tms/dashboards/dashboard-tabs.md": {
+      "id": "632848465",
+      "title": "Dashboard — Вкладки, метрики и фильтры"
+    },
+    "tms/doc-center/README.md": {
+      "id": "632094868",
+      "title": "Attachments & Doc Center — документы и централизованный реестр"
+    },
+    "tms/features/attachment-category.md": {
+      "id": "630390860",
+      "title": "Attachment Type Category — Категории вложений"
+    },
+    "tms/features/broker-view.md": {
+      "id": "631668820",
+      "title": "Broker View — Вид и действия брокера"
+    },
+    "tms/features/co2-widget.md": {
+      "id": "632881186",
+      "title": "CO2 Widget — Виджет углеродного следа"
+    },
+    "tms/features/container-tracking.md": {
+      "id": "632488003",
+      "title": "Container Tracking — Отслеживание контейнеров через Kpler"
+    },
+    "tms/features/container/container-return.md": {
+      "id": "632586289",
+      "title": "Container Return — Возврат порожних контейнеров"
+    },
+    "tms/features/doc-workflow.md": {
+      "id": "632553538",
+      "title": "Documents Workflow — Уведомления о документах · tms/features"
+    },
+    "tms/features/expected-orders.md": {
+      "id": "632684628",
+      "title": "Expected Orders (EO) — Ожидаемые заказы · tms/features"
+    },
+    "tms/features/freight-units.md": {
+      "id": "632848481",
+      "title": "Freight Units (FU) — Грузовые единицы"
+    },
+    "tms/features/fu-improvements.md": {
+      "id": "631341142",
+      "title": "FU Improvements — Улучшения Freight Units"
+    },
+    "tms/features/grouping-2.0.md": {
+      "id": "632946754",
+      "title": "Grouping 2.0 — Группировка отправлений"
+    },
+    "tms/features/labels-sscc.md": {
+      "id": "632291425",
+      "title": "Labels & SSCC — Штрихкоды и мульти-лейблы · tms/features"
+    },
+    "tms/features/logistic-specificities.md": {
+      "id": "632881203",
+      "title": "Logistic Specificities — Специфики груза и транспортного средства"
+    },
+    "tms/features/magic-filters.md": {
+      "id": "632389748",
+      "title": "Magic Filters — Умные фильтры"
+    },
+    "tms/features/multi-container.md": {
+      "id": "632193107",
+      "title": "Multi Container — Мульти-контейнерные бронирования · tms/features"
+    },
+    "tms/features/new-tracking-architecture.md": {
+      "id": "633143346",
+      "title": "New Tracking Architecture (2026) — Новая архитектура трекинга"
+    },
+    "tms/features/pallets.md": {
+      "id": "631111752",
+      "title": "Pallets Management — Управление поддонами · tms/features"
+    },
+    "tms/features/quota-management.md": {
+      "id": "631341159",
+      "title": "Quota Management — Управление квотами перевозчиков"
+    },
+    "tms/features/rebooking.md": {
+      "id": "632029251",
+      "title": "Repeat — Повтор перевозки"
+    },
+    "tms/features/retro-consolidation.md": {
+      "id": "630390877",
+      "title": "Retro Consolidation — Финансовая консолидация отправок"
+    },
+    "tms/features/sea-freight-ship-data.md": {
+      "id": "632881219",
+      "title": "Sea Freight — Данные судна (Ship Data) · tms/features"
+    },
+    "tms/features/smart-lists.md": {
+      "id": "633143363",
+      "title": "Smart Lists — умные пресеты списков"
+    },
+    "tms/features/visits-driver-data.md": {
+      "id": "632356898",
+      "title": "Visits — Данные водителя и грузовика"
+    },
+    "tms/features/visual-indicators.md": {
+      "id": "633045025",
+      "title": "Visual Indicators — Визуальные индикаторы слотов"
+    },
+    "tms/followers/README.md": {
+      "id": "632750162",
+      "title": "Followers & Follower Plans — подписчики объектов"
+    },
+    "tms/free-tm/README.md": {
+      "id": "631341175",
+      "title": "FreeTM / TM Light — Облегчённый TMS"
+    },
+    "tms/galaxy/README.md": {
+      "id": "632684645",
+      "title": "Galaxy — Мультиарендность и группы аккаунтов"
+    },
+    "tms/galaxy/galaxy-module.md": {
+      "id": "632258659",
+      "title": "Galaxy — группы аккаунтов и мультиарендность"
+    },
+    "tms/grouping/README.md": {
+      "id": "632160404",
+      "title": "Grouping — Группировка перевозок"
+    },
+    "tms/implementation/README.md": {
+      "id": "631308402",
+      "title": "Implementation — Техническая реализация TMS"
+    },
+    "tms/implementation/backend/01_АРХИТЕКТУРА.md": {
+      "id": "632455251",
+      "title": "Архитектура системы"
+    },
+    "tms/implementation/backend/02_ДОМЕНЫ_И_СУЩНОСТИ.md": {
+      "id": "632488020",
+      "title": "Домены и сущности TMS"
+    },
+    "tms/implementation/backend/03_МОДУЛИ_И_СЕРВИСЫ.md": {
+      "id": "632455268",
+      "title": "Модули и сервисы · tms/implementation/backend"
+    },
+    "tms/implementation/backend/04_ИНТЕГРАЦИИ.md": {
+      "id": "632520772",
+      "title": "Интеграции с перевозчиками и внешними системами"
+    },
+    "tms/implementation/backend/05_ВОРКЕР_И_ОЧЕРЕДИ.md": {
+      "id": "631308418",
+      "title": "Воркер и очереди · tms/implementation/backend"
+    },
+    "tms/implementation/backend/06_РАЗРАБОТКА.md": {
+      "id": "631111768",
+      "title": "Руководство разработчика"
+    },
+    "tms/implementation/backend/README.md": {
+      "id": "632422515",
+      "title": "Внутренняя документация — Shiptify Backend"
+    },
+    "tms/implementation/database/README.md": {
+      "id": "632422531",
+      "title": "Database — PostgreSQL"
+    },
+    "tms/implementation/database/er-model.md": {
+      "id": "632684662",
+      "title": "ER-модель — Ключевые сущности"
+    },
+    "tms/implementation/database/lifecycle-diagrams.md": {
+      "id": "632619057",
+      "title": "Диаграммы жизненного цикла моделей"
+    },
+    "tms/implementation/frontend/README.md": {
+      "id": "632717361",
+      "title": "Frontend — Клиентская часть TMS"
+    },
+    "tms/implementation/integrations/README.md": {
+      "id": "632881236",
+      "title": "Integrations — Внешние системы"
+    },
+    "tms/implementation/setup.md": {
+      "id": "631931044",
+      "title": "Локальный запуск TMS"
+    },
+    "tms/invoicing/01_invoices.md": {
+      "id": "632225938",
+      "title": "Инвойсы и стоимость перевозки"
+    },
+    "tms/invoicing/02_invoicing-statuses-detail.md": {
+      "id": "633045041",
+      "title": "Статусы инвойсинга — полное описание"
+    },
+    "tms/invoicing/README.md": {
+      "id": "632062116",
+      "title": "Инвойсинг (Invoicing)"
+    },
+    "tms/invoicing/cost-segments.md": {
+      "id": "632422548",
+      "title": "Cost Segments & External Costs — статьи затрат"
+    },
+    "tms/invoicing/invoice-line-improvements.md": {
+      "id": "632094884",
+      "title": "Улучшения модуля инвойсинга (Jan 2026)"
+    },
+    "tms/invoicing/invoicing-v2.md": {
+      "id": "632029268",
+      "title": "Invoicing V2 — Расширенный инвойсинг"
+    },
+    "tms/master-data/01_locations.md": {
+      "id": "633012306",
+      "title": "Локации (Locations)"
+    },
+    "tms/master-data/README.md": {
+      "id": "632356914",
+      "title": "Мастер-данные (Master Data)"
+    },
+    "tms/master-data/location-creation.md": {
+      "id": "632913985",
+      "title": "Location Creation — Создание локаций"
+    },
+    "tms/master-data/locations-module.md": {
+      "id": "631504964",
+      "title": "Locations / Master Data — справочник адресов"
+    },
+    "tms/master-data/products.md": {
+      "id": "631111785",
+      "title": "Products & Cargo Types — каталог товаров и типы груза"
+    },
+    "tms/metadata/README.md": {
+      "id": "632193140",
+      "title": "Metadata (MD) — кастомные поля платформы"
+    },
+    "tms/milkrun/README.md": {
+      "id": "632029285",
+      "title": "Milkrun · tms/milkrun"
+    },
+    "tms/milkrun/milkrun-module.md": {
+      "id": "632389765",
+      "title": "Milkrun — мультистоповые маршруты"
+    },
+    "tms/notifications/README.md": {
+      "id": "632356930",
+      "title": "Notifications — Уведомления · tms/notifications"
+    },
+    "tms/orders/README.md": {
+      "id": "633012323",
+      "title": "Заказы (Orders)"
+    },
+    "tms/parcels/README.md": {
+      "id": "632520789",
+      "title": "Parcels — посылки (Express/Parcel режим)"
+    },
+    "tms/procurement/quota-management.md": {
+      "id": "631996513",
+      "title": "Quota Management — Управление квотами · tms/procurement"
+    },
+    "tms/procurement/quote-strategy.md": {
+      "id": "631701605",
+      "title": "Quote Strategy — Стратегии котировок · tms/procurement"
+    },
+    "tms/rate-sheets/README.md": {
+      "id": "631799859",
+      "title": "Rate Sheets (Тарифные листы)"
+    },
+    "tms/rate-sheets/structure.md": {
+      "id": "632062133",
+      "title": "Rate Sheet — Структура и алгоритм сборки · tms/rate-sheets"
+    },
+    "tms/referrals/README.md": {
+      "id": "633012340",
+      "title": "Referrals, Agreement, Contracts — реферралы, согласия, контракты"
+    },
+    "tms/requests/01_shipment-request.md": {
+      "id": "633077827",
+      "title": "SR — Shipment Request (прямое бронирование)"
+    },
+    "tms/requests/02_quote-request.md": {
+      "id": "632029302",
+      "title": "QR — Quote Request (запрос котировок)"
+    },
+    "tms/requests/README.md": {
+      "id": "631898260",
+      "title": "Заявки (Shipment Requests)"
+    },
+    "tms/sea-schedule/README.md": {
+      "id": "632586305",
+      "title": "Sea Schedule — расписания морских линий"
+    },
+    "tms/shipments/00_domain-map.md": {
+      "id": "631668869",
+      "title": "TMS Shipments — Domain Map"
+    },
+    "tms/shipments/00_domain-map.ru.md": {
+      "id": "632324194",
+      "title": "TMS Shipments — Карта домена (RU)"
+    },
+    "tms/shipments/01_create-shipment-wizard.md": {
+      "id": "632750178",
+      "title": "Создание перевозки — CSW Wizard"
+    },
+    "tms/shipments/01_list/README.md": {
+      "id": "632782946",
+      "title": "Shipments List Page"
+    },
+    "tms/shipments/01_list/actions.md": {
+      "id": "631898277",
+      "title": "Shipments List — Actions & Buttons"
+    },
+    "tms/shipments/01_list/api.md": {
+      "id": "632488053",
+      "title": "Shipments List — API Reference"
+    },
+    "tms/shipments/01_list/filters.md": {
+      "id": "632356946",
+      "title": "Shipments List — Filters"
+    },
+    "tms/shipments/01_list/table-columns.md": {
+      "id": "631308435",
+      "title": "Shipments List — Table Columns"
+    },
+    "tms/shipments/02_create-wizard/README.md": {
+      "id": "632651874",
+      "title": "CSW — Мастер создания заявки на перевозку"
+    },
+    "tms/shipments/02_create-wizard/api.md": {
+      "id": "632881253",
+      "title": "CSW API — POST /shipment-requests"
+    },
+    "tms/shipments/02_create-wizard/step-01_basics.md": {
+      "id": "632193156",
+      "title": "CSW Шаг 1 — Basics (Основные данные)"
+    },
+    "tms/shipments/02_create-wizard/step-02_cargo.md": {
+      "id": "632291442",
+      "title": "CSW Шаг 2 — Cargo (Груз)"
+    },
+    "tms/shipments/02_create-wizard/step-03_pre-shipment.md": {
+      "id": "633045074",
+      "title": "CSW Шаг 3 — Pre-shipment (Адреса и даты)"
+    },
+    "tms/shipments/02_create-wizard/step-04_booking.md": {
+      "id": "632193173",
+      "title": "CSW Шаг 4 — Booking (Выбор перевозчика и отправка)"
+    },
+    "tms/shipments/02_list.md": {
+      "id": "632619090",
+      "title": "Список перевозок"
+    },
+    "tms/shipments/03_details.md": {
+      "id": "631111801",
+      "title": "Страница деталей перевозки"
+    },
+    "tms/shipments/03_details/README.md": {
+      "id": "631308451",
+      "title": "Детальная страница перевозки — Обзор"
+    },
+    "tms/shipments/03_details/tab_booking.md": {
+      "id": "631504980",
+      "title": "Вкладка Booking — Детальная документация"
+    },
+    "tms/shipments/03_details/tab_invoicing.md": {
+      "id": "632651891",
+      "title": "Вкладка Invoicing — Детальная документация"
+    },
+    "tms/shipments/03_details/tab_tracking.md": {
+      "id": "632553554",
+      "title": "Вкладка Tracking — Детальная документация"
+    },
+    "tms/shipments/04_state-machine.md": {
+      "id": "631341192",
+      "title": "Shipments — State Machine"
+    },
+    "tms/shipments/05_modals/README.md": {
+      "id": "631111817",
+      "title": "Shipments — Модальные окна"
+    },
+    "tms/shipments/06_roles-matrix.md": {
+      "id": "631963747",
+      "title": "Матрица ролей и прав доступа — Shipments"
+    },
+    "tms/shipments/07_integrations-behavior.md": {
+      "id": "632225986",
+      "title": "Поведение интеграций при работе с отправлениями"
+    },
+    "tms/shipments/08_requirements-map.md": {
+      "id": "631996530",
+      "title": "Карта требований — Shipments Domain"
+    },
+    "tms/shipments/09_checklist-booking.md": {
+      "id": "631963763",
+      "title": "Чек-лист: TMS BOOKING"
+    },
+    "tms/shipments/10_checklist-invoicing.md": {
+      "id": "631701621",
+      "title": "Чек-лист: INVOICING"
+    },
+    "tms/shipments/11_checklist-rate-sheets.md": {
+      "id": "632553571",
+      "title": "Чек-лист: RATE SHEETS + TRACKING + NOTIFICATIONS"
+    },
+    "tms/shipments/12_checklist-dock.md": {
+      "id": "631799876",
+      "title": "Чек-лист: DOCK + SLOTIFY"
+    },
+    "tms/shipments/13_checklist-buy-sell.md": {
+      "id": "632979540",
+      "title": "Чек-лист: BUY_SELL_AND_ORDER_STRUCTURE"
+    },
+    "tms/shipments/14_checklist-tms-general-batch1.md": {
+      "id": "630390926",
+      "title": "Чек-лист TMS General — Batch 1: Grouping, FU, Auth, Navigation"
+    },
+    "tms/shipments/15_checklist-tms-general-batch2.md": {
+      "id": "633143411",
+      "title": "Чек-лист TMS General — Batch 2: Multi-Container, Sea, Documents, STY3.0"
+    },
+    "tms/shipments/16_checklist-tms-ocr.md": {
+      "id": "632553587",
+      "title": "Чек-лист TMS — OCR (image-only pptx файлы)"
+    },
+    "tms/shipments/CHECKLIST-TRACKING.md": {
+      "id": "632782962",
+      "title": "Трекинг: Обработка источников для чек-листов"
+    },
+    "tms/shipments/README.md": {
+      "id": "632815667",
+      "title": "Отправки (Shipments)"
+    },
+    "tms/shipments/RTM-MASTER.md": {
+      "id": "631046247",
+      "title": "RTM Master — Требования → Документация"
+    },
+    "tms/shipments/RTM-REQ-TO-DOCS.md": {
+      "id": "632389781",
+      "title": "RTM: Требования → Документация"
+    },
+    "tms/shipments/RTM.md": {
+      "id": "632422564",
+      "title": "RTM — Requirements Traceability Matrix"
+    },
+    "tms/shipments/ai-reader-dual-screen.md": {
+      "id": "632127537",
+      "title": "AI Reader / Dual Screen — Создание перевозки из документа"
+    },
+    "tms/shipments/booking-types.md": {
+      "id": "632619106",
+      "title": "Типы бронирования — Booking Types"
+    },
+    "tms/shipments/flow-types.md": {
+      "id": "632324211",
+      "title": "Flow Types — Типы создания и отправки перевозок"
+    },
+    "tms/shipments/notifications.md": {
+      "id": "632422581",
+      "title": "Система уведомлений — Notifications & Business Log"
+    },
+    "tms/shipments/packing-list-api.md": {
+      "id": "632815684",
+      "title": "Packing List API — Управление упаковочным листом"
+    },
+    "tms/shipments/replan-cancel-reason-codes.md": {
+      "id": "632553603",
+      "title": "Reason Codes — Причины отмены и переноса"
+    },
+    "tms/shipments/rtm/RTM-01-booking.md": {
+      "id": "631701637",
+      "title": "RTM-01: Booking — Требования → Документация"
+    },
+    "tms/shipments/rtm/RTM-02-invoicing.md": {
+      "id": "633077876",
+      "title": "RTM-02: Invoicing — Требования → Документация"
+    },
+    "tms/shipments/rtm/RTM-03-rate-sheets.md": {
+      "id": "631308468",
+      "title": "RTM-03: Rate Sheets + Tracking + Notifications — Требования → Документация"
+    },
+    "tms/shipments/rtm/RTM-04-dock.md": {
+      "id": "632717378",
+      "title": "RTM-04: Dock + Slotify — Требования → Документация"
+    },
+    "tms/shipments/rtm/RTM-05-buy-sell.md": {
+      "id": "632356962",
+      "title": "RTM-05: Buy & Sell + Orders — Требования → Документация"
+    },
+    "tms/shipments/rtm/RTM-06-general-batch1.md": {
+      "id": "632881270",
+      "title": "RTM-06: General Batch 1 — Grouping / FU / Auth / Nav"
+    },
+    "tms/shipments/rtm/RTM-07-general-batch2.md": {
+      "id": "632815701",
+      "title": "RTM-07: General Batch 2 — Multi Container / Sea / Docs / STY"
+    },
+    "tms/shipments/rtm/RTM-08-ocr.md": {
+      "id": "632881286",
+      "title": "RTM-08: OCR — Требования → Документация"
+    },
+    "tms/shipments/shipment-detail-rebuild.md": {
+      "id": "632029319",
+      "title": "Shipment Detail Rebuild — Переработка страницы перевозки"
+    },
+    "tms/shipments/transit-points-api.md": {
+      "id": "633045091",
+      "title": "Transit Points API — Транзитные точки маршрута"
+    },
+    "tms/slots/01_list.md": {
+      "id": "632815717",
+      "title": "Список слотов · tms/slots"
+    },
+    "tms/slots/02_slotify.md": {
+      "id": "631046263",
+      "title": "Slotify — управление слотами (календарный вид)"
+    },
+    "tms/slots/README.md": {
+      "id": "631504997",
+      "title": "Слоты (Slots)"
+    },
+    "tms/slots/dynamic-slot-naming.md": {
+      "id": "631111834",
+      "title": "Dynamic Slot Naming — Динамическое именование слотов"
+    },
+    "tms/slots/slotbook-carrier-selection.md": {
+      "id": "632553619",
+      "title": "Slotbook — Улучшенный выбор перевозчика"
+    },
+    "tms/slots/slotbook-ui-feedback.md": {
+      "id": "632422598",
+      "title": "Slotbook UI — Улучшения контактного блока и packing list"
+    },
+    "tms/slots/slotify-ui-3.md": {
+      "id": "632094900",
+      "title": "Slotify UI 3.0 и 3.1 — Переработка интерфейса"
+    },
+    "tms/technical-view/README.md": {
+      "id": "631472148",
+      "title": "Technical View — Технический взгляд на страницы TMS"
+    },
+    "tms/technical-view/navigation-graph.md": {
+      "id": "632619122",
+      "title": "Navigation Graph — Граф навигации"
+    },
+    "tms/technical-view/page-inventory.md": {
+      "id": "631931061",
+      "title": "Инвентарь страниц TMS"
+    },
+    "tms/technical-view/pages/shipment-detail.md": {
+      "id": "632226003",
+      "title": "Страница: Детали перевозки"
+    },
+    "tms/technical-view/pages/shipments-list.md": {
+      "id": "632422615",
+      "title": "Страница: Список перевозок"
+    },
+    "tms/templates/README.md": {
+      "id": "631996546",
+      "title": "Templates — шаблоны перевозок, шаринг, группы"
+    },
+    "tms/tracking/01_tracking-points.md": {
+      "id": "631668886",
+      "title": "Tracking Points — точки трекинга"
+    },
+    "tms/tracking/02_tracking-statuses-detail.md": {
+      "id": "631046279",
+      "title": "Статусы трекинга — полное описание"
+    },
+    "tms/tracking/README.md": {
+      "id": "632029336",
+      "title": "Трекинг (Tracking)"
+    },
+    "tms/tracking/new-tracking-architecture.md": {
+      "id": "631701685",
+      "title": "New Tracking Architecture — Новая архитектура трекинга"
+    },
+    "tms/transport-requests/README.md": {
+      "id": "631472165",
+      "title": "Transport Requests (Транспортные запросы) · tms/transport-requests"
+    },
+    "tms/transport-requests/transport-plan-module.md": {
+      "id": "633045124",
+      "title": "Transport Plan / Transport Requests / Groups"
+    },
+    "tools/coverage.md": {
+      "id": "632455301",
+      "title": "Покрытие (авто-сгенерировано build-graph.cjs)"
+    }
+  }
+}
