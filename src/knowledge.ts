@@ -1452,6 +1452,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
 
     const [entities, relations] = await Promise.all([
       prisma.knowledgeEntity.findMany({
+        where: { type: { not: '_meta' } },
         orderBy: { type: 'asc' },
         include: { _count: { select: { entries: true } } },
       }),
@@ -1459,13 +1460,23 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     ]);
 
     return reply.send({
-      nodes: entities.map((e: any) => ({
-        id: e.id,
-        name: e.name,
-        type: e.type,
-        summary: e.summary,
-        entryCount: e._count.entries,
-      })),
+      nodes: entities.map((e: any) => {
+        const m = (e.metadata || {}) as any;
+        return {
+          id: e.id,
+          name: e.name,
+          type: e.type,
+          summary: e.summary,
+          entryCount: e._count.entries,
+          domain: m.domain || null,
+          status: m.status || null,
+          route: m.route || null,
+          kind: m.kind || null,
+          codeRefs: typeof m.codeRefs === 'number' ? m.codeRefs : null,
+          confluence: m.confluence || null,
+          url: m.url || null,
+        };
+      }),
       edges: relations.map((r: any) => ({ id: r.id, from: r.fromId, to: r.toId, type: r.type })),
     });
   });

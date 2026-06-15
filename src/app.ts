@@ -14,6 +14,7 @@ import { wfCreateTask, wfEnqueueJob, wfSetStatus } from './workflow.js';
 import { readRecentEvents } from './bus/sink.js';
 import { registerIntakeApi } from './intake.js';
 import { registerKnowledgeApi, seedKnowledgeGraph } from './knowledge.js';
+import { loadGraphIntoDb } from './graphLoader.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
 import { TaskStatus, WfJobType, WfTaskStatus } from './prismaEnums.js';
 
@@ -821,7 +822,11 @@ app.get('/internal', async (_, reply) => {
 
 async function start() {
   await seedDefaultAdmin().catch((e) => app.log.error(e, 'admin seed failed'));
-  await seedKnowledgeGraph().catch((e) => app.log.error(e, 'graph seed failed'));
+  // Load the real documentation knowledge graph (idempotent, self-deploying);
+  // fall back to the small stub seed only when graph.json is absent.
+  await loadGraphIntoDb((m) => app.log.info(m))
+    .then((res) => { if (res.missing) return seedKnowledgeGraph(); })
+    .catch((e) => app.log.error(e, 'graph load failed'));
   await app.listen({ host: '0.0.0.0', port: config.port });
   app.log.info(`app listening on :${config.port}`);
 }
