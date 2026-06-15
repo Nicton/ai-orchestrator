@@ -7,6 +7,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Claude Code CLI — primary engine for answer generation (auth via mounted ~/.claude).
+RUN npm install -g @anthropic-ai/claude-code && claude --version || true
+
 COPY prisma ./prisma
 RUN npx prisma generate
 

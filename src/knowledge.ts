@@ -1016,9 +1016,13 @@ ${evidence}`;
   } catch {
     llmAnswer = '';
   }
-  if (llmAnswer) return { mode: 'llm', answer: llmAnswer, usedGraph };
+  // Основной ответ — от LLM; структуру из графа добавляем ПОСЛЕ него (дополнением).
+  if (llmAnswer) {
+    const answer = graphCtx ? `${llmAnswer}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : llmAnswer;
+    return { mode: 'llm', answer, usedGraph };
+  }
 
-  // LLM недоступен/пуст. Для структурных вопросов отвечаем ПРЯМО из графа (без LLM).
+  // LLM недоступен/пуст — для структурных вопросов отвечаем из графа (резерв).
   if (graphCtx) return { mode: 'llm', answer: formatGraphAnswer(graphCtx, lang), usedGraph: true };
   if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition', usedGraph };
   return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic', usedGraph };
