@@ -64,14 +64,17 @@ ${body}
   await flush();
 
   const G = ['-C', WORKSPACE, '-c', 'safe.directory=*'];
-  const diff = await sh('git', [...G, 'status', '--porcelain'], { timeoutMs: 30000, asUser: true });
+  const EXCL = ['--', ':!workspaces', ':!data', ':!node_modules', ':!.env', ':!secrets'];
+  const diff = await sh('git', [...G, 'status', '--porcelain', ...EXCL], { timeoutMs: 30000, asUser: true });
   if (!diff.out.trim()) {
     await setIdea(ideaId, { status: 'FAILED', log: log.concat('Агент не внёс изменений в файлы — нечего коммитить.').join('\n') });
     return;
   }
   log.push('Изменённые файлы:', diff.out.trim().slice(0, 4000));
 
-  await sh('git', [...G, 'add', '-A'], { timeoutMs: 30000, asUser: true });
+  // Стейджим всё, КРОМЕ деплой-локальных данных (документация/данные/секреты),
+  // иначе untracked-доки попадают в коммит. Изменения кода агентом сохраняются.
+  await sh('git', [...G, 'add', '-A', ...EXCL], { timeoutMs: 30000, asUser: true });
   const commitMsg = `feat(idea): ${title}\n\nAuto-implemented from idea ${ideaId} (approved by ${adminName}).\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>`;
   const commit = await sh('git', [...G, '-c', 'user.name=Ideas Bot', '-c', 'user.email=ideas@shiptify.local', 'commit', '-m', commitMsg], { timeoutMs: 30000, asUser: true });
   log.push('--- commit ---', commit.out.slice(-2000));
