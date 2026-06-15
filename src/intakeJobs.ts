@@ -1,9 +1,9 @@
-import { IntakeJobStatus, IntakeJobType } from '@prisma/client';
 import { prisma } from './db.js';
+import { IntakeJobStatus, type IntakeJobTypeValue } from './prismaEnums.js';
 
 export async function enqueueIntakeJob(opts: {
   intakeId: string;
-  type: IntakeJobType;
+  type: IntakeJobTypeValue;
   payload?: any;
   runAfter?: Date;
 }) {

@@ -1,5 +1,5 @@
 import { prisma } from './db.js';
-import { WfEventType, WfJobStatus, WfJobType, WfTaskStatus } from '@prisma/client';
+import { WfEventType, WfJobStatus, WfJobType, WfTaskStatus, type WfJobTypeValue, type WfTaskStatusValue } from './prismaEnums.js';
 
 export async function wfCreateTask(params: {
   externalSource?: string;
@@ -46,7 +46,7 @@ export async function wfCreateTask(params: {
   return task;
 }
 
-export async function wfEnqueueJob(taskId: string, type: WfJobType, payload?: any) {
+export async function wfEnqueueJob(taskId: string, type: WfJobTypeValue, payload?: any) {
   return prisma.wfJob.create({
     data: {
       taskId,
@@ -57,7 +57,7 @@ export async function wfEnqueueJob(taskId: string, type: WfJobType, payload?: an
   });
 }
 
-export async function wfSetStatus(taskId: string, status: WfTaskStatus, reason?: string) {
+export async function wfSetStatus(taskId: string, status: WfTaskStatusValue, reason?: string) {
   const task = await prisma.wfTask.update({
     where: { id: taskId },
     data: {

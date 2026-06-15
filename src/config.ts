@@ -1,6 +1,7 @@
 export const config = {
   port: Number(process.env.APP_PORT || 4321),
-  model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+  llmProvider: 'openai' as const,
+  model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
   workerPollMs: Number(process.env.WORKER_POLL_MS || 2000),
   callbackTimeoutMs: Number(process.env.CALLBACK_TIMEOUT_MS || 10000),
 

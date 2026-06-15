@@ -76,7 +76,7 @@ export async function getDocgenTaskView(runId: string) {
 
   if (status === 'DONE') {
     // Prefer stage docgen_writer output
-    const writerStage = run.stages.find((s) => s.stageId === 'docgen_writer');
+    const writerStage = run.stages.find((s: any) => s.stageId === 'docgen_writer');
     if (writerStage?.resultText) {
       try {
         const parsed = JSON.parse(writerStage.resultText);

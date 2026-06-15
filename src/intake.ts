@@ -4,10 +4,10 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { MultipartFile } from '@fastify/multipart';
 import { prisma } from './db.js';
-import { IntakeJobType } from '@prisma/client';
 import { transcribeAudioFile } from './llm.js';
 import { generateQuestionnaireFromTranscript, generateRequirementCardFromQuestionnaire } from './requirementIntake.js';
 import { enqueueIntakeJob } from './intakeJobs.js';
+import { IntakeJobType } from './prismaEnums.js';
 
 const createIntakeSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -155,7 +155,7 @@ export async function registerIntakeApi(app: FastifyInstance) {
     });
 
     return {
-      intakes: items.map((i) => ({
+      intakes: items.map((i: any) => ({
         id: i.id,
         createdAt: i.createdAt,
         updatedAt: i.updatedAt,

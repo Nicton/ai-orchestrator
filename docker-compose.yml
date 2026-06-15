@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: orchestrator
       POSTGRES_DB: orchestrator
     ports:
-      - "54323:5432"
+      - "127.0.0.1:${HOST_DB_PORT:-54324}:5432"
     volumes:
       - orchestrator_mvp_pg:/var/lib/postgresql/data
     healthcheck:
@@ -31,13 +31,20 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "4321:${APP_PORT:-4321}"
+      - "${HOST_APP_PORT:-4322}:${APP_PORT:-4321}"
     volumes:
       - ./data:/app/data
+      - ../../knowledge-base:/app/knowledge-base:ro
+      - ./docs:/app/docs:ro
+      - ./product:/app/product:ro
+      - ./workspaces:/app/workspaces:ro
       - ./secrets/openai_api_key:/run/secrets/openai_api_key:ro
       - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
     command: ["sh","-lc","until node -e \"const net=require('net');const s=net.connect(5432,'db');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),500);\"; do echo 'waiting for db...'; sleep 1; done; npm run db:push && npm run start:app"]
     restart: unless-stopped
+    networks:
+      - default
+      - appnet
 
   worker:
     build:
@@ -55,10 +62,21 @@ services:
         condition: service_healthy
     volumes:
       - ./data:/app/data
+      - ../../knowledge-base:/app/knowledge-base:ro
+      - ./docs:/app/docs:ro
+      - ./product:/app/product:ro
+      - ./workspaces:/app/workspaces:ro
       - ./secrets/openai_api_key:/run/secrets/openai_api_key:ro
       - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
     command: ["sh","-lc","npm run start:worker"]
     restart: unless-stopped
+    networks:
+      - default
 
 volumes:
   orchestrator_mvp_pg:
+
+networks:
+  appnet:
+    external: true
+    name: appnet
