@@ -1,7 +1,7 @@
 ---
 title: Carrier Billing Rules
 source_type: confluence
-confluence_url: https://shiptify.atlassian.net/wiki/spaces/BILL/pages/200202/Carrier+Billing+Rules
+confluence_url: https://shiptify.atlassian.net/wiki/search?text=Carrier%20Billing%20Rules&spaces=BILL
 ---
 
 # Carrier Billing Rules

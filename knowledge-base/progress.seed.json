@@ -1,0 +1,179 @@
+{
+    "updatedAt": "2026-06-05T12:39:00Z",
+    "status": "ok",
+    "confluencePageId": 589365250,
+    "notes": "Cron @2026-06-05 14:39 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) using UI autotests + Qase export.\n- Confluence parent page 589365250 updated to v304.\n- Children sync (TD): created=0 updated=9 (00_INDEX 612204547 v2, 01_PRODUCT_MAP 612106277 v2, 02_ROLES_AND_ACCESS 612401186 v2, 03_OBJECTS_STATES_TRANSITIONS 612564996 v2, 04_USER_FLOWS 612040748 v2, 05_GLOSSARY 611942420 v2, 06_TESTCASES_INDEX 612335620 v2, 07_AUTOTEST_MAP 612040764 v2, 08_LINKS_REGISTRY 611418121 v2).\n- Local KB edits AFTER sync (will go up next run):\n  - 01_PRODUCT_MAP.md → добавлены smoke-baseline детали по Grouping / Pick-up grouping (filters, group name, nShipmentsButton) + связь с Qase 2013/2014/2054.\n  - 02_ROLES_AND_ACCESS.md → уточнена carrier visibility для Update location; расширена матрица доступа строками Pick-up grouping и chat/system messages после Update location.\n  - 03_OBJECTS_STATES_TRANSITIONS.md → добавлен подтверждённый smoke post-condition для grouping: modal closes -> Tracking tab link `Grouped with 1 other shipment`.\n  - 04_USER_FLOWS.md → добавлены отдельные операционные флоу для GROUPING и PICK-UP GROUPING (create group + assign to existing group).\n  - 05_GLOSSARY.md → добавлены термины Group departure / Group arrival / Group shipment и Assign to the group.\n  - 07_AUTOTEST_MAP.md → добавлен autotest экспорта grouping list (`export/exportGrouping/exportGrouping.js`) + backlog note по Create Milkrun lifecycle на grouping page.\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-06-05 14:39 Europe/Warsaw; added direct link to grouping export autotest.\n",
+    "history": [
+        {
+            "ts_utc": "2026-06-05T12:39:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-06-05 14:39 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) using UI autotests + Qase export.\n- Confluence parent page 589365250 updated to v304.\n- Children sync (TD): created=0 updated=9 (00_INDEX 612204547 v2, 01_PRODUCT_MAP 612106277 v2, 02_ROLES_AND_ACCESS 612401186 v2, 03_OBJECTS_STATES_TRANSITIONS 612564996 v2, 04_USER_FLOWS 612040748 v2, 05_GLOSSARY 611942420 v2, 06_TESTCASES_INDEX 612335620 v2, 07_AUTOTEST_MAP 612040764 v2, 08_LINKS_REGISTRY 611418121 v2).\n- Local KB edits AFTER sync (will go up next run):\n  - 01_PRODUCT_MAP.md → добавлены smoke-baseline детали по Grouping / Pick-up grouping (filters, group name, nShipmentsButton) + связь с Qase 2013/2014/2054.\n  - 02_ROLES_AND_ACCESS.md → уточнена carrier visibility для Update location; расширена матрица доступа строками Pick-up grouping и chat/system messages после Update location.\n  - 03_OBJECTS_STATES_TRANSITIONS.md → добавлен подтверждённый smoke post-condition для grouping: modal closes -> Tracking tab link `Grouped with 1 other shipment`.\n  - 04_USER_FLOWS.md → добавлены отдельные операционные флоу для GROUPING и PICK-UP GROUPING (create group + assign to existing group).\n  - 05_GLOSSARY.md → добавлены термины Group departure / Group arrival / Group shipment и Assign to the group.\n  - 07_AUTOTEST_MAP.md → добавлен autotest экспорта grouping list (`export/exportGrouping/exportGrouping.js`) + backlog note по Create Milkrun lifecycle на grouping page.\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-06-05 14:39 Europe/Warsaw; added direct link to grouping export autotest.\n"
+        },
+        {
+            "ts_utc": "2026-06-05T12:09:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-06-05 14:09 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) using UI autotests + Qase export.\n- Confluence parent page 589365250 updated to v303.\n- Children sync (TD): created=9 updated=0 (00_INDEX 612204547, 01_PRODUCT_MAP 612106277, 02_ROLES_AND_ACCESS 612401186, 03_OBJECTS_STATES_TRANSITIONS 612564996, 04_USER_FLOWS 612040748, 05_GLOSSARY 611942420, 06_TESTCASES_INDEX 612335620, 07_AUTOTEST_MAP 612040764, 08_LINKS_REGISTRY 611418121).\n- Local KB edits AFTER sync (will go up next run):\n  - 01_PRODUCT_MAP.md → уточнён smoke baseline CSW milkrun (PS1/PS2, 2 Shipments, blueMilkrunBlock), добавлен note про Show Milkrun toggle и Crossdock MERGE IN A MILKRUN UI-contract.\n  - 02_ROLES_AND_ACCESS.md → уточнена роль spectator на PS level; расширена матрица доступа для Grouping / milkrun block visibility.\n  - 03_OBJECTS_STATES_TRANSITIONS.md → добавлен конкретный baseline перехода PS1+PS2 -> milkrun; уточнён grouping lifecycle: Show Milkrun -> [MILKRUN] -> Create Milkrun Modal -> grouped.\n  - 04_USER_FLOWS.md → зафиксирован post-condition для smoke milkrun (3 UI artefacts) и dependency flow'а Grouping от Show Milkrun toggle.\n  - 05_GLOSSARY.md → уточнены термины Show Milkrun и Milkrun steps/stops (stops + dates в monitoring modal).\n  - 07_AUTOTEST_MAP.md → добавлены before/after baseline checks для updateLocation.js и backlog по grouping milkrun lifecycle без autotest coverage.\n  - 08_LINKS_REGISTRY.md → обновлены child page IDs после нового sync + Last sync marker -> 2026-06-05 14:09 Europe/Warsaw; добавлен TD backlog по Show Milkrun / Grouping enablement.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T12:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 14:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) focusing links+Qase structure.\n- Confluence parent page 589365250 updated to v288.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v39, 03_OBJECTS_STATES_TRANSITIONS v54, 04_USER_FLOWS v70, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v284).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 14:32 Europe/Warsaw; added note about Qase export JSON structure (suites-tree) + tiny parsing hint.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T12:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 14:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then refreshed local KB link-registry last-sync marker (14:02).\n- Confluence parent page 589365250 updated to v287.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v39, 03_OBJECTS_STATES_TRANSITIONS v54, 04_USER_FLOWS v70, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v284).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md -> updated Last sync marker -> 2026-05-31 14:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T11:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 13:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage).\n- Confluence parent page 589365250 updated to v286.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v39, 03_OBJECTS_STATES_TRANSITIONS v54, 04_USER_FLOWS v70, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v283).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md -> updated Last sync marker -> 2026-05-31 13:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T11:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 13:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage).\n- Confluence parent page 589365250 updated to v285.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v54, 04_USER_FLOWS v70, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v282).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 13:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T10:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 12:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage).\n- Confluence parent page 589365250 updated to v284.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v54, 04_USER_FLOWS v70, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v281).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 12:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T10:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 12:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then updated local KB (link registry last-sync marker).\n- Confluence parent page 589365250 updated to v283.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v54, 04_USER_FLOWS v70, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v280).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 12:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T09:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 11:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then продолжил локальное наполнение KB (milkrun-stage) по UI автотестам + Qase export.\n- Confluence parent page 589365250 updated to v282.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v54, 04_USER_FLOWS v69, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v279).\n- Local KB edits AFTER sync (будут запушены в Confluence на следующем прогоне):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 11:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T09:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 11:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then продолжил локальное наполнение KB (milkrun-stage) по UI автотестам.\n- Confluence parent page 589365250 updated to v281.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v53, 04_USER_FLOWS v68, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v278).\n- Local KB edits AFTER sync (будут запушены в Confluence на следующем прогоне):\n  - 04_USER_FLOWS.md → добавлен flow “Milkrun + Rate Sheet price (Direct booking)” (источник: countMilkrunRateSheet.js).\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 11:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T08:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 10:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) using UI autotests + Qase export + TD Confluence pages backlog.\n- Local KB edits BEFORE sync: updated 08_LINKS_REGISTRY last-sync marker -> 2026-05-31 10:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T08:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 10:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then started next KB enrichment pass (milkrun-stage) using UI autotests + Qase export + TD Confluence pages.\n- Confluence parent page 589365250 updated to v279.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v52, 04_USER_FLOWS v67, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v275).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 10:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T07:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 09:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) from Qase export + UI autotests (no new TD Confluence pages fetched in this run).\n- Confluence parent page 589365250 updated to v278.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v50, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v52, 04_USER_FLOWS v67, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v274).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 09:32 Europe/Warsaw.\n  - 04_USER_FLOWS.md → added Qase references for Update location UI: 948/950/952.\n  - 03_OBJECTS_STATES_TRANSITIONS.md → added Qase references for Update location UI: 948/950/952.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T07:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 09:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) from UI autotests + Qase export (no new Confluence TD pages fetched in this run).\n- Confluence parent page 589365250 updated to v277.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v49, 02_ROLES_AND_ACCESS v38, 03_OBJECTS_STATES_TRANSITIONS v52, 04_USER_FLOWS v67, 05_GLOSSARY v42, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v273).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 09:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T06:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 08:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) from UI autotests + Qase export.\n- Confluence parent page 589365250 updated to v276.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v49, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v66, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v272).\n- Local KB edits AFTER sync (will go up next run):\n  - 01_PRODUCT_MAP.md → расширены правила/шаги \"Milkrun calculation\" (Qase 4221) + пометки, что нужно подтвердить distinct PU/DEL на BK уровне.\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 08:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T06:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 08:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then enriched local KB (milkrun-stage) with backlog sections for roles/objects/flows/glossary + refreshed link-registry last-sync marker.\n- Confluence parent page 589365250 updated to v275.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v49, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v66, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v271).\n- Local KB edits AFTER sync (will go up next run):\n  - 02_ROLES_AND_ACCESS.md → добавлен черновик видимости ролей для milkrun-stage (spectator / FU keys).\n  - 03_OBJECTS_STATES_TRANSITIONS.md → добавлен TODO-блок по milkrun indicators/banner/modal + update location milkrun + FU keys.\n  - 04_USER_FLOWS.md → добавлен список milkrun-stage flows для детальной вычитки (916/917/918/924/926/927/1055/1061/1417/1419/1421/1422/2826-2829 + suite 274).\n  - 05_GLOSSARY.md → добавлены термины milkrun monitoring modal + FU keys.\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 08:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T05:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 07:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued KB enrichment pass (milkrun-stage) from UI autotests + Qase export.\n- Confluence parent page 589365250 updated to v274.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v49, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v66, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v46, 08_LINKS_REGISTRY v270).\n- Next local KB edits (to be pushed next run): refresh 08_LINKS_REGISTRY last-sync marker; mine Confluence TD pages for milkrun FU keys (1417/1419/1421/1422) + update-location-milkrun (2826–2829) and wire links into 03/04/05."
+        },
+        {
+            "ts_utc": "2026-05-31T05:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 07:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then started next KB enrichment pass from UI autotests + MA-2026-05-25.json (milkrun-stage focus).\n- Confluence parent page 589365250 updated to v273.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v49, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v65, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v45, 08_LINKS_REGISTRY v269).\n- Next local KB edits (to be pushed next run): update 01/02/03/04/05/07/08 with more concrete milkrun-stage flows + role visibility extracted from autotests + Qase export."
+        },
+        {
+            "ts_utc": "2026-05-31T04:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 06:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then minor local KB enrichment (milkrun-stage) from UI autotests + Qase export (no new Confluence links fetched)."
+        },
+        {
+            "ts_utc": "2026-05-31T04:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 06:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued local KB enrichment (milkrun-stage) from UI autotests (FU keys visibility).\n- Confluence parent page 589365250 updated to v271.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v48, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v65, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v43, 08_LINKS_REGISTRY v267).\n- Local KB edits AFTER sync (will go up next run):\n  - 07_AUTOTEST_MAP.md → cleaned up FU section: filled creatingFU steps + removed duplicate addingFU block; kept shipper vs carrier visibility notes.\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 06:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T03:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 05:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued KB enrichment (milkrun-stage) from UI autotests.\n- Confluence parent page 589365250 updated to v270.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v48, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v65, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v43, 08_LINKS_REGISTRY v267).\n- Local KB edits AFTER sync (will go up next run):\n  - 07_AUTOTEST_MAP.md → обновлён snapshot количества тестов (156 js/ts) + добавлен baseline smoke `smokeTest/rateSheet.js` (8,500 €; applied rate sheet = Rate Sheet for automation).\n  - 01_PRODUCT_MAP.md → заполнен блок Rate Sheets: smoke baseline (8,500 €) + milkrun rate sheet (10,000 €).\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 05:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T03:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 05:02 Europe/Warsaw: synced Confluence parent+children from local internal KB; then continued KB enrichment focus (milkrun-stage) from UI autotests + Qase export; refreshed link registry last-sync marker.\n- Local KB edits:\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 05:02 Europe/Warsaw.\n  - (no structural KB reshuffles; content focus remains milkrun-stage: milkrun creation + rate sheet, update location milkrun, FU keys + spectator limits).\n- Confluence parent page 589365250 updated to v269.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v48, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v65, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v43, 08_LINKS_REGISTRY v266).\n"
+        },
+        {
+            "ts_utc": "2026-05-31T02:33:43Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 04:32 Europe/Warsaw: synced Confluence parent+children from local internal KB; then added small KB enrichment + resynced children.\n- Parent page 589365250 → v268.\n- Children sync #1 (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v48, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v64, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v42, 08_LINKS_REGISTRY v264).\n- Local KB edits:\n  - 07_AUTOTEST_MAP.md → добавлена метрика: ~199 uiTests/*.js files (snapshot 2026-05-31).\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 04:32 Europe/Warsaw.\n- Children sync #2 (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v48, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v65, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v42, 08_LINKS_REGISTRY v265).\nNext: deeper KB enrichment for milkrun-stage (BK vs PSH packing list, FU keys, spectator visibility, update location milkrun) using AutoTests + MA-2026-05-25.json + TD Confluence pages.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T02:33:06Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 04:32 Europe/Warsaw: synced Confluence parent+children from local internal KB. Then updated local KB link registry last-sync marker. Next: continue KB enrichment (milkrun-stage) using AutoTests + MA-2026-05--25.json + TD space pages.\n- Confluence parent page 589365250 updated to v268.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v48, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v64, 05_GLOSSARY v41, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v42, 08_LINKS_REGISTRY v264).\n- Local KB edits AFTER sync (will go up next run):\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 04:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T02:02:05Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 04:02 Europe/Warsaw: synced Confluence parent+children from local internal KB. Next: continue KB enrichment (milkrun-stage) using AutoTests + MA-2026-05-25.json + TD space pages.\n- Confluence parent page 589365250 updated to v267.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v48, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v63, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v263).\n- Local KB edits AFTER sync (will go up next run):\n  - 04_USER_FLOWS.md → добавлены экспортированные шаги/expected для Qase 4221 (Milkrun calculation).\n  - 08_LINKS_REGISTRY.md → updated Last sync marker -> 2026-05-31 04:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T01:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 03:32 Europe/Warsaw: synced Confluence parent+children from local KB. Next: continue KB enrichment pass (milkrun-stage) using AutoTests + MA-2026-05-25.json + TD space pages.\n- Confluence parent page 589365250 updated to v266.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v47, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v51, 04_USER_FLOWS v62, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v263).\n- Local KB edits AFTER sync (will go up next run):\n  - 07_AUTOTEST_MAP.md → детализирован flow smokeTest/contentAtTheBookingLevel.js (Car container @ BK level).\n  - 04_USER_FLOWS.md → добавлены точные шаги BK-level packing list (Define a logistics mean → Car → Add detailed packing list).\n  - 05_GLOSSARY.md → добавлен термин contentFromTheBookingLevelZone / BK-level content.\n  - 08_LINKS_REGISTRY.md → обновлён Last sync marker -> 2026-05-31 03:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T01:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 03:02 Europe/Warsaw: synced Confluence parent+children from local KB; then enriched local KB (milkrun-stage) using AutoTests.\n- Confluence parent page 589365250 updated to v265.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v46, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v50, 04_USER_FLOWS v62, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v262).\n- Local KB edits AFTER sync (will go up next run):\n  - 04_USER_FLOWS.md → добавлен детализированный smoke flow по BK-level packing list / container (autotest contentAtTheBookingLevel.js).\n  - 01_PRODUCT_MAP.md → добавлен блок связи Milkrun & FTL (suite 274) с smoke autotest BK-level containers (contentAtTheBookingLevel.js)."
+        },
+        {
+            "ts_utc": "2026-05-31T00:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 02:32 Europe/Warsaw: synced Confluence parent+children from local KB; continued KB enrichment pass (milkrun-stage) using AutoTests + MA-2026-05-25.json + TD Confluence pages.\n- Confluence parent page 589365250 updated to v264.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v46, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v50, 04_USER_FLOWS v62, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v262).\n- Local KB edits AFTER sync (will go up next run):\n  - 01_PRODUCT_MAP.md → добавлен индекс по suite 'Milkrun & FTL (274)' (BK/PSH/BK+PSH/Email+PDF кейсы 2027–2046).\n  - 03_OBJECTS_STATES_TRANSITIONS.md → добавлен полный список кейсов Milkrun & FTL (274): BK/PSH/BK+PSH/Email+PDF (2027–2046).\n  - 08_LINKS_REGISTRY.md → last sync marker -> 2026-05-31 02:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-31T00:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 02:02 Europe/Warsaw: synced Confluence parent+children from local KB; continued KB enrichment pass using UI autotests + Qase export (milkrun-stage focus).\n- Confluence parent page 589365250 updated to v263.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v46, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v50, 04_USER_FLOWS v62, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v261).\n- Local KB: refreshed 08_LINKS_REGISTRY last-sync marker to 2026-05-31 02:02 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-30T23:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 01:02 Europe/Warsaw: synced Confluence parent+children from local KB; starting KB enrichment pass using AutoTests + Qase export + TD Confluence pages (milkrun-stage focus).\n- Confluence parent page 589365250 updated to v261.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v46, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v50, 04_USER_FLOWS v61, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v258).\n"
+        },
+        {
+            "ts_utc": "2026-05-30T22:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 00:32 Europe/Warsaw: synced Confluence parent+children from local KB; starting next KB enrichment pass (milkrun-stage) from AutoTests + Qase export + TD Confluence pages.\n- Confluence parent page 589365250 updated to v260.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v46, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v50, 04_USER_FLOWS v61, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v258).\n"
+        },
+        {
+            "ts_utc": "2026-05-30T22:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-31 00:02 Europe/Warsaw: synced Confluence parent+children from local KB; then updated local KB (08_LINKS_REGISTRY) last-sync marker.\n- Confluence parent page 589365250 updated to v259.\n- Children sync #1 (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v45, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v49, 04_USER_FLOWS v61, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v256).\n- Local KB edits: 08_LINKS_REGISTRY.md → last sync -> 2026-05-31 00:02 Europe/Warsaw.\n- Children sync #2 (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v46, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v50, 04_USER_FLOWS v61, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v257).\n"
+        },
+        {
+            "ts_utc": "2026-05-30T21:32:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-30 23:32 Europe/Warsaw: synced Confluence parent+children from local KB; then continued KB enrichment (milkrun-stage) from Qase export: PS-level CSW features + refreshed links last-sync marker.\n- Confluence parent page 589365250 updated to v258.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v45, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v49, 04_USER_FLOWS v61, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v256).\n- Local KB edits AFTER sync (will go up next run):\n  - 01_PRODUCT_MAP.md → added explicit PS-level CSW features list (Spectators/Incoterms/Multicontainers @ pre-shipment) with Qase ids 1430/1431/1432/1434/1441.\n  - 03_OBJECTS_STATES_TRANSITIONS.md → clarified suite path for PS-level cases (Freight Orders & Freight Units / Freight Orders).\n  - 08_LINKS_REGISTRY.md → last sync -> 2026-05-30 23:32 Europe/Warsaw.\n"
+        },
+        {
+            "ts_utc": "2026-05-30T21:02:00Z",
+            "job": "shiptify-confluence-sync-internal-kb-30m",
+            "notes": "Cron @2026-05-30 23:02 Europe/Warsaw: synced Confluence parent+children from local KB; refreshed last-sync marker in 08_LINKS_REGISTRY; updated progress.json timestamps.\n- Confluence parent page 589365250 updated to v257.\n- Children sync (TD): created=0 updated=9 (00_INDEX v2, 01_PRODUCT_MAP v45, 02_ROLES_AND_ACCESS v37, 03_OBJECTS_STATES_TRANSITIONS v49, 04_USER_FLOWS v61, 05_GLOSSARY v40, 06_TESTCASES_INDEX v2, 07_AUTOTEST_MAP v41, 08_LINKS_REGISTRY v255).\n- Local KB edits:\n  - 08_LINKS_REGISTRY.md → last sync -> 2026-05--30 23:02 Europe/Warsaw.\n"
+        }
+    ],
+    "last_run_utc": "2026-06-05T12:39:00Z"
+}

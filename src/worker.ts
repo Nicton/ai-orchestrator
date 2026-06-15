@@ -154,7 +154,7 @@ async function processNextStageRun() {
       runId: candidate.runId,
       stageId: candidate.stageId,
       actor: { kind: 'agent', id: candidate.roleOrSkill },
-      llm: { provider: 'anthropic' },
+      llm: { provider: config.llmProvider },
       call: { tool: 'llm.runRolePrompt', input: { roleOrSkill: candidate.roleOrSkill } },
     });
 
@@ -167,7 +167,7 @@ async function processNextStageRun() {
       runId: candidate.runId,
       stageId: candidate.stageId,
       actor: { kind: 'agent', id: candidate.roleOrSkill },
-      llm: { provider: 'anthropic', model: llm.model },
+      llm: { provider: config.llmProvider, model: llm.model },
       call: { tool: 'llm.runRolePrompt' },
     });
 
@@ -194,7 +194,7 @@ async function processNextStageRun() {
       runId: candidate.runId,
       stageId: candidate.stageId,
       actor: { kind: 'agent', id: candidate.roleOrSkill },
-      llm: { provider: 'anthropic', model: llm.model },
+      llm: { provider: config.llmProvider, model: llm.model },
       result: {
         kind: 'success',
         summary: `stage done tokens=${done.totalTokens ?? '-'}`,
@@ -212,7 +212,7 @@ async function processNextStageRun() {
       status: 'completed',
       message: 'stage completed',
       actor: { kind: 'agent', id: candidate.roleOrSkill },
-      llm: { provider: 'openai', model: llm.model },
+      llm: { provider: config.llmProvider, model: llm.model },
     });
 
     await prisma.artifact.create({

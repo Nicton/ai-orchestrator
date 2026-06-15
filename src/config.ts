@@ -12,15 +12,13 @@ function readFileTrim(filePath?: string) {
 
 export const config = {
   port: Number(process.env.APP_PORT || 4321),
+  llmProvider: 'anthropic' as const,
   model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
-  // Target answer-generation model for Searchify (per master spec: "Fable 5").
-  // The deployment must alias this name to a real backend model.
-  answerModel: process.env.ANSWER_MODEL || 'fable-5',
+  answerModel: process.env.ANSWER_MODEL || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
   workerPollMs: Number(process.env.WORKER_POLL_MS || 2000),
   callbackTimeoutMs: Number(process.env.CALLBACK_TIMEOUT_MS || 10000),
 
-  // Speech-to-text (Whisper). When openaiApiKey is set, audio is transcribed
-  // via the OpenAI Whisper API; otherwise STT is unavailable (unless MOCK_LLM).
+  // Speech-to-text (Whisper).
   stt: {
     openaiApiKey: (process.env.OPENAI_API_KEY || '').trim() || readFileTrim(process.env.OPENAI_API_KEY_FILE),
     baseUrl: process.env.STT_BASE_URL || 'https://api.openai.com/v1',

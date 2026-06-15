@@ -1,7 +1,7 @@
 ---
 title: Onboarding a New Engineer
 source_type: confluence
-confluence_url: https://shiptify.atlassian.net/wiki/spaces/ENG/pages/300303/Onboarding
+confluence_url: https://shiptify.atlassian.net/wiki/search?text=Onboarding&spaces=ENG
 ---
 
 # Onboarding a New Engineer

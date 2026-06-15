@@ -1,7 +1,7 @@
 ---
 title: Adding a New Carrier Type in TMS
 source_type: confluence
-confluence_url: https://shiptify.atlassian.net/wiki/spaces/TMS/pages/100101/Carrier+Types
+confluence_url: https://shiptify.atlassian.net/wiki/search?text=Carrier%20Types&spaces=TMS
 ---
 
 # Adding a New Carrier Type in TMS

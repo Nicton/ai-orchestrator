@@ -1,0 +1,262 @@
+<h1>ShiptiFy Documentation — TMS (seed)</h1>
+<p><em>Generated from MA-2026-05-25 test-cases JSON. Scope: TMS only. This is a draft knowledge base that will be expanded.</em></p>
+<p><strong>Source file:</strong> <code>/home/user/.openclaw/workspace/shiptify/test-cases/MA-2026-05-25.json</code></p>
+
+<h2>Contents</h2>
+<ul>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#taxonomy">Taxonomy</a></li>
+  <li><a href="#glossary">Glossary</a></li>
+  <li><a href="#roles">Roles</a></li>
+</ul>
+
+<hr/>
+
+<h2 id="overview">Overview</h2>
+<h1>TMS scope extracted from MA-2026-05-25 test cases</h1>
+<p>This folder summarizes the <strong>Transport Management System (TMS)</strong>-related scope inferred from the mobile app test cases file: <code>/home/user/.openclaw/workspace/shiptify/test-cases/MA-2026-05-25.json</code>.</p>
+<h2>What is considered “TMS” here</h2>
+<p>Only functionality directly connected to planning, booking, executing, tracking and managing transport shipments/loads was included, such as:</p>
+<ul>
+<li>Shipment/booking creation (wizard flows, drafts, ready-to-book)</li>
+<li>Quote requests / direct bookings / award flows</li>
+<li>Carrier interaction (carrier-side booking details, actions)</li>
+<li>Slot booking</li>
+<li>Planning &amp; replanning tracking points</li>
+<li>Tracking (ETA, milestones, location/date updates, public tracking)</li>
+<li>Shipment collaboration features tied to execution (spectators/followers, metadata, attachments, chat references)</li>
+<li>TMS master data supporting execution (locations / “master location”)</li>
+</ul>
+<p>Non-TMS generic app functionality (pure UI cosmetics, unrelated settings, etc.) is intentionally not modeled unless it is explicitly tied to transport execution.</p>
+<h2>Outputs</h2>
+<ul>
+<li><strong>01_taxonomy.md</strong> – proposed TMS domain/module taxonomy derived from test titles</li>
+<li><strong>02_glossary.md</strong> – abbreviations encountered in titles/descriptions (expanded when inferable)</li>
+<li><strong>03_roles.md</strong> – user roles and capabilities evidenced by the test cases</li>
+</ul>
+<hr/>
+<h2 id="taxonomy">Taxonomy</h2>
+<h1>TMS taxonomy (derived from MA-2026-05-25 test cases)</h1>
+<p>This taxonomy is built by clustering recurring test-case titles/phrases (e.g., *CSW*, *Booking*, *SR/QR*, *Tracking*, *PML/Master Location*, *Spectators*).</p>
+<h2>1. Identity &amp; access (TMS personas)</h2>
+<ul>
+<li>Login as <strong>shipper</strong> / <strong>carrier</strong> / <strong>multi-account</strong></li>
+<li>Switching active account within multi-account</li>
+</ul>
+<h2>2. Shipment / booking creation (pre-shipment)</h2>
+<h3>2.1 Create Shipment Wizard (CSW)</h3>
+<ul>
+<li>Creating a <strong>Shipment Request</strong> (SR)</li>
+<li>Creating a <strong>Quote Request</strong> (QR)</li>
+<li>Creating <strong>Draft</strong> bookings</li>
+<li>Creating <strong>Ready-to-book</strong> (RTB) bookings</li>
+<li>Date handling inside CSW (pick-up/delivery date pickers)</li>
+<li>Spectators selection during creation (spectators dropdowns)</li>
+</ul>
+<h3>2.2 Slot booking</h3>
+<ul>
+<li>Slot booking flow from shipper side (multi-step modal)</li>
+<li>Selecting date/time slot, confirming slot booking</li>
+</ul>
+<h2>3. Quote management &amp; award</h2>
+<ul>
+<li>Requesting quotes to one/multiple carriers</li>
+<li>Auto-quote flows (enter prices → save quote → award)</li>
+<li>“Waiting quote” state behaviors (e.g., date behavior on booking details)</li>
+</ul>
+<h2>4. Booking confirmation &amp; tendering</h2>
+<ul>
+<li>Direct booking vs request-a-quote branching</li>
+<li>Auto-confirm SR/QR resulting in a created shipment</li>
+<li>Carrier selection step during booking (shipper side)</li>
+</ul>
+<h2>5. Shipment lifecycle &amp; status model</h2>
+<p>Evidence of distinct operational states in tests:</p>
+<ul>
+<li>Draft</li>
+<li>Ready to book (RTB)</li>
+<li>Waiting quote</li>
+<li>Booked</li>
+<li>Cancel / cancellation outcomes (appears in abbreviations)</li>
+</ul>
+<h2>6. Execution planning &amp; replanning</h2>
+<ul>
+<li>Replan of tracking points (e.g., loading tracking point datepicker)</li>
+<li>Planning references in exports (tracking/planning export)</li>
+</ul>
+<h2>7. Tracking &amp; visibility</h2>
+<h3>7.1 Tracking list &amp; tracking tab</h3>
+<ul>
+<li>Tracking list access from shipper/carrier/spectator sides</li>
+<li>Tooltip behavior in tracking list</li>
+</ul>
+<h3>7.2 Milestones, ETA &amp; updates</h3>
+<ul>
+<li>ETA timing after auto-confirm</li>
+<li>Update location and date</li>
+<li>(Implied) milestone lists (ML) and/or transport plan (TP)</li>
+</ul>
+<h3>7.3 Public tracking</h3>
+<ul>
+<li>Public Tracking page</li>
+</ul>
+<h2>8. Collaboration on shipments (execution context)</h2>
+<h3>8.1 Spectators / followers</h3>
+<ul>
+<li>Assign spectators at pre-shipment level</li>
+<li>Select spectators from dropdown</li>
+<li>Spectator followers block</li>
+<li>Shared shipments lifecycle when spectator connection is deleted/restored</li>
+<li>Spectator access rules for related shipments (e.g., “brothers” / multi-containers)</li>
+</ul>
+<h3>8.2 Metadata &amp; attachments (shipment-level)</h3>
+<ul>
+<li>Share metadata / request metadata</li>
+<li>Missing spectator followers in metadata / attachments (permission propagation)</li>
+</ul>
+<h3>8.3 Chat (shipment collaboration)</h3>
+<ul>
+<li>Tests indicate chat participants/followers should include spectators in some contexts</li>
+</ul>
+<h2>9. Documents &amp; proof</h2>
+<ul>
+<li>POD referenced (proof-of-delivery)</li>
+<li>PDF exports referenced</li>
+</ul>
+<h2>10. Master data supporting TMS execution</h2>
+<h3>10.1 Locations / Master Location (PML)</h3>
+<ul>
+<li>Public Master Location user</li>
+<li>Create / update / delete location</li>
+<li>Country/LOCODE references (location standardization)</li>
+</ul>
+<h3>10.2 Equipment / shipment characteristics (inferred)</h3>
+<ul>
+<li>FTL/LTL/FCL referenced (transport mode/service characteristics)</li>
+<li>Weight units (KG)</li>
+</ul>
+<p>---</p>
+<h2>Notes / assumptions</h2>
+<ul>
+<li>Some abbreviations (e.g., <strong>ML</strong>, <strong>TP</strong>, <strong>PSH</strong>, <strong>BK</strong>) appear frequently but are not explicitly defined in the test-case text; expansions are marked as inferred/unknown in the glossary.</li>
+<li>Although some tests touch collaboration (spectators, chat, metadata), they are included <strong>only where clearly shipment-execution related</strong>.</li>
+</ul>
+<hr/>
+<h2 id="glossary">Glossary</h2>
+<h1>Glossary of abbreviations (from MA-2026-05-25 test cases)</h1>
+<p>Abbreviations were extracted primarily from test titles/descriptions and then expanded when the surrounding text made the meaning reasonably inferable.</p>
+<h2>Confirmed / strongly inferable</h2>
+<ul>
+<li><strong>TMS</strong> — Transport Management System</li>
+<li><strong>CSW</strong> — *Create Shipment Wizard* (in tests: “Pick-up date on … CSW”, “mandatory fields of CSW”)</li>
+<li><strong>SR</strong> — Shipment Request (in tests: “Creating of SR”, “Auto-confirm SR”)</li>
+<li><strong>QR</strong> — Quote Request (in tests: “Creating of QR”, “Auto-confirm QR”, “Waiting quote status”)</li>
+<li><strong>RTB</strong> — Ready To Book (in tests: “Creating Ready to book”, “RTB option/filter”)</li>
+<li><strong>POD</strong> — Proof Of Delivery (referenced directly as POD)</li>
+<li><strong>PDF</strong> — Portable Document Format</li>
+<li><strong>ETA</strong> — Estimated Time of Arrival (referenced directly as ETA timing)</li>
+<li><strong>UTC</strong> — Coordinated Universal Time</li>
+<li><strong>LOCODE</strong> — UN/LOCODE (location code standard; referenced as LOCODE)</li>
+<li><strong>FTL</strong> — Full Truck Load</li>
+<li><strong>LTL</strong> — Less Than Truck Load</li>
+<li><strong>FCL</strong> — Full Container Load</li>
+<li><strong>CO2</strong> — Carbon dioxide (emissions; appears as CO2)</li>
+<li><strong>KG</strong> — kilogram</li>
+<li><strong>RDV</strong> — Rendez-vous / appointment (common FR abbreviation; appears alongside EN/FR/locale-related items)</li>
+</ul>
+<h2>Likely / inferred but not explicit in text</h2>
+<ul>
+<li><strong>PML</strong> — *Public Master Location* or *Product Master Location* (tests explicitly mention “Public Master Location (PML) user”; “Master Location” appears together with PML)</li>
+<li><strong>SH</strong> — Shipment (appears frequently next to booking/tracking context)</li>
+<li><strong>BK / BOOKING</strong> — Booking (BK appears frequently; BOOKING appears as a token too)</li>
+</ul>
+<h2>Unknown (seen in test-case text, expansion not reliable from context alone)</h2>
+<ul>
+<li><strong>ML</strong> — unknown (possibly *Milestone List* / *Milestones*)</li>
+<li><strong>TP</strong> — unknown (possibly *Transport Plan*)</li>
+<li><strong>PSH</strong> — unknown</li>
+<li><strong>FU</strong> — unknown (appears in spectator-related tests: “FU - keys are not displayed from spectators”)</li>
+<li><strong>POL</strong> — unknown/ambiguous (commonly *Port of Loading* in ocean freight; confirm in product context)</li>
+<li><strong>MA</strong> — unknown (could be “Main app”/project prefix; appears as a token in text)</li>
+<li><strong>AE</strong> — unknown</li>
+<li><strong>RS</strong> — unknown</li>
+</ul>
+<p>---</p>
+<h2>Follow-ups (if you want to tighten this glossary)</h2>
+<p>If you can confirm any of: <strong>ML, TP, PSH, FU, POL</strong>, we can upgrade them from “unknown” to “confirmed” and link them to the corresponding UI modules.</p>
+<hr/>
+<h2 id="roles">Roles</h2>
+<h1>TMS user roles &amp; capabilities (evidence from MA-2026-05-25 test cases)</h1>
+<p>This is a role list strictly derived from what the test titles/descriptions imply users can do.</p>
+<h2>Shipper</h2>
+<p><strong>What the shipper can do (from tests):</strong></p>
+<ul>
+<li>Authenticate/login as shipper</li>
+<li>Create shipments/bookings via CSW:</li>
+<li>Create <strong>SR</strong> (Shipment Request)</li>
+<li>Create <strong>QR</strong> (Quote Request)</li>
+<li>Save <strong>Draft</strong></li>
+<li>Save <strong>Ready-to-book (RTB)</strong></li>
+<li>Perform <strong>Direct booking</strong> and select carrier(s)</li>
+<li>Request quotes from one or multiple carriers</li>
+<li>Use <strong>Slot Booking</strong> flow (book a slot by selecting date/time and confirming)</li>
+<li>Auto-confirm SR/QR flows that result in shipment creation</li>
+<li>View tracking list / tracking tab for shipments</li>
+<li>Export tracking/planning information (implied by “Export from tracking, planning”)</li>
+<li>Manage shipment-level collaboration inputs:</li>
+<li>Assign/select <strong>spectators</strong> during booking creation</li>
+<li>Share/request metadata (shipment-level)</li>
+</ul>
+<h2>Carrier</h2>
+<p><strong>What the carrier can do (from tests):</strong></p>
+<ul>
+<li>Authenticate/login as carrier</li>
+<li>View booking details for shipments in various states (e.g., “Waiting quote”, “Booked”)</li>
+<li>Participate in quote flow:</li>
+<li>Provide quote prices (auto-quote flow implies carrier-side quoting actions)</li>
+<li>Replan certain execution details (tests mention replanning datepicker “as carrier”)</li>
+<li>View shipment tracking and related details</li>
+</ul>
+<h2>Multi-account user</h2>
+<p>A user identity that can access multiple accounts/tenants.</p>
+<p><strong>What the multi-account user can do (from tests):</strong></p>
+<ul>
+<li>Authenticate/login as multi-account</li>
+<li>Switch between accounts (“Switching accounts in multi-account”)</li>
+</ul>
+<h2>Spectator (shipment viewer / follower)</h2>
+<p>A role with constrained visibility into shipments, intended for stakeholders who should be able to follow execution without full shipper/carrier permissions.</p>
+<p><strong>What the spectator can do (from tests):</strong></p>
+<ul>
+<li>Access shipments shared with them (“shared shipments on spectator side”)</li>
+<li>Open tracking tab and tracking list on spectator side</li>
+<li>See tooltips / read-only tracking UI elements</li>
+</ul>
+<p><strong>Permission/visibility rules implied by tests:</strong></p>
+<ul>
+<li>Spectators are assignable at <strong>pre-shipment</strong> level (during booking creation)</li>
+<li>Spectator access can extend across related shipments (e.g., “multicontainers … access to brothers”)</li>
+<li>When a spectator connection is deleted, shared shipments/templates may be removed; when restored, they reactivate</li>
+<li>Spectators should appear as followers in shipment collaboration surfaces (chat, attachments, metadata) — multiple tests check for “missing spectator followers”</li>
+<li>Certain keys/fields may be hidden for spectators (e.g., “FU - keys are not displayed from spectators”)</li>
+</ul>
+<h2>Public tracking user (anonymous/external)</h2>
+<p><strong>What a public user can do (from tests):</strong></p>
+<ul>
+<li>View <strong>Public Tracking page</strong> (read-only shipment tracking visibility)</li>
+</ul>
+<h2>Public Master Location (PML) user</h2>
+<p>Role implied by: “Public Master Location (PML) user”.</p>
+<p><strong>What this user can do (from tests):</strong></p>
+<ul>
+<li>Manage locations:</li>
+<li>Create new location</li>
+<li>Update existing location</li>
+<li>Delete existing location</li>
+</ul>
+<p>---</p>
+<h2>Open questions</h2>
+<ul>
+<li>Whether “PML user” is a dedicated persona or a permission set within shipper/admin accounts.</li>
+<li>Definitions for abbreviations <strong>ML/TP/PSH/FU</strong> could further refine role entitlements.</li>
+</ul>

@@ -1,7 +1,7 @@
 ---
 title: Production Deployment Runbook
 source_type: confluence
-confluence_url: https://shiptify.atlassian.net/wiki/spaces/OPS/pages/400404/Deployment+Runbook
+confluence_url: https://shiptify.atlassian.net/wiki/search?text=Deployment%20Runbook&spaces=OPS
 ---
 
 # Production Deployment Runbook

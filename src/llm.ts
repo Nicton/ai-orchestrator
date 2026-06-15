@@ -18,18 +18,12 @@ export type TranscriptionResult = {
 };
 
 export async function runRolePrompt(role: string, prompt: string, model?: string): Promise<LlmResult> {
-  if (String(process.env.MOCK_LLM || '').trim() === '1') {
-    return {
-      text: JSON.stringify({ summary: `[MOCK] role=${role}`, artifacts: [], next: [] }, null, 2),
-      model: 'mock',
-    };
-  }
-
   return runClaudeCli(role, prompt, model);
 }
 
 function runClaudeCli(role: string, prompt: string, model?: string): Promise<LlmResult> {
   const useModel = model || config.model;
+
   return new Promise((resolve, reject) => {
     const args = [
       '-p', prompt,
@@ -58,7 +52,17 @@ function runClaudeCli(role: string, prompt: string, model?: string): Promise<Llm
           reject(new Error(`claude CLI error: ${parsed.result || stderr.trim()}`));
           return;
         }
-        resolve({ text: parsed.result ?? stdout.trim(), model: useModel });
+
+        resolve({
+          text: parsed.result ?? stdout.trim(),
+          model: parsed.modelUsage ? Object.keys(parsed.modelUsage)[0] || useModel : useModel,
+          promptTokens: parsed.usage?.input_tokens,
+          completionTokens: parsed.usage?.output_tokens,
+          totalTokens:
+            typeof parsed.usage?.input_tokens === 'number' && typeof parsed.usage?.output_tokens === 'number'
+              ? parsed.usage.input_tokens + parsed.usage.output_tokens
+              : undefined,
+        });
       } catch {
         resolve({ text: stdout.trim(), model: useModel });
       }
@@ -70,34 +74,42 @@ function runClaudeCli(role: string, prompt: string, model?: string): Promise<Llm
   });
 }
 
-// Server-side speech-to-text. Primary production path is Whisper via the
-// OpenAI-compatible /audio/transcriptions API (config.stt). Browser speech is
-// not the production path. Falls back to a mock only when MOCK_LLM=1.
+function readSecretFile(filePath?: string) {
+  const p = String(filePath || '').trim();
+  if (!p) return '';
+  try {
+    return fs.readFileSync(p, 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+function getOpenAiApiKey() {
+  const direct = String(process.env.OPENAI_API_KEY || '').trim();
+  if (direct) return direct;
+
+  const fromFile = readSecretFile(process.env.OPENAI_API_KEY_FILE);
+  if (fromFile) {
+    process.env.OPENAI_API_KEY = fromFile;
+    return fromFile;
+  }
+
+  throw new Error('OPENAI_API_KEY is not configured');
+}
+
 export async function transcribeAudioFile(filePath: string, languageHint?: string): Promise<TranscriptionResult> {
-  const { openaiApiKey, baseUrl, model } = config.stt;
-  if (!openaiApiKey && String(process.env.MOCK_LLM || '').trim() === '1') {
-    return { text: 'This is a mock transcription of the recorded question.', model: 'mock', language: languageHint };
-  }
-
-  if (!openaiApiKey) {
-    const err: any = new Error(
-      'Speech-to-text is not configured. Set OPENAI_API_KEY (Whisper) or run with MOCK_LLM=1.',
-    );
-    err.statusCode = 503;
-    throw err;
-  }
-
-  const buffer = await fs.promises.readFile(filePath);
+  const apiKey = getOpenAiApiKey();
+  const fileBuffer = await fs.promises.readFile(filePath);
   const filename = path.basename(filePath) || 'audio.webm';
 
   const form = new FormData();
-  form.append('file', new Blob([new Uint8Array(buffer)]), filename);
-  form.append('model', model);
+  form.append('file', new Blob([new Uint8Array(fileBuffer)]), filename);
+  form.append('model', config.stt.model);
   if (languageHint) form.append('language', languageHint);
 
-  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/audio/transcriptions`, {
+  const res = await fetch(`${config.stt.baseUrl.replace(/\/$/, '')}/audio/transcriptions`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${openaiApiKey}` },
+    headers: { Authorization: `Bearer ${apiKey}` },
     body: form,
   });
 
@@ -107,5 +119,9 @@ export async function transcribeAudioFile(filePath: string, languageHint?: strin
   }
 
   const data: any = await res.json();
-  return { text: String(data.text || '').trim(), model, language: data.language || languageHint };
+  return {
+    text: String(data.text || '').trim(),
+    model: data.model || config.stt.model,
+    language: data.language || languageHint,
+  };
 }

@@ -1,7 +1,7 @@
 ---
 title: Roles and Permissions
 source_type: confluence
-confluence_url: https://shiptify.atlassian.net/wiki/spaces/SEC/pages/500505/Roles+and+Permissions
+confluence_url: https://shiptify.atlassian.net/wiki/search?text=Roles%20and%20Permissions&spaces=SEC
 status: approved
 ---
 

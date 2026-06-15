@@ -11,6 +11,10 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 COPY core ./core
+COPY knowledge-base ./knowledge-base
+COPY docs ./docs
+COPY product ./product
+COPY workspaces ./workspaces
 COPY skills ./skills
 COPY scripts ./scripts
 COPY src ./src

@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from './db.js';
 import { runRolePrompt, transcribeAudioFile } from './llm.js';
 import { config } from './config.js';
 import { requireAuth, requireAdmin } from './auth.js';
+import { safeJsonParse } from './json.js';
 
 type SourceType = 'confluence' | 'jira' | 'web' | 'local';
 
@@ -15,6 +17,9 @@ type KnowledgeDoc = {
   title: string;
   text: string;
   normalized: string;
+  tokens: string[];
+  titleTokens: string[];
+  pathTokens: string[];
   mtimeMs: number;
   sourceUrl?: string;
   sourceType: SourceType;
@@ -30,6 +35,42 @@ type KnowledgeSearchHit = {
   snippet: string;
   sourceUrl?: string;
   sourceType: SourceType;
+};
+
+type KnowledgeSuggestion = {
+  original: string;
+  suggested: string;
+  reason: 'transliteration';
+};
+
+type PlannedQueryVariant = {
+  query: string;
+  rationale: string;
+};
+
+type KnowledgeQueryPlan = {
+  originalQuestion: string;
+  normalizedQuestion: string;
+  language: 'ru' | 'en' | 'fr';
+  intent: string;
+  answerStyle: 'direct' | 'table' | 'steps' | 'links' | 'compare';
+  entities: string[];
+  searchQueries: PlannedQueryVariant[];
+};
+
+type PlannedSearchResult = {
+  hits: KnowledgeSearchHit[];
+  terms: string[];
+  suggestion: KnowledgeSuggestion | null;
+  plan: KnowledgeQueryPlan;
+  profile: QueryProfile;
+};
+
+type CanonicalDomainKey = 'tms';
+
+type QueryProfile = {
+  isDefinitionQuery: boolean;
+  canonicalDomain?: CanonicalDomainKey;
 };
 
 type KnowledgeRootConfig = {
@@ -54,6 +95,8 @@ const docRoots: KnowledgeRootConfig[] = [
 const NON_FILE_ROOT_WEIGHTS: Record<string, number> = {
   operational: 1.5,
 };
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(MODULE_DIR, '..');
 
 function rootWeight(label: string): number {
   const fileRoot = docRoots.find((root) => root.label === label);
@@ -124,23 +167,214 @@ function normalizeQuery(text: string) {
   return normalizeWhitespace(text).toLowerCase();
 }
 
+function tokenize(text: string) {
+  return normalizeQuery(text)
+    .split(/[^a-zA-Zа-яА-ЯёЁ0-9]+/)
+    .filter(Boolean);
+}
+
+const queryStopwords = new Set([
+  'что', 'это', 'зачем', 'какой', 'какая', 'какие', 'как', 'где', 'когда', 'почему', 'ли',
+  'или', 'для', 'про', 'надо', 'нужно', 'есть', 'нет', 'мне', 'меня', 'него', 'неё', 'нее',
+  'знаю', 'расскажи', 'расскажи', 'покажи', 'объясни', 'подскажи', 'скучно',
+  'the', 'what', 'why', 'how', 'when', 'where', 'which', 'who', 'does', 'do', 'is', 'are',
+  'tell', 'show', 'about', 'please', 'a', 'an',
+]);
+
 function detectQuestionLanguage(text: string) {
   const sample = normalizeWhitespace(text);
   if (!sample) return 'en';
   const cyrillicMatches = sample.match(/[А-Яа-яЁёІіЎў]/g) || [];
+  if (cyrillicMatches.length) return 'ru';
+  const frenchAccentMatches = sample.match(/[àâæçéèêëîïôœùûüÿ]/gi) || [];
+  if (frenchAccentMatches.length) return 'fr';
+
   const latinMatches = sample.match(/[A-Za-z]/g) || [];
   if (cyrillicMatches.length > latinMatches.length / 2) return 'ru';
+  const lowered = sample.toLowerCase();
+  const frenchSignals = [
+    'bonjour', 'bonsoir', 'merci', 'pourquoi', 'comment', 'avec', 'sans', 'dans',
+    'est', 'sont', 'être', 'avoir', 'peut', 'livraison', 'transport', 'question',
+  ];
+  const frenchHits = frenchSignals.filter((word) => lowered.includes(word)).length;
+  if (frenchHits >= 2) return 'fr';
   return 'en';
 }
 
+function normalizeAnswerLanguage(language?: string) {
+  const normalized = String(language || '').trim().toLowerCase();
+  if (normalized === 'ru' || normalized === 'en' || normalized === 'fr') return normalized;
+  return 'en';
+}
+
+function localizedAnswerCopy(language: string) {
+  const lang = normalizeAnswerLanguage(language);
+  return {
+    noAnswer: {
+      ru: 'Не нашёл достаточно сильного ответа в проиндексированной базе знаний. Попробуй сузить область продукта или добавь недостающие материалы в knowledge-base / documentation / docs.',
+      en: 'I could not find a strong answer in the indexed knowledge base yet. Try narrowing the product area or add the missing source materials into knowledge-base / documentation / docs first.',
+      fr: 'Je n’ai pas encore trouvé de réponse assez solide dans la base de connaissances indexée. Essaie de préciser le domaine produit ou d’ajouter les sources manquantes dans knowledge-base / documentation / docs.',
+    },
+    synthesisUnavailable: {
+      ru: 'Я нашёл релевантные материалы, но сейчас не смог собрать финальный ответ. Ниже оставил источники, чтобы можно было сразу открыть нужные документы.',
+      en: 'I found relevant source materials, but I could not synthesize the final answer right now. I left the sources below so you can open the right documents immediately.',
+      fr: 'J’ai trouvé des sources pertinentes, mais je n’ai pas réussi à synthétiser la réponse finale pour le moment. J’ai laissé les sources ci-dessous pour que tu puisses ouvrir directement les bons documents.',
+    },
+  } as const;
+}
+
 function queryTerms(query: string) {
-  return Array.from(
-    new Set(
-      normalizeQuery(query)
-        .split(/[^a-zA-Zа-яА-Я0-9]+/)
-        .filter((term) => term.length >= 3),
-    ),
-  );
+  const tokens = tokenize(query).filter((term) => term.length >= 3);
+  const filtered = tokens.filter((term) => !queryStopwords.has(term));
+  return Array.from(new Set(filtered.length ? filtered : tokens));
+}
+
+const definitionQuestionPatterns = [
+  /\bwhat\s+is\b/i,
+  /\bwhat'?s\b/i,
+  /\bdefine\b/i,
+  /\bmeaning\s+of\b/i,
+  /\bexplain\b/i,
+  /\bqu['’]est[- ]ce\s+que\b/i,
+  /\bque\s+signifie\b/i,
+  /\bчто\s+такое\b/i,
+  /\bэто\s+что\b/i,
+];
+
+const canonicalDefinitionPathPatterns = [
+  /(^|\/)00_overview\.md$/i,
+  /(^|\/)01_taxonomy\.md$/i,
+  /(^|\/)02_glossary\.md$/i,
+  /(^|\/)03_roles\.md$/i,
+  /(^|\/)00_index\.md$/i,
+  /(^|\/)01_product_map\.md$/i,
+  /(^|\/)05_glossary\.md$/i,
+  /(^|\/)02_roles_and_access\.md$/i,
+];
+
+const tmsCanonicalPathPatterns = [
+  /^knowledge-base\/tms\/(00_overview|01_taxonomy|02_glossary|03_roles)\.md$/i,
+  /^knowledge-base\/internal\/1\.0\/(00_INDEX|01_PRODUCT_MAP|02_ROLES_AND_ACCESS|05_GLOSSARY)\.md$/i,
+];
+
+const cyrillicToLatinMap: Record<string, string> = {
+  а: 'a',
+  б: 'b',
+  в: 'v',
+  г: 'g',
+  д: 'd',
+  е: 'e',
+  ё: 'e',
+  ж: 'zh',
+  з: 'z',
+  и: 'i',
+  й: 'y',
+  к: 'k',
+  л: 'l',
+  м: 'm',
+  н: 'n',
+  о: 'o',
+  п: 'p',
+  р: 'r',
+  с: 's',
+  т: 't',
+  у: 'u',
+  ф: 'f',
+  х: 'h',
+  ц: 'ts',
+  ч: 'ch',
+  ш: 'sh',
+  щ: 'sch',
+  ы: 'y',
+  э: 'e',
+  ю: 'yu',
+  я: 'ya',
+  ь: '',
+  ъ: '',
+};
+
+function transliterateCyrillicToken(token: string) {
+  if (!/^[а-яё]+$/i.test(token)) return token;
+  return token
+    .toLowerCase()
+    .split('')
+    .map((char) => cyrillicToLatinMap[char] ?? char)
+    .join('');
+}
+
+function buildTransliterationSuggestion(query: string): KnowledgeSuggestion | null {
+  const parts = query.trim().split(/\s+/);
+  if (!parts.length) return null;
+
+  let changed = false;
+  const suggested = parts.map((part) => {
+    const match = part.match(/^([^A-Za-zА-Яа-яЁё0-9]*)([A-Za-zА-Яа-яЁё0-9-]+)([^A-Za-zА-Яа-яЁё0-9]*)$/);
+    if (!match) return part;
+
+    const [, prefix, core, suffix] = match;
+    if (!/^[а-яё-]{2,8}$/i.test(core) || /[aeiouy]/i.test(core)) return part;
+
+    const transliterated = core
+      .split('-')
+      .map((chunk) => transliterateCyrillicToken(chunk))
+      .join('-');
+
+    if (!transliterated || transliterated === core.toLowerCase()) return part;
+    changed = true;
+    return `${prefix}${transliterated}${suffix}`;
+  }).join(' ');
+
+  if (!changed) return null;
+  return {
+    original: query,
+    suggested,
+    reason: 'transliteration',
+  };
+}
+
+function rankKnowledgeDocs(docs: KnowledgeDoc[], query: string, profile: QueryProfile) {
+  const terms = queryTerms(query);
+  const normalizedQuestion = normalizeQuery(query);
+
+  const hits: KnowledgeSearchHit[] = docs
+    .map((doc) => {
+      let rawScore = 0;
+      let matchedTerms = 0;
+
+      for (const term of terms) {
+        const pathMatches = doc.pathTokens.filter((token) => token === term).length;
+        const titleMatches = doc.titleTokens.filter((token) => token === term).length;
+        const bodyMatches = doc.tokens.filter((token) => token === term).length;
+        if (pathMatches || titleMatches || bodyMatches) matchedTerms += 1;
+        rawScore += pathMatches * 8;
+        rawScore += titleMatches * 10;
+        rawScore += Math.min(6, bodyMatches * 2);
+      }
+
+      if (doc.normalized.includes(normalizedQuestion)) rawScore += 16;
+      if (matchedTerms === terms.length && terms.length > 0) rawScore += 10;
+      if (terms[0] && doc.titleTokens.includes(terms[0])) rawScore += 4;
+      rawScore += definitionDocBoost(doc.path, profile);
+
+      const weightedScore = rawScore * rootWeight(doc.rootLabel) * pathScoreMultiplier(doc.path);
+
+      return {
+        path: doc.path,
+        rootLabel: doc.rootLabel,
+        title: doc.title,
+        score: Number(weightedScore.toFixed(2)),
+        rawScore: Number(rawScore.toFixed(2)),
+        termMatches: matchedTerms,
+        snippet: buildSnippet(doc.text, terms),
+        sourceUrl: doc.sourceUrl,
+        sourceType: doc.sourceType,
+      };
+    })
+    .filter((hit) => hit.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+
+  return { hits, terms };
 }
 
 function inferIntent(question: string) {
@@ -151,6 +385,72 @@ function inferIntent(question: string) {
   if (/(architecture|архитект|service|api|integration|интеграц)/.test(q)) return 'Architecture';
   if (/(risk|риск|impact|affected|затрон)/.test(q)) return 'Risk';
   return 'Question';
+}
+
+function isDefinitionQuery(question: string, terms: string[]) {
+  const normalized = normalizeQuery(question);
+  if (definitionQuestionPatterns.some((pattern) => pattern.test(normalized))) return true;
+  if (terms.length <= 4 && /\b(tms|sr|qr|eta|edi|api)\b/i.test(question) && /\?$/.test(question.trim())) return true;
+  return false;
+}
+
+function detectCanonicalDomain(question: string, terms: string[]): CanonicalDomainKey | undefined {
+  const normalized = normalizeQuery(question);
+  if (terms.includes('tms') || normalized.includes('transport management system')) return 'tms';
+  return undefined;
+}
+
+function buildQueryProfile(question: string, terms: string[]): QueryProfile {
+  const definition = isDefinitionQuery(question, terms);
+  return {
+    isDefinitionQuery: definition,
+    canonicalDomain: definition ? detectCanonicalDomain(question, terms) : undefined,
+  };
+}
+
+function inferAnswerStyle(question: string): KnowledgeQueryPlan['answerStyle'] {
+  const q = normalizeQuery(question);
+  if (/(table|таблиц|matrix|mapping|compare|сравн|difference|разниц|variant|вариант|vs\b)/.test(q)) return 'table';
+  if (/(step|steps|how to|как|процесс|workflow|instruction|инструкц)/.test(q)) return 'steps';
+  if (/(link|links|url|ссылк|where doc|где документац)/.test(q)) return 'links';
+  if (/(compare|сравн|difference|разниц|versus|vs\b)/.test(q)) return 'compare';
+  return 'direct';
+}
+
+function fallbackQueryPlan(question: string, languageHint?: string): KnowledgeQueryPlan {
+  const normalizedQuestion = normalizeWhitespace(question);
+  const terms = queryTerms(question);
+  const transliteration = buildTransliterationSuggestion(question);
+  const queryParts = normalizedQuestion.split(/\s+/).filter(Boolean);
+  const searchQueries: PlannedQueryVariant[] = [];
+
+  searchQueries.push({ query: normalizedQuestion, rationale: 'original question' });
+  if (terms.length) {
+    searchQueries.push({
+      query: terms.slice(0, 8).join(' '),
+      rationale: 'keyword-focused query',
+    });
+  }
+  if (
+    transliteration
+    && transliteration.suggested !== normalizedQuestion
+    && queryParts.length <= 3
+  ) {
+    searchQueries.push({
+      query: transliteration.suggested,
+      rationale: 'cyrillic-to-latin abbreviation fallback',
+    });
+  }
+
+  return {
+    originalQuestion: question,
+    normalizedQuestion,
+    language: (languageHint as KnowledgeQueryPlan['language']) || detectQuestionLanguage(question) as KnowledgeQueryPlan['language'],
+    intent: inferIntent(question),
+    answerStyle: inferAnswerStyle(question),
+    entities: terms.slice(0, 5),
+    searchQueries: dedupeQueryVariants(searchQueries).slice(0, 4),
+  };
 }
 
 function deriveTopic(question: string, terms: string[]) {
@@ -165,7 +465,33 @@ function pathScoreMultiplier(docPath: string) {
   ), 1);
 }
 
-function confidenceFromHits(hits: KnowledgeSearchHit[], termCount: number) {
+function isCanonicalDefinitionDoc(docPath: string) {
+  return canonicalDefinitionPathPatterns.some((pattern) => pattern.test(docPath));
+}
+
+function isCanonicalDomainDoc(docPath: string, domain?: CanonicalDomainKey) {
+  if (!domain) return false;
+  if (domain === 'tms') return tmsCanonicalPathPatterns.some((pattern) => pattern.test(docPath));
+  return false;
+}
+
+function definitionDocBoost(docPath: string, profile: QueryProfile) {
+  if (!profile.isDefinitionQuery) return 0;
+
+  let boost = 0;
+  if (isCanonicalDefinitionDoc(docPath)) boost += 18;
+  if (isCanonicalDomainDoc(docPath, profile.canonicalDomain)) boost += 20;
+  if (profile.canonicalDomain === 'tms' && /(^|\/)tms\//i.test(docPath)) boost += 8;
+  return boost;
+}
+
+function confidenceFromHits(
+  hits: KnowledgeSearchHit[],
+  termCount: number,
+  profile: QueryProfile,
+  answerMode: 'llm' | 'fallback',
+  fallbackKind?: 'definition' | 'generic',
+) {
   if (!hits.length) return 0.08;
 
   const topHits = hits.slice(0, 3);
@@ -180,23 +506,45 @@ function confidenceFromHits(hits: KnowledgeSearchHit[], termCount: number) {
   const evidenceDiversity = new Set(topHits.map((hit) => hit.rootLabel)).size / Math.min(3, topHits.length);
   const trustedTopEvidence = topHits.filter((hit) => hit.rootLabel === 'knowledge-base' || hit.rootLabel === 'documentation').length;
   const trustedEvidenceRatio = trustedTopEvidence / topHits.length;
+  const canonicalTopHits = hits.slice(0, 5).filter((hit) => isCanonicalDomainDoc(hit.path, profile.canonicalDomain) || isCanonicalDefinitionDoc(hit.path));
+  const canonicalCoverage = Math.min(1, canonicalTopHits.length / 3);
+  const canonicalTopLead = canonicalTopHits.some((hit) => hit.path === topHit.path) ? 1 : 0;
 
   const rawConfidence = 0.1
     + matchedTermRatio * 0.28
     + coverageRatio * 0.18
     + normalizedTopScore * 0.18
     + evidenceDiversity * 0.08
-    + trustedEvidenceRatio * 0.18;
+    + trustedEvidenceRatio * 0.18
+    + (profile.isDefinitionQuery ? canonicalCoverage * 0.14 + canonicalTopLead * 0.06 : 0);
 
-  const cap = topHit.rootLabel === 'knowledge-base' ? 0.84 : 0.76;
-  return Number(Math.min(cap, rawConfidence).toFixed(2));
+  let adjusted = rawConfidence;
+  if (profile.isDefinitionQuery && canonicalTopHits.length === 0) adjusted = Math.min(adjusted, 0.67);
+  if (answerMode !== 'llm') {
+    if (fallbackKind === 'definition' && profile.isDefinitionQuery && canonicalTopHits.length >= 2) {
+      adjusted -= 0.04;
+    } else {
+      adjusted -= profile.isDefinitionQuery ? 0.18 : 0.12;
+    }
+  }
+
+  const cap = profile.isDefinitionQuery
+    ? (
+      canonicalTopHits.length >= 2
+        ? (answerMode === 'llm' ? 0.93 : fallbackKind === 'definition' ? 0.88 : 0.78)
+        : 0.78
+    )
+    : (topHit.rootLabel === 'knowledge-base' ? 0.84 : 0.76);
+
+  return Number(Math.max(0.08, Math.min(cap, adjusted)).toFixed(2));
 }
 
 function buildSnippet(text: string, terms: string[]) {
   const compact = normalizeWhitespace(text);
   if (!compact) return '';
   const lower = compact.toLowerCase();
-  const idx = terms
+  const prioritizedTerms = [...terms].sort((a, b) => b.length - a.length);
+  const idx = prioritizedTerms
     .map((term) => lower.indexOf(term))
     .filter((i) => i >= 0)
     .sort((a, b) => a - b)[0];
@@ -239,13 +587,16 @@ async function walkDocs(absRoot: string, label: string) {
         const text = normalizeWhitespace(body);
         if (!text) continue;
 
-        const rel = path.relative(process.cwd(), absPath);
+        const rel = path.relative(REPO_ROOT, absPath);
         docs.push({
           path: rel,
           rootLabel: label,
           title: title || path.basename(absPath, ext),
           text,
           normalized: text.toLowerCase(),
+          tokens: tokenize(text),
+          titleTokens: tokenize(title || path.basename(absPath, ext)),
+          pathTokens: tokenize(rel),
           mtimeMs: stat.mtimeMs,
           sourceUrl,
           sourceType: sourceType || 'local',
@@ -270,7 +621,7 @@ async function loadKnowledgeDocs(force = false) {
   const roots: Array<{ label: string; path: string; files: number }> = [];
 
   for (const root of docRoots) {
-    const absRoot = path.resolve(process.cwd(), root.relPath);
+    const absRoot = path.resolve(REPO_ROOT, root.relPath);
     const docs = await walkDocs(absRoot, root.label);
     allDocs.push(...docs);
     roots.push({ label: root.label, path: root.relPath, files: docs.length });
@@ -306,6 +657,9 @@ async function loadOperationalDocs(): Promise<KnowledgeDoc[]> {
         title: entry.title,
         text,
         normalized: text.toLowerCase(),
+        tokens: tokenize(text),
+        titleTokens: tokenize(entry.title),
+        pathTokens: tokenize(`db knowledge entry ${entry.id}`),
         mtimeMs: entry.updatedAt.getTime(),
         sourceUrl: entry.sourceUrl || undefined,
         sourceType: ['confluence', 'jira', 'web', 'local'].includes(sourceType) ? sourceType : 'local',
@@ -316,58 +670,219 @@ async function loadOperationalDocs(): Promise<KnowledgeDoc[]> {
   }
 }
 
-async function searchKnowledge(query: string) {
-  const { docs } = await loadKnowledgeDocs();
-  const terms = queryTerms(query);
-  const normalizedQuestion = normalizeQuery(query);
-
-  const hits: KnowledgeSearchHit[] = docs
-    .map((doc) => {
-      let rawScore = 0;
-      let matchedTerms = 0;
-
-      for (const term of terms) {
-        const pathMatches = doc.path.toLowerCase().includes(term) ? 1 : 0;
-        const bodyMatches = doc.normalized.split(term).length - 1;
-        if (pathMatches || bodyMatches) matchedTerms += 1;
-        rawScore += pathMatches * 8;
-        rawScore += Math.min(6, bodyMatches);
-      }
-
-      if (doc.normalized.includes(normalizedQuestion)) rawScore += 16;
-      if (matchedTerms === terms.length && terms.length > 0) rawScore += 10;
-      if (doc.title.toLowerCase().includes(terms[0] || '')) rawScore += 4;
-
-      const weightedScore = rawScore * rootWeight(doc.rootLabel) * pathScoreMultiplier(doc.path);
-
-      return {
-        path: doc.path,
-        rootLabel: doc.rootLabel,
-        title: doc.title,
-        score: Number(weightedScore.toFixed(2)),
-        rawScore: Number(rawScore.toFixed(2)),
-        termMatches: matchedTerms,
-        snippet: buildSnippet(doc.text, terms),
-        sourceUrl: doc.sourceUrl,
-        sourceType: doc.sourceType,
-      };
-    })
-    .filter((hit) => hit.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8);
-
-  return { hits, terms };
+function dedupeQueryVariants(variants: PlannedQueryVariant[]) {
+  const seen = new Set<string>();
+  const unique: PlannedQueryVariant[] = [];
+  for (const variant of variants) {
+    const query = normalizeWhitespace(variant.query);
+    const key = normalizeQuery(query);
+    if (!query || !key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ query, rationale: variant.rationale || 'search variant' });
+  }
+  return unique;
 }
 
-async function composeAnswer(question: string, hits: KnowledgeSearchHit[], language: string) {
-  if (!hits.length) {
-    const fallbackByLanguage: Record<string, string> = {
-      ru: 'Не нашёл достаточно сильного ответа в проиндексированной базе знаний. Попробуй сузить область продукта или добавь недостающие материалы в knowledge-base / documentation / docs.',
-      en: 'I could not find a strong answer in the indexed knowledge base yet. Try narrowing the product area or add the missing source materials into knowledge-base / documentation / docs first.',
+const queryPlannerSchema = z.object({
+  normalizedQuestion: z.string().min(1).max(500),
+  language: z.enum(['ru', 'en', 'fr']),
+  intent: z.string().min(1).max(80),
+  answerStyle: z.enum(['direct', 'table', 'steps', 'links', 'compare']),
+  entities: z.array(z.string().min(1).max(120)).max(8).default([]),
+  searchQueries: z.array(z.object({
+    query: z.string().min(1).max(300),
+    rationale: z.string().min(1).max(180),
+  })).min(1).max(4),
+});
+
+async function buildQueryPlan(question: string, languageHint?: string): Promise<KnowledgeQueryPlan> {
+  const fallback = fallbackQueryPlan(question, languageHint);
+  const prompt = `You are planning retrieval for a grounded product knowledge assistant.
+
+Return JSON only.
+
+Task:
+- Normalize the user's question for retrieval.
+- Infer the best intent label.
+- Pick the most useful answer style.
+- Generate 2 to 4 high-value search queries for document retrieval.
+- Expand abbreviations or transliterations only when strongly justified by the question itself.
+- Preserve product names and likely domain terms.
+
+Rules:
+- Keep the same user language in normalizedQuestion.
+- searchQueries must be short and retrieval-oriented, not full answers.
+- Include the original wording or a very close variant as one of the searchQueries.
+- When the question mixes Cyrillic with Latin abbreviations, include a Latin variant if it could materially help retrieval.
+- Do not invent entities that are not implied by the question.
+- intent should be a compact label like Question, Requirement, Architecture, Compare, HowTo, Links, Status, Bug.
+- answerStyle should be one of: direct, table, steps, links, compare.
+
+Question:
+${question}
+
+Language hint:
+${fallback.language}
+
+Return shape:
+{
+  "normalizedQuestion": "string",
+  "language": "ru|en|fr",
+  "intent": "string",
+  "answerStyle": "direct|table|steps|links|compare",
+  "entities": ["string"],
+  "searchQueries": [
+    { "query": "string", "rationale": "string" }
+  ]
+}`;
+
+  try {
+    const result = await runRolePrompt('knowledge_assistant.query_planner', prompt, config.answerModel);
+    const parsed = queryPlannerSchema.parse(safeJsonParse(result.text));
+    return {
+      originalQuestion: question,
+      normalizedQuestion: normalizeWhitespace(parsed.normalizedQuestion),
+      language: parsed.language,
+      intent: parsed.intent,
+      answerStyle: parsed.answerStyle,
+      entities: parsed.entities.map((item) => normalizeWhitespace(item)).filter(Boolean).slice(0, 8),
+      searchQueries: dedupeQueryVariants(parsed.searchQueries).slice(0, 4),
     };
+  } catch {
+    return fallback;
+  }
+}
+
+function mergeHitsByPath(
+  scoredHits: Array<KnowledgeSearchHit & { variantIndex: number }>,
+  variantCount: number,
+) {
+  const merged = new Map<string, KnowledgeSearchHit>();
+  const hitVariants = new Map<string, Set<number>>();
+
+  for (const hit of scoredHits) {
+    const existing = merged.get(hit.path);
+    const variants = hitVariants.get(hit.path) || new Set<number>();
+    variants.add(hit.variantIndex);
+    hitVariants.set(hit.path, variants);
+
+    const diversityBoost = variants.size > 1 ? 1 + ((variants.size - 1) * 0.12) : 1;
+    const score = Number((hit.score * diversityBoost).toFixed(2));
+    if (!existing || score > existing.score) {
+      merged.set(hit.path, {
+        path: hit.path,
+        rootLabel: hit.rootLabel,
+        title: hit.title,
+        score,
+        rawScore: hit.rawScore,
+        termMatches: hit.termMatches,
+        snippet: hit.snippet,
+        sourceUrl: hit.sourceUrl,
+        sourceType: hit.sourceType,
+      });
+    }
+  }
+
+  return Array.from(merged.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.min(8, Math.max(variantCount * 3, 6)));
+}
+
+async function searchKnowledge(query: string, languageHint?: string): Promise<PlannedSearchResult> {
+  const { docs } = await loadKnowledgeDocs();
+  const plan = await buildQueryPlan(query, languageHint);
+  const profile = buildQueryProfile(query, queryTerms(query));
+  const variants = dedupeQueryVariants([
+    { query, rationale: 'user wording' },
+    { query: plan.normalizedQuestion, rationale: 'normalized question' },
+    ...plan.searchQueries,
+  ]).slice(0, 5);
+
+  const collectedTerms = new Set<string>();
+  const scoredHits: Array<KnowledgeSearchHit & { variantIndex: number }> = [];
+  let appliedSuggestion: KnowledgeSuggestion | null = null;
+
+  variants.forEach((variant, variantIndex) => {
+    const primary = rankKnowledgeDocs(docs, variant.query, profile);
+    primary.terms.forEach((term) => collectedTerms.add(term));
+    let effectiveHits = primary.hits;
+
+    if (!effectiveHits.length) {
+      const suggestion = buildTransliterationSuggestion(variant.query);
+      if (suggestion) {
+        const fallback = rankKnowledgeDocs(docs, suggestion.suggested, profile);
+        fallback.terms.forEach((term) => collectedTerms.add(term));
+        if (fallback.hits.length) {
+          effectiveHits = fallback.hits;
+          if (!appliedSuggestion && normalizeQuery(suggestion.suggested) !== normalizeQuery(query)) {
+            appliedSuggestion = suggestion;
+          }
+        } else if (!appliedSuggestion && variantIndex === 0) {
+          appliedSuggestion = suggestion;
+        }
+      }
+    }
+
+    effectiveHits.forEach((hit) => {
+      const variantBoost = variantIndex === 0 ? 1.12 : variantIndex === 1 ? 1.06 : 1;
+      scoredHits.push({
+        ...hit,
+        score: Number((hit.score * variantBoost).toFixed(2)),
+        variantIndex,
+      });
+    });
+  });
+
+  const hits = mergeHitsByPath(scoredHits, variants.length);
+  return {
+    hits,
+    terms: Array.from(collectedTerms),
+    suggestion: appliedSuggestion,
+    plan,
+    profile,
+  };
+}
+
+function buildDefinitionFallback(hits: KnowledgeSearchHit[], language: string, profile: QueryProfile) {
+  const lang = normalizeAnswerLanguage(language);
+  const canonicalHits = hits
+    .filter((hit) => isCanonicalDomainDoc(hit.path, profile.canonicalDomain) || isCanonicalDefinitionDoc(hit.path))
+    .slice(0, 4);
+  const sourceList = canonicalHits.length ? canonicalHits : hits.slice(0, 4);
+  const sourceRefs = sourceList.map((hit) => hit.sourceUrl || hit.path).join(', ');
+
+  if (profile.canonicalDomain === 'tms') {
+    const messages = {
+      ru: `TMS в этой базе знаний трактуется как Transport Management System и определяется через канонический слой документов: overview, taxonomy, glossary и roles. По текущим источникам это домен про shipment/booking lifecycle, execution planning, tracking и supporting master data. Sources: ${sourceRefs}`,
+      en: `In this knowledge base, TMS is treated as the Transport Management System and is defined through the canonical overview, taxonomy, glossary, and roles documents. Based on the current sources, it covers the shipment/booking lifecycle, execution planning, tracking, and supporting master data. Sources: ${sourceRefs}`,
+      fr: `Dans cette base de connaissances, le TMS est défini comme le Transport Management System via les documents canoniques overview, taxonomy, glossary et roles. D’après les sources actuelles, il couvre le cycle shipment/booking, la planification d’exécution, le tracking et les master data de support. Sources: ${sourceRefs}`,
+    } as const;
+    return messages[lang];
+  }
+
+  const generic = {
+    ru: `Нашёл канонические документы по определению термина, но финальный synthesis сейчас недоступен. Начни с этих источников: ${sourceRefs}`,
+    en: `I found the canonical definition documents for this term, but the final synthesis is unavailable right now. Start with these sources: ${sourceRefs}`,
+    fr: `J’ai trouvé les documents canoniques qui définissent ce terme, mais la synthèse finale est indisponible pour le moment. Commence par ces sources : ${sourceRefs}`,
+  } as const;
+  return generic[lang];
+}
+
+async function composeAnswer(
+  question: string,
+  hits: KnowledgeSearchHit[],
+  language: string,
+  plan?: KnowledgeQueryPlan,
+  profile?: QueryProfile,
+): Promise<{ mode: 'llm' | 'fallback'; answer: string; fallbackKind?: 'definition' | 'generic' }> {
+  const lang = normalizeAnswerLanguage(language);
+  const copy = localizedAnswerCopy(lang);
+
+  if (!hits.length) {
     return {
       mode: 'fallback',
-      answer: fallbackByLanguage[language] || fallbackByLanguage.en,
+      answer: copy.noAnswer[lang],
+      fallbackKind: 'generic',
     };
   }
 
@@ -379,64 +894,70 @@ async function composeAnswer(question: string, hits: KnowledgeSearchHit[], langu
     )
     .join('\n\n');
 
+  const answerStyleBlock = profile?.isDefinitionQuery
+    ? `This is a definitional question. Prefer the canonical definition flow:
+- start with overview / taxonomy / glossary / roles if present;
+- define the term in one sentence first;
+- then list the main functional scope in 3-6 bullets;
+- if the canonical docs are present, treat them as higher priority than narrower feature pages.`
+    : 'Answer in the style that best fits the question.';
+
   const prompt = `You are Searchify, a product knowledge assistant inside an engineering workspace.
 
 Answer the user's question using ONLY the evidence below.
 
 Rules:
-- Be concrete and concise.
+- Be concrete, useful, and concise.
+- Adapt the output shape to the user's question instead of dumping raw search snippets.
+- Start with the direct answer immediately. Do not add filler like "Here is the best grounded answer".
+- If the user asks for a count, comparison, status matrix, mapping, or list of variants, prefer a compact markdown table.
+- Preferred answer style for this question: ${plan?.answerStyle || inferAnswerStyle(question)}.
+- If the evidence supports only a partial answer, explicitly separate "What is clear" from "What is unclear".
+- When evidence contains URLs, include a short "Links:" section with the most relevant raw URLs.
 - Ground every claim in the evidence. Do NOT invent entities, roles, processes, APIs, integrations, permissions, or limitations that are not present in the evidence.
 - If the evidence is partial, outdated, or conflicting, say so explicitly.
 - If the evidence does not actually answer the question, say honestly that the information is insufficient instead of guessing.
-- CRITICAL: Respond strictly in the SAME language the user used to ask the question (detected: ${language}). Mirror the user's language even if the evidence is in another language.
+- CRITICAL: Respond strictly in the SAME language requested for the answer (detected: ${lang}). Mirror that language even if the evidence is in another language.
+- ${answerStyleBlock}
 - End with a short "Sources:" line listing the most relevant titles/paths.
+
+Preferred answer shape:
+1. Direct answer
+2. Optional details or table, only if it genuinely helps
+3. Optional Links section
+4. Sources line
 
 Question:
 ${question}
 
+Retrieval plan:
+- normalized question: ${plan?.normalizedQuestion || normalizeWhitespace(question)}
+- intent: ${plan?.intent || inferIntent(question)}
+- entities: ${(plan?.entities || []).join(', ') || 'n/a'}
+- search variants: ${(plan?.searchQueries || []).map((item) => item.query).join(' | ') || question}
+
 Evidence:
 ${evidence}`;
 
-  if (String(process.env.MOCK_LLM || '').trim() === '1') {
-    const bulletPoints = hits
-      .slice(0, 4)
-      .map((hit) => `- **${hit.title}**: ${hit.snippet}`)
-      .join('\n');
-
-    const intro =
-      language === 'ru'
-        ? `Вот лучший grounded-ответ, который я могу собрать по вопросу: "${question}"`
-        : `Here is the best grounded answer I can assemble for: "${question}"`;
-    const evidenceLabel = language === 'ru' ? 'Наиболее релевантные найденные материалы:' : 'Most relevant indexed evidence:';
-
-    return {
-      mode: 'mock-grounded',
-      answer: [
-        intro,
-        '',
-        evidenceLabel,
-        bulletPoints,
-      ].join('\n'),
-    };
-  }
-
   try {
     const result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel);
-    return { mode: 'llm', answer: result.text.trim() || hits[0].snippet };
+    const answer = result.text.trim();
+    if (answer) return { mode: 'llm', answer };
+    if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition' };
+    return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic' };
   } catch {
-    const intro =
-      language === 'ru'
-        ? `Вот лучший grounded-ответ, который я могу собрать по вопросу: "${question}"`
-        : `Here is the best grounded answer I can assemble for: "${question}"`;
-    const evidenceLabel = language === 'ru' ? 'Наиболее релевантные найденные материалы:' : 'Most relevant indexed evidence:';
-    const fallback = [
-      intro,
-      '',
-      evidenceLabel,
-      ...hits.slice(0, 3).map((hit) => `- **${hit.title}**: ${hit.snippet}`),
-    ].join('\n');
-
-    return { mode: 'fallback', answer: fallback };
+    if (profile?.isDefinitionQuery) {
+      return {
+        mode: 'fallback',
+        answer: buildDefinitionFallback(hits, lang, profile),
+        fallbackKind: 'definition',
+      };
+    }
+    return {
+      mode: 'fallback',
+      answer: copy.synthesisUnavailable[lang],
+      fallbackKind: 'generic',
+    };
   }
 }
 
@@ -493,7 +1014,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
   const askSchema = z.object({
     question: z.string().min(3),
     channel: z.string().min(1).max(120).optional(),
-    languageHint: z.enum(['ru', 'en']).optional(),
+    languageHint: z.enum(['ru', 'en', 'fr']).optional(),
     inputMode: z.enum(['text', 'voice']).default('text'),
   });
 
@@ -532,12 +1053,12 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
     const started = Date.now();
-    const language = parsed.data.languageHint || detectQuestionLanguage(parsed.data.question);
-    const intent = inferIntent(parsed.data.question);
-    const { hits, terms } = await searchKnowledge(parsed.data.question);
-    const composed = await composeAnswer(parsed.data.question, hits, language);
+    const language = normalizeAnswerLanguage(parsed.data.languageHint || detectQuestionLanguage(parsed.data.question));
+    const { hits, terms, suggestion, plan, profile } = await searchKnowledge(parsed.data.question, parsed.data.languageHint);
+    const intent = plan.intent || inferIntent(parsed.data.question);
+    const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile);
     const latencyMs = Date.now() - started;
-    const confidence = confidenceFromHits(hits, terms.length);
+    const confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
 
     const saved = await prisma.knowledgeQuery.create({
       data: {
@@ -573,6 +1094,14 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
       confidence,
       latencyMs,
       language,
+      suggestion,
+      retrievalPlan: {
+        normalizedQuestion: plan.normalizedQuestion,
+        intent: plan.intent,
+        answerStyle: plan.answerStyle,
+        entities: plan.entities,
+        searchQueries: plan.searchQueries,
+      },
       sources: hits,
     });
   });

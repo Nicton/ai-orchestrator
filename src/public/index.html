@@ -113,6 +113,11 @@
     min-width: 0; resize: none; font-family: inherit; line-height: 1.5; max-height: 240px; overflow-y: auto;
     padding: 0; margin: 0;
   }
+  .send-inline {
+    border: 1px solid var(--blue); background: var(--blue); color: #fff; border-radius: 999px;
+    padding: 10px 18px; font-size: 14px; font-weight: 600; align-self: center; flex: none;
+  }
+  .send-inline:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
   .mic {
     border: none; background: none; padding: 6px; border-radius: 50%; display: flex; align-items: center;
     flex: none; align-self: flex-start;
@@ -133,6 +138,32 @@
   }
   .home-actions button:hover { border-color: var(--line); box-shadow: var(--shadow); }
   .voicehint { margin-top: 14px; font-size: 13px; color: var(--muted); min-height: 18px; }
+  .composer-tools { width: 100%; max-width: 620px; margin-top: 12px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; }
+  .tool-btn {
+    border: 1px solid var(--line); background: #fff; color: #3c4043; border-radius: 999px;
+    padding: 9px 14px; font-size: 13px; font-weight: 600;
+  }
+  .lang-switch { display:inline-flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .lang-chip {
+    border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 999px;
+    padding: 8px 12px; font-size: 12px; font-weight: 700; letter-spacing: .08em;
+  }
+  .lang-chip.active { background: #e8f0fe; color: var(--blue-dark); border-color: #c9defc; }
+  .voice-panel {
+    width: 100%; max-width: 620px; margin-top: 12px; border: 1px solid var(--line-soft); border-radius: 18px;
+    background: #fff; box-shadow: var(--shadow); padding: 14px 16px;
+  }
+  .voice-panel[hidden] { display: none !important; }
+  .voice-panel-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .voice-status-line { margin-top: 12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; color: var(--muted); font-size: 13px; }
+  .voice-status-dot { width: 10px; height: 10px; border-radius: 999px; background: #9aa0a6; display: inline-block; }
+  .voice-status-dot.recording { background: var(--red); box-shadow: 0 0 0 6px rgba(217,48,37,.12); }
+  .voice-status-dot.processing { background: var(--amber); box-shadow: 0 0 0 6px rgba(227,116,0,.12); }
+  .voice-status-dot.ready { background: var(--green); box-shadow: none; }
+  .voice-countdown {
+    display:inline-flex; align-items:center; justify-content:center; min-width:34px;
+    padding: 3px 8px; border-radius: 999px; background: var(--bg-soft); color: #3c4043; font-size: 12px;
+  }
 
   /* ---------- results ---------- */
   .results-area { width: 100%; max-width: 720px; margin: 22px 0 80px; }
@@ -152,6 +183,10 @@
   .answer li { margin: 4px 0; }
   .answer code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
   .answer strong { font-weight: 600; }
+  .md-table-wrap { overflow-x: auto; margin: 0 0 14px; }
+  .md-table { width: 100%; border-collapse: collapse; min-width: 420px; font-size: 14px; }
+  .md-table th, .md-table td { border: 1px solid var(--line-soft); padding: 10px 12px; text-align: left; vertical-align: top; }
+  .md-table th { background: var(--bg-soft); font-weight: 600; }
 
   .sources { margin-top: 22px; }
   .sources h3 { font-size: 14px; color: var(--muted); font-weight: 500; margin: 0 0 12px; text-transform: uppercase; letter-spacing:.4px; }
@@ -263,8 +298,8 @@
 <div id="view-login">
   <div class="login-wrap">
     <div class="login-card">
-      <div class="logo glogo" style="font-size:34px"><span class="c1">K</span><span class="c2">n</span><span class="c3">o</span><span class="c4">w</span><span class="c5">i</span></div>
-      <h1>Knowledge Assistant</h1>
+      <div class="logo glogo" style="font-size:34px"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span></div>
+      <h1>Searchify</h1>
       <p class="sub">Sign in with your work email</p>
       <form id="loginForm">
         <div class="field">
@@ -287,21 +322,48 @@
 <div id="view-home" style="display:none">
   <div class="home centered" id="home">
     <div class="home-logo">
-      <div class="glogo"><span class="c1">K</span><span class="c2">n</span><span class="c3">o</span><span class="c4">w</span><span class="c5">l</span><span class="c6">y</span></div>
+      <div class="glogo"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span></div>
       <div class="gtag">Ask anything about our products, processes and docs</div>
     </div>
 
     <div class="searchbar">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <textarea id="q" rows="1" placeholder="Ask a question…" autocomplete="off"></textarea>
-      <button class="mic" id="micBtn" title="Record your question" aria-label="Record your question">
+      <button class="mic" id="micBtn" title="Open voice recorder" aria-label="Open voice recorder">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V23h2v-3.06A9 9 0 0 0 21 11h-2z" fill="currentColor"/></svg>
       </button>
+      <button class="send-inline" id="sendInlineBtn">Send</button>
+    </div>
+
+    <div class="composer-tools">
+      <button class="tool-btn" id="voicePanelToggleBtn">Voice controls</button>
+      <div class="lang-switch">
+        <span style="font-size:12px; color:var(--muted); font-weight:600;">Language</span>
+        <button class="lang-chip active" id="langRuBtn" type="button">RU</button>
+        <button class="lang-chip" id="langEnBtn" type="button">EN</button>
+        <button class="lang-chip" id="langFrBtn" type="button">FR</button>
+        <button class="lang-chip" id="langAutoBtn" type="button">AUTO</button>
+      </div>
+    </div>
+
+    <div class="voice-panel" id="voicePanel" hidden>
+      <div class="voice-panel-row">
+        <button class="tool-btn" id="voiceStartBtn" type="button">Start recording</button>
+        <button class="tool-btn" id="voiceCancelBtn" type="button" hidden>Cancel</button>
+        <button class="tool-btn" id="voicePauseBtn" type="button" hidden>Pause</button>
+        <button class="tool-btn" id="voiceResumeBtn" type="button" hidden>Resume</button>
+        <button class="tool-btn" id="voiceSendBtn" type="button" hidden>Send</button>
+      </div>
+      <div class="voice-status-line">
+        <span class="voice-status-dot" id="voiceStatusDot"></span>
+        <span id="voicePanelStatus">Stage: Idle</span>
+        <span class="voice-countdown" id="voiceCountdown" hidden>10</span>
+      </div>
     </div>
     <div class="voicehint" id="voicehint"></div>
 
     <div class="home-actions" id="homeActions">
-      <button id="askBtn">Ask Knowly</button>
+      <button id="askBtn">Send</button>
       <button id="luckyBtn">I'm feeling curious</button>
     </div>
 
@@ -321,21 +383,186 @@ const API = {
   login: (email, password) => fetch('/api/auth/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email, password}) }),
   logout: () => fetch('/api/auth/logout', { method:'POST' }),
   changePw: (currentPassword, newPassword) => fetch('/api/auth/change-password', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({currentPassword, newPassword}) }),
-  ask: (question, inputMode) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode}) }),
+  ask: (question, inputMode, languageHint) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode, languageHint}) }),
   rate: (id, rating) => fetch(`/api/knowledge/queries/${id}/rating`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({rating}) }),
   feedback: (id, kind, text, rating) => fetch(`/api/knowledge/queries/${id}/feedback`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({kind, text, rating}) }),
   correction: (id, payload) => fetch(`/api/knowledge/queries/${id}/correction`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) }),
   history: () => fetch('/api/knowledge/history').then(r => r.ok ? r.json() : {queries:[]}),
-  transcribe: (blob) => { const fd = new FormData(); fd.append('audio', blob, 'question.webm'); return fetch('/api/knowledge/transcribe', { method:'POST', body: fd }); },
+  transcribe: (blob, language) => { const fd = new FormData(); fd.append('audio', blob, 'question.webm'); if (language) fd.append('language', language); return fetch('/api/knowledge/transcribe', { method:'POST', body: fd }); },
 };
 
 let currentUser = null;
 let lastQuery = null; // { id, rating }
+const I18N = {
+  ru: {
+    appTagline: 'Спрашивай что угодно о наших продуктах, процессах и документации',
+    askPlaceholder: 'Задай вопрос…',
+    send: 'Отправить',
+    voiceControls: 'Голосовые команды',
+    language: 'Язык',
+    startRecording: 'Начать запись',
+    startNewRecording: 'Новая запись',
+    cancel: 'Отменить',
+    pause: 'Пауза',
+    resume: 'Продолжить',
+    curious: 'Мне повезёт',
+    stageIdle: 'Стадия: ожидание',
+    stageRecording: 'Стадия: запись',
+    stagePaused: 'Стадия: пауза',
+    stageProcessing: 'Стадия: отправка голосового сообщения…',
+    stageReady: 'Стадия: готово к отправке',
+    stageSent: 'Стадия: отправлено',
+    stageDenied: 'Стадия: доступ к микрофону запрещён',
+    stageUnsupported: 'Стадия: браузер не поддерживается',
+    stageError: 'Стадия: ошибка',
+    idleHint: 'Голосовой ввод не активен.',
+    recordingHint: 'Запись идёт.',
+    pausedHint: 'Запись на паузе.',
+    processingHint: 'Отправляю аудио на расшифровку…',
+    readySendingHint: 'Текст готов. Отправляю вопрос…',
+    transcriptReady: 'Текст готов.',
+    micDenied: 'Доступ к микрофону запрещён.',
+    micUnsupported: 'Запись не поддерживается в этом браузере.',
+    voiceFailed: 'Не удалось обработать голос.',
+    typeLongerQuestion: 'Введи более длинный вопрос',
+    searching: 'Ищу по базе знаний…',
+    networkErrorRetry: 'Сетевая ошибка. Попробуй ещё раз.',
+    didYouMean: 'Возможно, вы искали:',
+    sources: 'Источники',
+    confidence: 'уверенность',
+    sourceOne: 'источник',
+    sourceMany: 'источников',
+    helpful: 'Это было полезно?',
+    suggestCorrection: '✏️ Предложить исправление',
+    thanksFeedback: 'Спасибо за отзыв',
+    signIn: 'Войти',
+    signingIn: 'Вход…',
+    signInFailed: 'Не удалось войти',
+    networkError: 'Сетевая ошибка',
+    loginHint: 'Аккаунты создаёт администратор. Попроси админа выдать доступ.',
+    email: 'Email',
+    password: 'Пароль',
+    voiceRecorderTitle: 'Открыть диктофон',
+  },
+  en: {
+    appTagline: 'Ask anything about our products, processes and docs',
+    askPlaceholder: 'Ask a question…',
+    send: 'Send',
+    voiceControls: 'Voice controls',
+    language: 'Language',
+    startRecording: 'Start recording',
+    startNewRecording: 'Start new recording',
+    cancel: 'Cancel',
+    pause: 'Pause',
+    resume: 'Resume',
+    curious: "I'm feeling curious",
+    stageIdle: 'Stage: Idle',
+    stageRecording: 'Stage: Recording',
+    stagePaused: 'Stage: Paused',
+    stageProcessing: 'Stage: Sending voice message…',
+    stageReady: 'Stage: Ready to send',
+    stageSent: 'Stage: Sent',
+    stageDenied: 'Stage: Microphone denied',
+    stageUnsupported: 'Stage: Unsupported browser',
+    stageError: 'Stage: Error',
+    idleHint: 'Voice input is idle.',
+    recordingHint: 'Recording is live.',
+    pausedHint: 'Recording is paused.',
+    processingHint: 'Sending audio for transcription…',
+    readySendingHint: 'Transcript ready. Sending question…',
+    transcriptReady: 'Transcript is ready.',
+    micDenied: 'Microphone access was denied.',
+    micUnsupported: 'Recording is not supported in this browser.',
+    voiceFailed: 'Voice transcription failed.',
+    typeLongerQuestion: 'Type a longer question',
+    searching: 'Searching the knowledge base…',
+    networkErrorRetry: 'Network error. Please try again.',
+    didYouMean: 'Did you mean:',
+    sources: 'Sources',
+    confidence: 'confidence',
+    sourceOne: 'source',
+    sourceMany: 'sources',
+    helpful: 'Was this helpful?',
+    suggestCorrection: '✏️ Suggest a correction',
+    thanksFeedback: 'Thanks for the feedback',
+    signIn: 'Sign in',
+    signingIn: 'Signing in…',
+    signInFailed: 'Sign in failed',
+    networkError: 'Network error',
+    loginHint: 'Accounts are created by an administrator. Ask your admin to send you access.',
+    email: 'Email',
+    password: 'Password',
+    voiceRecorderTitle: 'Open voice recorder',
+  },
+  fr: {
+    appTagline: 'Pose une question sur nos produits, processus et documentations',
+    askPlaceholder: 'Pose une question…',
+    send: 'Envoyer',
+    voiceControls: 'Commandes vocales',
+    language: 'Langue',
+    startRecording: 'Démarrer l’enregistrement',
+    startNewRecording: 'Nouvel enregistrement',
+    cancel: 'Annuler',
+    pause: 'Pause',
+    resume: 'Reprendre',
+    curious: 'Je me sens curieux',
+    stageIdle: 'Étape : en attente',
+    stageRecording: 'Étape : enregistrement',
+    stagePaused: 'Étape : pause',
+    stageProcessing: 'Étape : envoi du message vocal…',
+    stageReady: 'Étape : prêt à envoyer',
+    stageSent: 'Étape : envoyé',
+    stageDenied: 'Étape : micro refusé',
+    stageUnsupported: 'Étape : navigateur non pris en charge',
+    stageError: 'Étape : erreur',
+    idleHint: 'La saisie vocale est inactive.',
+    recordingHint: 'L’enregistrement est en cours.',
+    pausedHint: 'L’enregistrement est en pause.',
+    processingHint: 'Envoi de l’audio pour transcription…',
+    readySendingHint: 'Transcription prête. Envoi de la question…',
+    transcriptReady: 'La transcription est prête.',
+    micDenied: 'L’accès au micro a été refusé.',
+    micUnsupported: 'L’enregistrement n’est pas pris en charge dans ce navigateur.',
+    voiceFailed: 'La transcription vocale a échoué.',
+    typeLongerQuestion: 'Saisis une question plus longue',
+    searching: 'Recherche dans la base de connaissances…',
+    networkErrorRetry: 'Erreur réseau. Réessaie.',
+    didYouMean: 'Vouliez-vous dire :',
+    sources: 'Sources',
+    confidence: 'confiance',
+    sourceOne: 'source',
+    sourceMany: 'sources',
+    helpful: 'Est-ce utile ?',
+    suggestCorrection: '✏️ Proposer une correction',
+    thanksFeedback: 'Merci pour ton retour',
+    signIn: 'Se connecter',
+    signingIn: 'Connexion…',
+    signInFailed: 'Échec de la connexion',
+    networkError: 'Erreur réseau',
+    loginHint: 'Les comptes sont créés par un administrateur. Demande à ton admin de t’envoyer un accès.',
+    email: 'Email',
+    password: 'Mot de passe',
+    voiceRecorderTitle: 'Ouvrir l’enregistreur vocal',
+  },
+};
 
 // ---------- helpers ----------
 function $(id){ return document.getElementById(id); }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(name){ return (name||'U').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function detectBrowserLanguage(){
+  const raw = String(navigator.language || document.documentElement.lang || 'en').toLowerCase();
+  if (raw.startsWith('ru')) return 'ru';
+  if (raw.startsWith('fr')) return 'fr';
+  return 'en';
+}
+function currentUiLanguage(){
+  return preferredAnswerLanguage === 'auto' ? detectBrowserLanguage() : preferredAnswerLanguage;
+}
+function t(key){
+  const lang = currentUiLanguage();
+  return I18N[lang]?.[key] || I18N.en[key] || key;
+}
 
 function toast(msg){
   const m = $('toastMount');
@@ -349,13 +576,32 @@ function renderMarkdown(src){
   const lines = esc.split(/\r?\n/);
   let html = '', inUl = false, inOl = false;
   const closeLists = () => { if(inUl){html+='</ul>';inUl=false;} if(inOl){html+='</ol>';inOl=false;} };
+  const isTableLine = (line) => /^\s*\|.*\|\s*$/.test(line);
+  const isTableSeparator = (line) => {
+    const trimmed = line.trim();
+    return isTableLine(trimmed) && /^\|?(\s*:?-{3,}:?\s*\|)+\s*$/.test(trimmed);
+  };
+  const splitTableCells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
   const inline = (t) => t
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-  for (let raw of lines){
-    const line = raw.trimEnd();
+  for (let i = 0; i < lines.length; i += 1){
+    const line = lines[i].trimEnd();
     let m;
+    if (isTableLine(line) && isTableSeparator(lines[i + 1] || '')){
+      closeLists();
+      const header = splitTableCells(line);
+      const rows = [];
+      let offset = i + 2;
+      while (offset < lines.length && isTableLine(lines[offset])) {
+        rows.push(splitTableCells(lines[offset]));
+        offset += 1;
+      }
+      html += `<div class="md-table-wrap"><table class="md-table"><thead><tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${header.map((_, idx) => `<td>${inline(row[idx] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      i = offset - 1;
+      continue;
+    }
     if ((m = line.match(/^(#{1,4})\s+(.*)$/))){ closeLists(); html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; continue; }
     if ((m = line.match(/^\s*[-*]\s+(.*)$/))){ if(!inUl){closeLists();html+='<ul>';inUl=true;} html += `<li>${inline(m[1])}</li>`; continue; }
     if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))){ if(!inOl){closeLists();html+='<ol>';inOl=true;} html += `<li>${inline(m[1])}</li>`; continue; }
@@ -368,103 +614,200 @@ function renderMarkdown(src){
 
 function confColor(c){ if(c>=0.6) return 'var(--green)'; if(c>=0.4) return 'var(--amber)'; return 'var(--red)'; }
 
-// ---------- voice (server-side Whisper via MediaRecorder, manual start/stop) ----------
-// Manual control: caller starts recording, the user speaks the full question,
-// then the caller stops. On stop we upload the audio and transcribe server-side.
+// ---------- voice (browser speech recognition only, manual start/stop) ----------
 function makeVoiceController(handlers){
-  // handlers: { onState(state), onTranscript(text) }
-  let mediaRecorder = null, chunks = [], stream = null, recording = false;
+  let recognition = null;
+  let recording = false;
+  let paused = false;
+  let endingMode = null;
+  let finalTranscript = '';
+  let interimTranscript = '';
 
-  async function startBrowserSpeechFallback(detail){
+  function createRecognition(){
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return false;
-
-    handlers.onState('fallback', detail || 'Server transcription is unavailable. Switching to browser speech recognition…');
-
-    return await new Promise((resolve) => {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      let transcript = '';
-
-      recognition.onstart = () => {
-        handlers.onState('recording', '🟡 Browser fallback is listening… speak now.');
-      };
-      recognition.onresult = (event) => {
-        transcript = Array.from(event.results || [])
-          .map((result) => result?.[0]?.transcript?.trim() || '')
-          .filter(Boolean)
-          .join(' ')
-          .trim();
-      };
-      recognition.onerror = (event) => {
-        handlers.onState('error', `Server STT is unavailable, and browser fallback failed: ${event.error || 'unknown error'}`);
-        resolve(true);
-      };
-      recognition.onend = () => {
-        if (transcript) {
-          handlers.onTranscript(transcript);
-          handlers.onState('done');
-        } else {
-          handlers.onState('error', 'Server STT is unavailable, and browser fallback did not capture any speech.');
-        }
-        resolve(true);
-      };
-
-      try {
-        recognition.start();
-      } catch {
-        resolve(false);
-      }
-    });
+    if (!SpeechRecognition) return null;
+    const next = new SpeechRecognition();
+    next.continuous = true;
+    next.interimResults = true;
+    next.maxAlternatives = 1;
+    next.lang = speechLocaleForLanguage(currentLanguageHint()) || navigator.language || document.documentElement.lang || 'en-US';
+    return next;
   }
 
-  async function start(){
+  function bestTranscript(){
+    return [finalTranscript, interimTranscript].filter(Boolean).join(' ').trim();
+  }
+
+  function pushTranscript(){
+    const transcript = bestTranscript();
+    if (transcript) handlers.onTranscript(transcript);
+    return transcript;
+  }
+
+  function start(){
     if (recording) return;
-    if (!navigator.mediaDevices || !window.MediaRecorder){
-      handlers.onState('unsupported'); return;
+    const nextRecognition = createRecognition();
+    if (!nextRecognition) {
+      handlers.onState('unsupported');
+      return;
     }
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch(_){ handlers.onState('denied'); return; }
-    chunks = [];
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      if (stream) stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
-      handlers.onState('processing');
-      try {
-        const r = await API.transcribe(blob);
-        const data = await r.json().catch(()=>({}));
-        if (!r.ok){
-          const detail = data.error || 'Transcription failed';
-          const shouldFallback = /insufficient_quota|quota|not configured|transcription failed|network error/i.test(String(detail));
-          if (shouldFallback) {
-            const startedFallback = await startBrowserSpeechFallback('Server Whisper is unavailable right now. Switching to browser speech recognition…');
-            if (startedFallback) return;
-          }
-          handlers.onState('error', detail);
+
+    if (!paused) {
+      finalTranscript = '';
+      interimTranscript = '';
+    }
+
+    endingMode = null;
+    recognition = nextRecognition;
+    recognition.onstart = () => {
+      recording = true;
+      paused = false;
+      handlers.onState('recording', t('stageRecording'));
+    };
+    recognition.onresult = (event) => {
+      interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const piece = event.results[i]?.[0]?.transcript?.trim() || '';
+        if (!piece) continue;
+        if (event.results[i].isFinal) {
+          finalTranscript = `${finalTranscript} ${piece}`.trim();
+        } else {
+          interimTranscript = `${interimTranscript} ${piece}`.trim();
+        }
+      }
+      pushTranscript();
+    };
+    recognition.onerror = (event) => {
+      const mode = endingMode;
+      const detail = event?.error || 'unknown error';
+      recognition = null;
+      recording = false;
+      interimTranscript = '';
+      endingMode = null;
+
+      if (mode === 'cancel') {
+        finalTranscript = '';
+        paused = false;
+        handlers.onState('idle', t('stageIdle'));
+        return;
+      }
+
+      if (mode === 'pause') {
+        paused = true;
+        handlers.onState('paused', t('stagePaused'));
+        return;
+      }
+
+      const transcript = pushTranscript();
+      if (mode === 'send' && transcript) {
+        paused = false;
+        handlers.onState('done', t('stageReady'));
+        return;
+      }
+
+      if (detail === 'not-allowed' || detail === 'service-not-allowed') {
+        finalTranscript = '';
+        paused = false;
+        handlers.onState('denied', t('stageDenied'));
+        return;
+      }
+
+      if (transcript) {
+        paused = false;
+        handlers.onState('done', t('stageReady'));
+        return;
+      }
+
+      paused = false;
+      handlers.onState('error', `${t('voiceFailed')} (${detail})`);
+    };
+    recognition.onend = () => {
+      const mode = endingMode;
+      const transcript = pushTranscript();
+      recognition = null;
+      recording = false;
+      interimTranscript = '';
+      endingMode = null;
+
+      if (mode === 'cancel') {
+        finalTranscript = '';
+        paused = false;
+        handlers.onState('idle', t('stageIdle'));
+        return;
+      }
+
+      if (mode === 'pause') {
+        paused = true;
+        handlers.onState('paused', t('stagePaused'));
+        return;
+      }
+
+      if (mode === 'send') {
+        paused = false;
+        if (transcript) {
+          handlers.onState('done', t('stageReady'));
           return;
         }
-        handlers.onTranscript(data.text || '');
-        handlers.onState('done');
-      } catch(_){
-        const startedFallback = await startBrowserSpeechFallback('Network issue during server transcription. Switching to browser speech recognition…');
-        if (!startedFallback) handlers.onState('error', 'Network error during transcription');
+        handlers.onState('error', t('voiceFailed'));
+        return;
       }
+
+      paused = false;
+      if (transcript) handlers.onState('done', t('stageReady'));
+      else handlers.onState('idle', t('stageIdle'));
     };
-    mediaRecorder.start();
-    recording = true;
-    handlers.onState('recording');
+
+    try {
+      recognition.start();
+    } catch (_){
+      recognition = null;
+      recording = false;
+      paused = false;
+      handlers.onState('denied', t('stageDenied'));
+    }
   }
+
+  function pause(){
+    if (!recording || paused || !recognition) return;
+    endingMode = 'pause';
+    try { recognition.stop(); } catch(_){}
+  }
+
+  function resume(){
+    if (!paused) return;
+    start();
+  }
+
   function stop(){
-    if (!recording || !mediaRecorder) return;
-    recording = false;
-    try { mediaRecorder.stop(); } catch(_){}
+    if (paused) {
+      const transcript = pushTranscript();
+      paused = false;
+      if (transcript) handlers.onState('done', t('stageReady'));
+      else handlers.onState('error', t('voiceFailed'));
+      return;
+    }
+    if (!recording || !recognition) return;
+    endingMode = 'send';
+    handlers.onState('processing', t('stageProcessing'));
+    try { recognition.stop(); } catch(_){}
   }
-  return { start, stop, isRecording: () => recording };
+
+  function cancel(){
+    finalTranscript = '';
+    interimTranscript = '';
+    if (recognition && recording) {
+      endingMode = 'cancel';
+      try { recognition.abort(); } catch(_){}
+      return;
+    }
+    recognition = null;
+    recording = false;
+    paused = false;
+    endingMode = null;
+    handlers.onState('idle', t('stageIdle'));
+  }
+
+  return { start, stop, pause, resume, cancel, isRecording: () => recording, isPaused: () => paused };
 }
 
 function autoGrow(el){ el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; }
@@ -503,14 +846,14 @@ function showApp(){
 $('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = $('loginSubmit'); const err = $('loginErr');
-  err.textContent = ''; btn.disabled = true; btn.textContent = 'Signing in…';
+  err.textContent = ''; btn.disabled = true; btn.textContent = t('signingIn');
   try {
     const r = await API.login($('loginEmail').value.trim(), $('loginPassword').value);
     const data = await r.json().catch(()=>({}));
-    if (!r.ok){ err.textContent = data.error || 'Sign in failed'; return; }
+    if (!r.ok){ err.textContent = data.error || t('signInFailed'); return; }
     currentUser = data.user; showApp();
-  } catch(_){ err.textContent = 'Network error'; }
-  finally { btn.disabled = false; btn.textContent = 'Sign in'; }
+  } catch(_){ err.textContent = t('networkError'); }
+  finally { btn.disabled = false; btn.textContent = t('signIn'); }
 });
 
 // ---------- user menu ----------
@@ -526,23 +869,111 @@ $('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add(
 // SEARCH
 // ===================================================================
 let pendingInputMode = 'text';
+let preferredAnswerLanguage = 'ru';
+let voiceCountdownTimer = null;
+let voiceWorkflowStage = 'idle';
+let voiceAutoSubmitPending = false;
+
+function detectQuestionLanguage(text){
+  const sample = String(text || '').trim();
+  if (!sample) return 'en';
+  if (/[А-Яа-яЁёІіЎў]/.test(sample)) return 'ru';
+  if (/[àâæçéèêëîïôœùûüÿ]/i.test(sample)) return 'fr';
+
+  const lowered = sample.toLowerCase();
+  const frenchSignals = [
+    'bonjour', 'bonsoir', 'merci', 'pourquoi', 'comment', 'avec', 'sans', 'dans',
+    'est', 'sont', 'être', 'avoir', 'peut', 'livraison', 'transport', 'question',
+  ];
+  const frenchHits = frenchSignals.filter((word) => lowered.includes(word)).length;
+  return frenchHits >= 2 ? 'fr' : 'en';
+}
+
+function speechLocaleForLanguage(languageHint){
+  if (languageHint === 'ru') return 'ru-RU';
+  if (languageHint === 'fr') return 'fr-FR';
+  return 'en-US';
+}
+
+function currentLanguageHint(){
+  return preferredAnswerLanguage === 'auto' ? detectQuestionLanguage($('q').value) : preferredAnswerLanguage;
+}
+
+function applyTranslations(){
+  const gtag = document.querySelector('.gtag');
+  if (gtag) gtag.textContent = t('appTagline');
+  $('q').placeholder = t('askPlaceholder');
+  $('sendInlineBtn').textContent = t('send');
+  $('askBtn').textContent = t('send');
+  $('voicePanelToggleBtn').textContent = t('voiceControls');
+  const langLabel = document.querySelector('.lang-switch span');
+  if (langLabel) langLabel.textContent = t('language');
+  $('luckyBtn').textContent = t('curious');
+  $('micBtn').title = t('voiceRecorderTitle');
+  $('micBtn').setAttribute('aria-label', t('voiceRecorderTitle'));
+  const loginHint = document.querySelector('.login-hint');
+  if (loginHint) loginHint.textContent = t('loginHint');
+  const emailLabel = document.querySelector('label[for="loginEmail"]');
+  if (emailLabel) emailLabel.textContent = t('email');
+  const passwordLabel = document.querySelector('label[for="loginPassword"]');
+  if (passwordLabel) passwordLabel.textContent = t('password');
+  $('loginSubmit').textContent = t('signIn');
+  setVoiceWorkflowStage(voiceWorkflowStage);
+}
+
+function setPreferredAnswerLanguage(next){
+  preferredAnswerLanguage = next;
+  $('langRuBtn').classList.toggle('active', next === 'ru');
+  $('langEnBtn').classList.toggle('active', next === 'en');
+  $('langFrBtn').classList.toggle('active', next === 'fr');
+  $('langAutoBtn').classList.toggle('active', next === 'auto');
+  applyTranslations();
+}
+
+function stopVoiceCountdown(){
+  if (voiceCountdownTimer) {
+    clearInterval(voiceCountdownTimer);
+    voiceCountdownTimer = null;
+  }
+  $('voiceCountdown').hidden = true;
+  $('voiceCountdown').textContent = '10';
+}
+
+function startVoiceCountdown(){
+  stopVoiceCountdown();
+  let value = 10;
+  $('voiceCountdown').hidden = false;
+  $('voiceCountdown').textContent = String(value);
+  voiceCountdownTimer = setInterval(() => {
+    value -= 1;
+    if (value <= 0) {
+      stopVoiceCountdown();
+      return;
+    }
+    $('voiceCountdown').textContent = String(value);
+  }, 1000);
+}
 
 async function runSearch(){
   const q = $('q').value.trim();
-  if (q.length < 3) { toast('Type a longer question'); return; }
+  if (q.length < 3) { toast(t('typeLongerQuestion')); return; }
   const inputMode = pendingInputMode; pendingInputMode = 'text';
   $('home').classList.remove('centered'); $('home').classList.add('results');
   const area = $('resultsArea');
   area.style.display = '';
-  area.innerHTML = `<div class="loading"><span class="spinner"></span> Searching the knowledge base…</div>`;
+  area.innerHTML = `<div class="loading"><span class="spinner"></span> ${escapeHtml(t('searching'))}</div>`;
   try {
-    const r = await API.ask(q, inputMode);
+    const r = await API.ask(q, inputMode, currentLanguageHint());
     if (r.status === 401){ showLogin(); return; }
     const data = await r.json();
     if (!r.ok){ area.innerHTML = `<div class="empty">${escapeHtml(data.error||'Something went wrong')}</div>`; return; }
     lastQuery = { id: data.queryId, rating: null };
     renderAnswer(data);
-  } catch(_){ area.innerHTML = `<div class="empty">Network error. Please try again.</div>`; }
+    if (inputMode === 'voice') setVoiceWorkflowStage('sent');
+  } catch(_){ area.innerHTML = `<div class="empty">${escapeHtml(t('networkErrorRetry'))}</div>`; }
+  finally {
+    voiceAutoSubmitPending = false;
+  }
 }
 
 function sourceBadge(type){
@@ -555,9 +986,12 @@ function renderAnswer(data){
   const area = $('resultsArea');
   const conf = typeof data.confidence === 'number' ? data.confidence : 0;
   const sources = (data.sources || []);
+  const suggestion = data.suggestion && data.suggestion.suggested
+    ? `<div class="chip" style="margin-bottom:12px;">${escapeHtml(t('didYouMean'))} <strong>${escapeHtml(data.suggestion.suggested)}</strong></div>`
+    : '';
   const sourcesHtml = sources.length ? `
     <div class="sources">
-      <h3>Sources</h3>
+      <h3>${escapeHtml(t('sources'))}</h3>
       ${sources.map(s => {
         const hasUrl = !!s.sourceUrl;
         const titleHtml = hasUrl
@@ -565,7 +999,8 @@ function renderAnswer(data){
           : `<span class="s-title">${escapeHtml(s.title)}</span>`;
         return `<div class="source">
           <div class="s-top">${sourceBadge(s.sourceType)} ${titleHtml}</div>
-          ${hasUrl ? `<div class="s-url">${escapeHtml(s.sourceUrl)}</div>` : `<div class="s-path">${escapeHtml(s.path||'')}</div>`}
+          ${hasUrl ? `<div class="s-url">${escapeHtml(s.sourceUrl)}</div>` : ''}
+          ${s.path ? `<div class="s-path">${escapeHtml(s.path)}</div>` : ''}
           ${s.snippet ? `<div class="s-snippet">${escapeHtml(s.snippet)}</div>` : ''}
         </div>`;
       }).join('')}
@@ -573,21 +1008,22 @@ function renderAnswer(data){
 
   area.innerHTML = `
     <div class="answer-meta">
-      <span class="chip"><span class="conf-dot" style="background:${confColor(conf)}"></span> ${Math.round(conf*100)}% confidence</span>
+      <span class="chip"><span class="conf-dot" style="background:${confColor(conf)}"></span> ${Math.round(conf*100)}% ${escapeHtml(t('confidence'))}</span>
       ${data.intent ? `<span class="chip">${escapeHtml(data.intent)}</span>` : ''}
       <span class="chip">${data.latencyMs||0} ms</span>
-      <span class="chip">${sources.length} source${sources.length===1?'':'s'}</span>
+      <span class="chip">${sources.length} ${escapeHtml(sources.length===1 ? t('sourceOne') : t('sourceMany'))}</span>
     </div>
+    ${suggestion}
     <div class="answer">${renderMarkdown(data.answer||'')}</div>
     ${sourcesHtml}
     <div class="feedback-row">
-      <span class="rate-label">Was this helpful?</span>
+      <span class="rate-label">${escapeHtml(t('helpful'))}</span>
       <div class="emojis" id="emojis">
         ${[1,2,3,4,5].map(n => `<button class="emoji" data-rating="${n}" title="${['Very unhappy','Unhappy','Neutral','Happy','Very happy'][n-1]}">${['😣','🙁','😐','🙂','😄'][n-1]}</button>`).join('')}
       </div>
       <span class="rate-thanks" id="rateThanks"></span>
       <span style="flex:1"></span>
-      <button class="action-btn" id="suggestBtn">✏️ Suggest a correction</button>
+      <button class="action-btn" id="suggestBtn">${escapeHtml(t('suggestCorrection'))}</button>
     </div>
   `;
 
@@ -604,7 +1040,7 @@ async function onRate(rating){
   document.querySelectorAll('#emojis .emoji').forEach(b => {
     b.classList.toggle('selected', parseInt(b.dataset.rating,10) === rating);
   });
-  $('rateThanks').textContent = 'Thanks for the feedback';
+  $('rateThanks').textContent = t('thanksFeedback');
   try {
     const r = await API.rate(lastQuery.id, rating);
     const data = await r.json().catch(()=>({}));
@@ -613,32 +1049,150 @@ async function onRate(rating){
 }
 
 $('askBtn').addEventListener('click', runSearch);
+$('sendInlineBtn').addEventListener('click', runSearch);
 $('luckyBtn').addEventListener('click', () => {
   const samples = ['Which systems are affected when we add a new carrier type in TMS?','How do carrier billing rules get resolved?','What is the production deployment runbook?','How do I onboard a new engineer?'];
   $('q').value = samples[Math.floor(Math.random()*samples.length)];
+  autoGrow($('q'));
   runSearch();
 });
 $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); runSearch(); } });
 $('q').addEventListener('input', () => autoGrow($('q')));
+$('langRuBtn').addEventListener('click', () => setPreferredAnswerLanguage('ru'));
+$('langEnBtn').addEventListener('click', () => setPreferredAnswerLanguage('en'));
+$('langFrBtn').addEventListener('click', () => setPreferredAnswerLanguage('fr'));
+$('langAutoBtn').addEventListener('click', () => setPreferredAnswerLanguage('auto'));
+$('voicePanelToggleBtn').addEventListener('click', () => $('voicePanel').toggleAttribute('hidden'));
 
-// ---------- voice search: manual start/stop -> server transcription ----------
+function setVoiceButtonVisibility(id, visible, label){
+  const el = $(id);
+  if (!el) return;
+  if (label) el.textContent = label;
+  el.hidden = !visible;
+}
+
+function setVoiceWorkflowStage(stage, detail){
+  voiceWorkflowStage = stage;
+  const mic = $('micBtn');
+  const dot = $('voiceStatusDot');
+  const status = $('voicePanelStatus');
+  dot.classList.remove('recording', 'processing', 'ready');
+  mic.classList.remove('recording', 'processing');
+
+  if (stage === 'recording') {
+    mic.classList.add('recording');
+    dot.classList.add('recording');
+  } else if (stage === 'paused') {
+    mic.classList.add('recording');
+    dot.classList.add('recording');
+  } else if (stage === 'processing') {
+    mic.classList.add('processing');
+    dot.classList.add('processing');
+  } else if (stage === 'sent') {
+    dot.classList.add('ready');
+  }
+
+  setVoiceButtonVisibility('voiceStartBtn', stage === 'idle' || stage === 'sent' || stage === 'error', stage === 'sent' ? t('startNewRecording') : t('startRecording'));
+  setVoiceButtonVisibility('voiceCancelBtn', stage === 'recording' || stage === 'paused', t('cancel'));
+  setVoiceButtonVisibility('voicePauseBtn', stage === 'recording', t('pause'));
+  setVoiceButtonVisibility('voiceResumeBtn', stage === 'paused', t('resume'));
+  setVoiceButtonVisibility('voiceSendBtn', stage === 'recording' || stage === 'paused' || stage === 'ready', t('send'));
+
+  const defaultStatus = (
+    stage === 'recording' ? t('stageRecording') :
+    stage === 'paused' ? t('stagePaused') :
+    stage === 'processing' ? t('stageProcessing') :
+    stage === 'ready' ? t('stageReady') :
+    stage === 'sent' ? t('stageSent') :
+    stage === 'denied' ? t('stageDenied') :
+    stage === 'unsupported' ? t('stageUnsupported') :
+    stage === 'error' ? t('stageError') :
+    t('stageIdle')
+  );
+  status.textContent = detail || defaultStatus;
+}
+
+// ---------- voice search: browser speech recognition ----------
 const voiceHint = $('voicehint');
 const searchVoice = makeVoiceController({
   onState: (state, detail) => {
-    const mic = $('micBtn');
-    if (state === 'recording'){ mic.classList.add('recording'); voiceHint.textContent = detail || '🔴 Recording… press the mic again to stop'; }
-    else if (state === 'processing'){ mic.classList.remove('recording'); mic.classList.add('processing'); voiceHint.innerHTML = '<span class="spinner"></span> Transcribing your question…'; }
-    else if (state === 'fallback'){ mic.classList.remove('processing'); voiceHint.textContent = detail || 'Server Whisper is unavailable. Using browser speech recognition…'; }
-    else if (state === 'done'){ mic.classList.remove('processing'); voiceHint.textContent = 'Transcribed. Review the text and press Ask.'; pendingInputMode = 'voice'; autoGrow($('q')); $('q').focus(); }
-    else if (state === 'denied'){ mic.classList.remove('recording','processing'); voiceHint.textContent = 'Microphone access was denied.'; }
-    else if (state === 'unsupported'){ voiceHint.textContent = 'Recording is not supported in this browser.'; }
-    else if (state === 'error'){ mic.classList.remove('recording','processing'); voiceHint.textContent = detail || 'Voice transcription failed.'; }
+    if (state === 'recording'){
+      setVoiceWorkflowStage('recording', detail);
+      voiceHint.textContent = t('recordingHint');
+      stopVoiceCountdown();
+    } else if (state === 'paused'){
+      setVoiceWorkflowStage('paused', detail);
+      voiceHint.textContent = t('pausedHint');
+      stopVoiceCountdown();
+    } else if (state === 'processing'){
+      setVoiceWorkflowStage('processing', detail);
+      voiceHint.innerHTML = `<span class="spinner"></span> ${escapeHtml(t('processingHint'))}`;
+      startVoiceCountdown();
+    } else if (state === 'done'){
+      pendingInputMode = 'voice';
+      autoGrow($('q'));
+      $('q').focus();
+      stopVoiceCountdown();
+      if (voiceAutoSubmitPending) {
+        setVoiceWorkflowStage('processing', t('stageProcessing'));
+        voiceHint.innerHTML = `<span class="spinner"></span> ${escapeHtml(t('readySendingHint'))}`;
+        runSearch();
+      } else {
+        setVoiceWorkflowStage('ready', detail);
+        voiceHint.textContent = t('transcriptReady');
+      }
+    } else if (state === 'denied'){
+      setVoiceWorkflowStage('denied', detail || t('stageDenied'));
+      voiceHint.textContent = t('micDenied');
+      stopVoiceCountdown();
+    } else if (state === 'unsupported'){
+      setVoiceWorkflowStage('unsupported', detail || t('stageUnsupported'));
+      voiceHint.textContent = t('micUnsupported');
+      stopVoiceCountdown();
+    } else if (state === 'error'){
+      setVoiceWorkflowStage('error', detail || t('stageError'));
+      voiceHint.textContent = detail || t('voiceFailed');
+      stopVoiceCountdown();
+      voiceAutoSubmitPending = false;
+    } else {
+      setVoiceWorkflowStage('idle', detail || t('stageIdle'));
+      voiceHint.textContent = t('idleHint');
+      stopVoiceCountdown();
+      voiceAutoSubmitPending = false;
+    }
   },
-  onTranscript: (text) => { $('q').value = text; },
+  onTranscript: (text) => {
+    $('q').value = text;
+    autoGrow($('q'));
+  },
 });
-$('micBtn').addEventListener('click', () => {
-  if (searchVoice.isRecording()) searchVoice.stop(); else searchVoice.start();
+$('micBtn').addEventListener('click', async () => {
+  $('voicePanel').hidden = false;
+  if (voiceWorkflowStage === 'recording' || voiceWorkflowStage === 'paused' || voiceWorkflowStage === 'processing') return;
+  voiceAutoSubmitPending = false;
+  await searchVoice.start();
 });
+$('voiceStartBtn').addEventListener('click', () => searchVoice.start());
+$('voiceCancelBtn').addEventListener('click', () => {
+  voiceAutoSubmitPending = false;
+  searchVoice.cancel();
+});
+$('voicePauseBtn').addEventListener('click', () => searchVoice.pause());
+$('voiceResumeBtn').addEventListener('click', () => searchVoice.resume());
+$('voiceSendBtn').addEventListener('click', () => {
+  pendingInputMode = 'voice';
+  if (voiceWorkflowStage === 'ready') {
+    voiceAutoSubmitPending = false;
+    runSearch();
+    return;
+  }
+  if (voiceWorkflowStage === 'recording' || voiceWorkflowStage === 'paused') {
+    voiceAutoSubmitPending = true;
+    searchVoice.stop();
+  }
+});
+applyTranslations();
+setVoiceWorkflowStage('idle');
 
 // ===================================================================
 // FEEDBACK MODAL (auto-opens when rating < 4)
@@ -684,7 +1238,7 @@ function openFeedback(rating){
       if (state === 'recording'){ m.classList.add('recording'); $('fbMicState').textContent = detail || 'Recording… click to stop'; }
       else if (state === 'processing'){ m.classList.remove('recording'); $('fbMicState').innerHTML = '<span class="spinner"></span> Transcribing…'; }
       else if (state === 'fallback'){ m.classList.remove('recording'); $('fbMicState').textContent = detail || 'Server Whisper unavailable. Browser speech fallback started…'; }
-      else if (state === 'done'){ $('fbMicState').textContent = 'Captured by voice'; }
+      else if (state === 'done'){ $('fbMicState').textContent = detail || 'Captured by voice'; }
       else if (state === 'denied'){ $('fbMicState').textContent = 'Mic access denied'; }
       else if (state === 'unsupported'){ $('fbMicState').textContent = 'Recording not supported'; }
       else if (state === 'error'){ m.classList.remove('recording'); $('fbMicState').textContent = detail || 'Voice failed'; }
@@ -748,7 +1302,7 @@ function openCorrection(){
       if (state === 'recording'){ m.classList.add('recording'); $('crMicState').textContent = detail || 'Recording… click to stop'; }
       else if (state === 'processing'){ m.classList.remove('recording'); $('crMicState').innerHTML = '<span class="spinner"></span> Transcribing…'; }
       else if (state === 'fallback'){ m.classList.remove('recording'); $('crMicState').textContent = detail || 'Server Whisper unavailable. Browser speech fallback started…'; }
-      else if (state === 'done'){ $('crMicState').textContent = 'Captured by voice'; }
+      else if (state === 'done'){ $('crMicState').textContent = detail || 'Captured by voice'; }
       else if (state === 'denied'){ $('crMicState').textContent = 'Mic access denied'; }
       else if (state === 'unsupported'){ $('crMicState').textContent = 'Recording not supported'; }
       else if (state === 'error'){ m.classList.remove('recording'); $('crMicState').textContent = detail || 'Voice failed'; }
