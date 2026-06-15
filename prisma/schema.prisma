@@ -626,6 +626,17 @@ model Idea {
   @@index([status, createdAt])
 }
 
+// Снапшот состояния качества (Quality Coverage Analytics) — для анализа динамики.
+model QualitySnapshot {
+  id        String   @id @default(cuid())
+  label     String?
+  data      Json     // { kpi, modules:[{name,size,score,...}] }
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([createdAt])
+}
+
 model AppSession {
   id        String   @id @default(cuid())
   token     String   @unique

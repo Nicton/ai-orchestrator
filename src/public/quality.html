@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quality Coverage Analytics — Searchify</title>
+<style>
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; }
+  *{box-sizing:border-box} body{margin:0;font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+  a{color:var(--blue);text-decoration:none}
+  header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .title{font-size:17px;font-weight:600}.spacer{flex:1}
+  .toplink{color:var(--muted);cursor:pointer;font-size:14px}.toplink:hover{color:var(--blue)}
+  .wrap{max-width:1280px;margin:18px auto;padding:0 18px}
+  .kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:140px;flex:1}
+  .kpi .v{font-size:26px;font-weight:700}.kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .tab{padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#3c4043;cursor:pointer;font-size:14px}
+  .tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+  .muted{color:var(--muted);font-size:13px}
+  .crumb{font-size:13px;margin-bottom:8px}.crumb b{cursor:pointer;color:var(--blue)}
+  svg.tm{width:100%;height:560px;display:block;background:#eef1f6;border-radius:8px}
+  .tm rect{cursor:pointer;stroke:#fff;stroke-width:2}
+  .tm text{fill:#fff;font-size:12px;font-weight:600;pointer-events:none;paint-order:stroke;stroke:rgba(0,0,0,.25);stroke-width:.5px}
+  .legend{display:flex;gap:4px;align-items:center;font-size:12px;color:var(--muted);margin-top:8px}
+  .legend i{width:22px;height:12px;display:inline-block}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase}
+  .cell{display:inline-block;width:20px;text-align:center;border-radius:4px;font-weight:700}
+  .ok{color:#137333}.no{color:#c5221f}.pa{color:#b06000}.nd{color:#9aa0a6}
+  .rk-High{color:#c5221f;font-weight:700}.rk-Medium{color:#b06000}.rk-Low{color:#137333}
+  select,input{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit}
+  button{font-family:inherit;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:7px 13px;font-size:13px;background:#fff}
+  button.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .chip{font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:14px;cursor:pointer}
+  .chip.on{background:#e8f0fe;border-color:var(--blue);color:var(--blue)}
+  .pane{display:none}.pane.active{display:block}
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="title">📊 Quality Coverage Analytics</span>
+  <span class="muted">единый движок · 3 представления</span>
+  <span class="spacer"></span>
+  <span class="toplink" onclick="location.href='/'">← Поиск</span>
+  <span class="toplink" onclick="location.href='/graph'">Graph</span>
+</header>
+<div class="wrap">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card" style="padding:12px 16px">
+    <span class="muted">Глубина покрытия (что считать за 100%):</span>
+    <span id="depth"></span>
+    <span class="muted" id="depthNote" style="margin-left:8px"></span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-p="treemap">Quality Treemap</div>
+    <div class="tab" data-p="matrix">Traceability Matrix</div>
+    <div class="tab" data-p="graph">Dependency Graph</div>
+    <div class="tab" data-p="snap">Снапшоты / Динамика</div>
+  </div>
+
+  <div class="pane active" id="p-treemap">
+    <div class="card">
+      <div class="crumb" id="crumb"></div>
+      <svg class="tm" id="tm"></svg>
+      <div class="legend">Покрытие: <span>0%</span>
+        <i style="background:#b71c1c"></i><i style="background:#e53935"></i><i style="background:#fb8c00"></i><i style="background:#fdd835"></i><i style="background:#9ccc65"></i><i style="background:#2e7d32"></i>
+        <span>100%</span> · размер блока = число требований/доков · клик — провалиться</div>
+    </div>
+  </div>
+
+  <div class="pane" id="p-matrix">
+    <div class="card">
+      <div style="margin-bottom:10px">Модуль: <select id="mfilter"><option value="">Все</option></select>
+        <span class="muted" id="mcount"></span></div>
+      <div style="max-height:620px;overflow:auto"><table id="matrix"></table></div>
+    </div>
+  </div>
+
+  <div class="pane" id="p-graph">
+    <div class="card">
+      <h3 style="margin-top:0">Dependency Graph</h3>
+      <div class="muted">Граф связей требование → документация → код → Confluence для расследования: почему модуль красный и чего не хватает. Открывается в полноэкранном виде с фильтрами/поиском/рисками.</div>
+      <p><button class="pri" onclick="location.href='/graph'">Открыть граф зависимостей →</button></p>
+    </div>
+  </div>
+
+  <div class="pane" id="p-snap">
+    <div class="card">
+      <div style="margin-bottom:10px">
+        <input id="snapLabel" placeholder="метка снапшота (опц.)" />
+        <button class="pri" id="snapSave">📸 Сохранить снапшот</button>
+        <span class="muted" id="snapMsg"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        Сравнить: <select id="snapA"></select> → <select id="snapB"></select> <button id="snapCmp">Сравнить</button>
+      </div>
+      <div id="snapDiff"></div>
+    </div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+let DEPTH=['requirements','documentation'];
+let DATA=null, CURRENT=null; // CURRENT = модуль для drill
+
+const ALL_LAYERS=[['requirements','Требования'],['documentation','Документация'],['tests','Тесты'],['automation','Автоматизация'],['execution','Прогоны']];
+
+function color(s){ // 0..100
+  const stops=[[0,'#b71c1c'],[40,'#e53935'],[55,'#fb8c00'],[70,'#fdd835'],[85,'#9ccc65'],[100,'#2e7d32']];
+  for(let i=stops.length-1;i>=0;i--) if(s>=stops[i][0]) return stops[i][1];
+  return stops[0][1];
+}
+
+async function boot(){
+  const me=await fetch('/api/auth/me'); if(!me.ok){location.href='/login';return;}
+  renderDepth();
+  await load();
+  buildTabs();
+  loadSnaps();
+}
+function renderDepth(){
+  $('depth').innerHTML=ALL_LAYERS.map(([k,l])=>`<span class="chip ${DEPTH.includes(k)?'on':''}" data-k="${k}">${l}</span>`).join(' ');
+  $('depth').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
+    const k=c.dataset.k; if(DEPTH.includes(k))DEPTH=DEPTH.filter(x=>x!==k);else DEPTH.push(k);
+    renderDepth(); load();
+  }));
+}
+async function load(){
+  DATA=await fetch('/api/quality?depth='+encodeURIComponent(DEPTH.join(','))).then(r=>r.json());
+  renderKPI(); CURRENT=null; drawTreemap();
+  const av=DATA.kpi.layersAvailable||{};
+  $('depthNote').textContent='доступно из данных: '+ALL_LAYERS.filter(([k])=>av[k]).map(([,l])=>l).join(', ')+'. Недоступные слои не штрафуют.';
+  const mf=$('mfilter'); mf.innerHTML='<option value="">Все</option>'+DATA.modules.map(m=>`<option>${esc(m.name)}</option>`).join('');
+}
+function renderKPI(){
+  const k=DATA.kpi;
+  const cards=[['Overall Quality',k.overallQuality+'%'],['Coverage',k.coverage+'%'],['Documentation',k.documentation+'%'],['Requirement Cov.',k.requirementCoverage+'%'],['Risk Score',k.riskScore+'%'],['Модулей',k.modulesCount],['Требований',k.requirementsTotal],['Документов',k.docsTotal]];
+  $('kpis').innerHTML=cards.map(([l,v])=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')
+    +`<div class="kpi" style="min-width:220px"><div class="l" style="margin:0 0 4px">Top Risk Modules</div>${(k.topRiskModules||[]).map(m=>`<div style="font-size:12px;display:flex;justify-content:space-between"><span>${esc(m.name)}</span><b style="color:${color(m.score)}">${m.score}%</b></div>`).join('')}</div>`;
+}
+
+// squarified treemap
+function squarify(items,X,Y,W,H){
+  items=items.filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
+  const total=items.reduce((s,d)=>s+d.value,0)||1;
+  const area=items.map(d=>d.value/total*(W*H));
+  const rects=[]; let x=X,y=Y,w=W,h=H,i=0;
+  const worst=(row,len)=>{const s=row.reduce((a,b)=>a+b,0),mx=Math.max(...row),mn=Math.min(...row);return Math.max(len*len*mx/(s*s),s*s/(len*len*mn));};
+  while(i<area.length){
+    const len=Math.min(w,h); let row=[area[i]]; i++;
+    while(i<area.length){ const cand=[...row,area[i]]; if(worst(cand,len)<=worst(row,len)){row.push(area[i]);i++;}else break; }
+    const sum=row.reduce((a,b)=>a+b,0);
+    if(w>=h){ const rw=sum/h; let yy=y; for(const a of row){const rh=a/rw; rects.push({x,y:yy,w:rw,h:rh}); yy+=rh;} x+=rw; w-=rw; }
+    else { const rh=sum/w; let xx=x; for(const a of row){const rw=a/rh; rects.push({x:xx,y,w:rw,h:rh}); xx+=rw;} y+=rh; h-=rh; }
+  }
+  items.forEach((d,idx)=>Object.assign(d,rects[idx]));
+  return items;
+}
+function drawTreemap(){
+  const svg=$('tm'); const W=svg.clientWidth||1000,H=560;
+  let items, title;
+  if(!CURRENT){ items=DATA.modules.map(m=>({value:m.size,label:m.name,score:m.coverageScore,m})); title='Вся система'; }
+  else { const m=CURRENT; items=(m.areas&&m.areas.length?m.areas:[{name:m.name,size:m.size,score:m.coverageScore}]).map(a=>({value:a.size,label:a.name.split('.').pop(),score:a.score,area:a})); title=m.name; }
+  $('crumb').innerHTML=`<b onclick="goRoot()">Вся система</b>`+(CURRENT?` › ${esc(CURRENT.name)} <span class="muted">(клик блока — матрица модуля)</span>`:'');
+  squarify(items,0,0,W,H);
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML=items.map(it=>{
+    const small=it.w<46||it.h<24;
+    return `<g class="tmnode" data-name="${esc(it.m?it.m.name:(CURRENT?CURRENT.name:''))}">
+      <rect x="${it.x.toFixed(1)}" y="${it.y.toFixed(1)}" width="${Math.max(0,it.w-2).toFixed(1)}" height="${Math.max(0,it.h-2).toFixed(1)}" fill="${color(it.score)}"></rect>
+      ${small?'':`<text x="${(it.x+6).toFixed(1)}" y="${(it.y+18).toFixed(1)}">${esc(it.label)}</text><text x="${(it.x+6).toFixed(1)}" y="${(it.y+34).toFixed(1)}" style="font-size:11px;opacity:.9">${it.score}% · ${it.value}</text>`}
+    </g>`;
+  }).join('');
+  svg.querySelectorAll('.tmnode').forEach((g,idx)=>g.addEventListener('click',()=>{
+    const it=items[idx];
+    if(!CURRENT && it.m){ CURRENT=it.m; drawTreemap(); }
+    else { // в модуле — открыть матрицу этого модуля
+      $('mfilter').value=CURRENT?CURRENT.name:''; switchTab('matrix'); loadMatrix();
+    }
+  }));
+}
+window.goRoot=()=>{CURRENT=null;drawTreemap();};
+
+async function loadMatrix(){
+  const mod=$('mfilter').value;
+  const d=await fetch('/api/quality/matrix'+(mod?'?module='+encodeURIComponent(mod):'')).then(r=>r.json());
+  $('mcount').textContent=`${d.rows.length} из ${d.total} требований`;
+  const ic={ok:'<span class="cell ok">✓</span>',partial:'<span class="cell pa">~</span>',none:'<span class="cell no">✗</span>',nodata:'<span class="cell nd">—</span>'};
+  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>Docs</th><th>Tests</th><th>Auto</th><th>Exec</th><th>Risk</th></tr></thead><tbody>`+
+    d.rows.map(r=>`<tr>
+      <td>${r.confluence?`<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(r.confluence)}" target="_blank">${esc(r.requirement)}</a>`:esc(r.requirement)}<div class="muted">${esc(r.summary||'')}</div></td>
+      <td>${esc(r.module)}</td>
+      <td>${ic[r.docs]||ic.nodata}</td><td>${ic[r.tests]}</td><td>${ic[r.automation]}</td><td>${ic[r.execution]}</td>
+      <td class="rk-${r.risk}">${r.risk}</td></tr>`).join('')+`</tbody>`;
+}
+$('mfilter').addEventListener('change',loadMatrix);
+
+function buildTabs(){
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.p)));
+}
+function switchTab(p){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===p));
+  document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('active',x.id==='p-'+p));
+  if(p==='matrix'&&!$('matrix').innerHTML) loadMatrix();
+}
+
+// Снапшоты
+async function loadSnaps(){
+  const d=await fetch('/api/quality/snapshots').then(r=>r.json());
+  const opts=(d.snapshots||[]).map(s=>`<option value="${s.id}">${new Date(s.createdAt).toLocaleString()} ${esc(s.label||'')}</option>`).join('');
+  $('snapA').innerHTML=opts; $('snapB').innerHTML=opts;
+}
+$('snapSave').addEventListener('click',async()=>{
+  $('snapMsg').textContent='Сохраняю…';
+  const r=await fetch('/api/quality/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:$('snapLabel').value})});
+  $('snapMsg').textContent=r.ok?'Сохранено ✓':'Только админ может сохранять снапшоты';
+  if(r.ok){$('snapLabel').value='';loadSnaps();}
+});
+$('snapCmp').addEventListener('click',async()=>{
+  const a=$('snapA').value,b=$('snapB').value; if(!a||!b)return;
+  const d=await fetch(`/api/quality/compare?a=${a}&b=${b}`).then(r=>r.json());
+  if(d.error){$('snapDiff').innerHTML='<span class="muted">'+esc(d.error)+'</span>';return;}
+  $('snapDiff').innerHTML=`<div class="muted" style="margin:8px 0">Overall: ${d.a.kpi.overallQuality}% → ${d.b.kpi.overallQuality}%</div>
+    <table><thead><tr><th>Модуль</th><th>Было</th><th>Стало</th><th>Δ</th></tr></thead><tbody>`+
+    d.diff.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.before==null?'—':x.before+'%'}</td><td>${x.after==null?'—':x.after+'%'}</td>
+      <td style="color:${x.delta>0?'#137333':x.delta<0?'#c5221f':'#5f6368'};font-weight:700">${x.delta>0?'+':''}${x.delta}</td></tr>`).join('')+`</tbody>`;
+});
+
+window.addEventListener('resize',()=>{ if(DATA) drawTreemap(); });
+boot();
+</script>
+</body>
+</html>
