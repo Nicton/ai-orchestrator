@@ -52,10 +52,10 @@
   <div class="kpis" id="kpis"></div>
 
   <div class="card" style="padding:12px 16px">
-    <span class="muted">Режим Coverage Score:</span>
+    <span class="muted">Слои покрытия (кликом отключайте с конца — 100% пересчитается):</span>
     <span id="modeSel"></span>
-    <span class="muted" id="depthNote" style="margin-left:8px"></span>
-    <div class="muted" style="margin-top:6px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Docs 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Run 10%</b> · <b>Bugs 10%</b></div>
+    <div class="muted" id="depthNote" style="margin-top:6px"></div>
+    <div class="muted" style="margin-top:4px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Docs 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Run 10%</b> · <b>Bugs 10%</b></div>
   </div>
 
   <div class="tabs">
@@ -108,9 +108,9 @@
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-let MODE='available';
-let DATA=null, CURRENT=null; // CURRENT = модуль для drill
 const ALL_LAYERS=[['subreq','SubReq'],['docs','Docs'],['tests','Tests'],['automation','Auto'],['execution','Run'],['defects','Bugs']];
+let ENABLED=ALL_LAYERS.map(([k])=>k); // все включены; пользователь отключает с конца
+let DATA=null, CURRENT=null; // CURRENT = модуль для drill
 
 function color(s){ // heatmap по ТЗ
   if(s<20) return '#8b0000'; // тёмно-красный
@@ -123,23 +123,29 @@ function color(s){ // heatmap по ТЗ
 
 async function boot(){
   const me=await fetch('/api/auth/me'); if(!me.ok){location.href='/login';return;}
-  renderMode();
+  renderLayers();
   await load();
   buildTabs();
   loadSnaps();
 }
-function renderMode(){
-  const modes=[['available','По доступным данным'],['strict','Строгий (по ТЗ, нет данных = 0%)']];
-  $('modeSel').innerHTML=modes.map(([k,l])=>`<span class="chip ${MODE===k?'on':''}" data-m="${k}">${l}</span>`).join(' ');
-  $('modeSel').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{ MODE=c.dataset.m; renderMode(); load(); if($('matrix').innerHTML) loadMatrix(); }));
+function renderLayers(){
+  $('modeSel').innerHTML=ALL_LAYERS.map(([k,l],i)=>{
+    const on=ENABLED.includes(k);
+    const w=({subreq:20,docs:15,tests:25,automation:20,execution:10,defects:10})[k];
+    return `<span class="chip ${on?'on':''}" data-k="${k}">${on?'☑':'☐'} ${l} <span style="opacity:.6">${w}%</span></span>`;
+  }).join(' ');
+  $('modeSel').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
+    const k=c.dataset.k;
+    if(ENABLED.includes(k)) ENABLED=ENABLED.filter(x=>x!==k); else ENABLED=ALL_LAYERS.map(([kk])=>kk).filter(kk=>ENABLED.includes(kk)||kk===k);
+    renderLayers(); load(); if($('matrix').innerHTML) loadMatrix();
+  }));
 }
 async function load(){
-  DATA=await fetch('/api/quality?mode='+MODE).then(r=>r.json());
+  DATA=await fetch('/api/quality?layers='+ENABLED.join(',')).then(r=>r.json());
   renderKPI(); CURRENT=null; drawTreemap();
   const av=DATA.kpi.layersAvailable||{};
-  const have=ALL_LAYERS.filter(([k])=>av[k]).map(([,l])=>l);
-  const miss=ALL_LAYERS.filter(([k])=>!av[k]).map(([,l])=>l);
-  $('depthNote').innerHTML=`данные есть: <b>${have.join(', ')||'—'}</b>`+(miss.length?` · источник не подключён: <b>${miss.join(', ')}</b>`:'');
+  const miss=ALL_LAYERS.filter(([k])=>ENABLED.includes(k)&&!av[k]).map(([,l])=>l);
+  $('depthNote').innerHTML=`100% считается по: <b>${ALL_LAYERS.filter(([k])=>ENABLED.includes(k)).map(([,l])=>l).join(' + ')||'—'}</b>`+(miss.length?` · <span style="color:#c5221f">включены без данных (=0%): ${miss.join(', ')}</span>`:'');
   const mf=$('mfilter'); mf.innerHTML='<option value="">Все</option>'+DATA.modules.map(m=>`<option>${esc(m.name)}</option>`).join('');
 }
 function renderKPI(){
@@ -193,7 +199,7 @@ window.goRoot=()=>{CURRENT=null;drawTreemap();};
 
 async function loadMatrix(){
   const mod=$('mfilter').value;
-  const d=await fetch('/api/quality/matrix?mode='+MODE+(mod?'&module='+encodeURIComponent(mod):'')).then(r=>r.json());
+  const d=await fetch('/api/quality/matrix?layers='+ENABLED.join(',')+(mod?'&module='+encodeURIComponent(mod):'')).then(r=>r.json());
   $('mcount').textContent=`${d.rows.length} из ${d.total} требований (сорт. по Score)`;
   const c=v=>v==null?'<span class="nd">—</span>':v+'%';
   $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>SubReq</th><th>Docs</th><th>Tests</th><th>Auto</th><th>Run</th><th>Bugs</th><th>Score</th><th>Risk</th></tr></thead><tbody>`+

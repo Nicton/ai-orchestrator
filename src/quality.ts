@@ -23,18 +23,16 @@ const W = { subreq: 20, docs: 15, tests: 25, automation: 20, execution: 10, defe
 // Компоненты покрытия (0..100 или null = «нет источника данных»).
 type Comp = { subreq: number | null; docs: number | null; tests: number | null; automation: number | null; execution: number | null; defects: number | null; bugs: number | null };
 
-// Coverage Score из компонентов.
-//   mode='available' — нормировка по слоям, где есть данные (недоступные не штрафуют);
-//   mode='strict'    — точная формула ТЗ (нет данных = 0).
-function coverageScore(c: Comp, mode: 'available' | 'strict'): number {
+const LAYER_KEYS = ['subreq', 'docs', 'tests', 'automation', 'execution', 'defects'] as const;
+type LayerKey = typeof LAYER_KEYS[number];
+
+// Динамический Coverage Score: 100% считается ТОЛЬКО по ВКЛЮЧЁННЫМ слоям (renormalize).
+// Включённый слой без данных = 0% (честно штрафует: «включил Tests, а тестов нет»).
+// Выключенный слой не учитывается вовсе — так пользователь отключает параметры «с конца».
+function coverageScore(c: Comp, enabled: string[]): number {
   const m: Record<string, number | null> = { subreq: c.subreq, docs: c.docs, tests: c.tests, automation: c.automation, execution: c.execution, defects: c.defects };
-  if (mode === 'strict') {
-    let s = 0;
-    for (const k of Object.keys(W) as (keyof typeof W)[]) s += (m[k] ?? 0) * W[k];
-    return Math.round(s / 100);
-  }
   let num = 0, den = 0;
-  for (const k of Object.keys(W) as (keyof typeof W)[]) { if (m[k] != null) { num += (m[k] as number) * W[k]; den += W[k]; } }
+  for (const k of LAYER_KEYS) { if (!enabled.includes(k)) continue; num += (m[k] ?? 0) * W[k]; den += W[k]; }
   return den ? Math.round(num / den) : 0;
 }
 
@@ -46,7 +44,7 @@ async function loadGraph() {
   return { ents, rels };
 }
 
-function compute(ents: Ent[], rels: Rel[], mode: 'available' | 'strict') {
+function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
   const byId: Record<string, Ent> = Object.fromEntries(ents.map((e) => [e.id, e]));
   const docs = ents.filter((e) => e.type === 'document');
   const reqs = ents.filter((e) => e.type === 'requirement');
@@ -126,13 +124,13 @@ function compute(ents: Ent[], rels: Rel[], mode: 'available' | 'strict') {
     const reqIds = m.reqs;
     const coveredReq = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
     const comp = components(m.docs, reqIds);
-    const score = coverageScore(comp, mode);
+    const score = coverageScore(comp, enabled);
     const riskCount = m.docs.filter((d) => ['not-implemented', 'icebox', 'partial'].includes(d.metadata?.status)).length;
     const size = Math.max(reqIds.length, m.docs.length, 1);
 
     const areas = Object.entries(m.areas).map(([aid, list]) => {
       const c = components(list, []);
-      return { id: aid, name: aid, size: list.length, score: coverageScore(c, mode), docCount: list.length, comp: c };
+      return { id: aid, name: aid, size: list.length, score: coverageScore(c, enabled), docCount: list.length, comp: c };
     }).sort((a, b) => b.size - a.size);
 
     return {
@@ -163,7 +161,7 @@ function compute(ents: Ent[], rels: Rel[], mode: 'available' | 'strict') {
     topRiskModules: [...modules].sort((a, b) => b.riskScore - a.riskScore).slice(0, 5).map((m) => ({ name: m.name, score: m.coverageScore, risk: m.riskScore })),
     topUncovered: [...modules].sort((a, b) => a.coverageScore - b.coverageScore).slice(0, 5).map((m) => ({ name: m.name, score: m.coverageScore })),
     layersAvailable,
-    mode,
+    enabled,
     weights: W,
   };
 
@@ -171,7 +169,7 @@ function compute(ents: Ent[], rels: Rel[], mode: 'available' | 'strict') {
 }
 
 // Матрица трассируемости: требование × {SubReq, Docs, Tests, Auto, Run, Bugs, Score}
-function buildMatrix(ents: Ent[], rels: Rel[], mode: 'available' | 'strict', moduleFilter?: string) {
+function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?: string) {
   const byId: Record<string, Ent> = Object.fromEntries(ents.map((e) => [e.id, e]));
   const reqs = ents.filter((e) => e.type === 'requirement');
   const reqCoverDocs: Record<string, string[]> = {};
@@ -194,7 +192,7 @@ function buildMatrix(ents: Ent[], rels: Rel[], mode: 'available' | 'strict', mod
       defects: av.defects ? 100 : null,
       bugs: av.defects ? 0 : null,
     };
-    const score = coverageScore(comp, mode);
+    const score = coverageScore(comp, enabled);
     const risk = score < 60 ? 'High' : score < 80 ? 'Medium' : 'Low';
     return {
       requirement: req.name, summary: req.metadata?.summary || '', module: domain,
@@ -208,12 +206,17 @@ function buildMatrix(ents: Ent[], rels: Rel[], mode: 'available' | 'strict', mod
 
 export async function registerQualityApi(app: FastifyInstance) {
   // Полный отчёт: KPI + treemap(модули/области) + матрица.
-  const getMode = (req: any): 'available' | 'strict' => (String(req.query?.mode || 'available') === 'strict' ? 'strict' : 'available');
+  // Включённые слои: ?layers=subreq,docs,tests,automation,execution,defects (по умолч. все).
+  const getLayers = (req: any): string[] => {
+    const raw = String(req.query?.layers || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const valid = raw.filter((k) => (LAYER_KEYS as readonly string[]).includes(k));
+    return valid.length ? valid : [...LAYER_KEYS];
+  };
 
   app.get('/api/quality', async (req: any, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
     const { ents, rels } = await loadGraph();
-    const { kpi, modules } = compute(ents, rels, getMode(req));
+    const { kpi, modules } = compute(ents, rels, getLayers(req));
     return reply.send({ kpi, modules });
   });
 
@@ -221,7 +224,7 @@ export async function registerQualityApi(app: FastifyInstance) {
   app.get('/api/quality/matrix', async (req: any, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
     const { ents, rels } = await loadGraph();
-    const rows = buildMatrix(ents, rels, getMode(req), req.query?.module ? String(req.query.module) : undefined);
+    const rows = buildMatrix(ents, rels, getLayers(req), req.query?.module ? String(req.query.module) : undefined);
     return reply.send({ rows: rows.slice(0, 1500), total: rows.length });
   });
 
@@ -229,7 +232,7 @@ export async function registerQualityApi(app: FastifyInstance) {
   app.post('/api/quality/snapshots', async (req: any, reply) => {
     const admin = await requireAdmin(req, reply); if (!admin) return;
     const { ents, rels } = await loadGraph();
-    const { kpi, modules } = compute(ents, rels, 'available');
+    const { kpi, modules } = compute(ents, rels, [...LAYER_KEYS]);
     const snap = await prisma.qualitySnapshot.create({
       data: { label: (req.body?.label || '').toString().slice(0, 120) || null, createdBy: admin.name, data: { kpi, modules: modules.map((m) => ({ name: m.name, size: m.size, coverageScore: m.coverageScore, riskScore: m.riskScore })) } as any },
     });
