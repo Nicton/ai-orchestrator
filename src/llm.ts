@@ -18,7 +18,44 @@ export type TranscriptionResult = {
 };
 
 export async function runRolePrompt(role: string, prompt: string, model?: string): Promise<LlmResult> {
-  return runClaudeCli(role, prompt, model);
+  // Prefer the Claude CLI when present; fall back to the OpenAI chat API (e.g. in
+  // containers without the CLI) so answer generation always has a working engine.
+  try {
+    const r = await runClaudeCli(role, prompt, model);
+    if (r.text && r.text.trim()) return r;
+  } catch {
+    // CLI missing or failed — fall through to OpenAI.
+  }
+  return runOpenAiChat(role, prompt);
+}
+
+async function runOpenAiChat(role: string, prompt: string): Promise<LlmResult> {
+  const apiKey = config.chat.openaiApiKey;
+  if (!apiKey) throw new Error('No LLM engine available (no Claude CLI, no OpenAI key)');
+  const res = await fetch(`${config.chat.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: config.chat.model,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: `You are acting as this role: ${role}` },
+        { role: 'user', content: prompt },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`OpenAI chat failed (${res.status}): ${detail.slice(0, 200)}`);
+  }
+  const data: any = await res.json();
+  return {
+    text: String(data.choices?.[0]?.message?.content || '').trim(),
+    model: data.model || config.chat.model,
+    promptTokens: data.usage?.prompt_tokens,
+    completionTokens: data.usage?.completion_tokens,
+    totalTokens: data.usage?.total_tokens,
+  };
 }
 
 function runClaudeCli(role: string, prompt: string, model?: string): Promise<LlmResult> {

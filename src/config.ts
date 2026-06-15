@@ -25,6 +25,13 @@ export const config = {
     model: process.env.STT_MODEL || 'whisper-1',
   },
 
+  // LLM chat fallback (used when the Claude CLI is unavailable, e.g. inside containers).
+  chat: {
+    openaiApiKey: (process.env.OPENAI_API_KEY || '').trim() || readFileTrim(process.env.OPENAI_API_KEY_FILE),
+    baseUrl: process.env.OPENAI_BASE_URL || process.env.STT_BASE_URL || 'https://api.openai.com/v1',
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  },
+
   youtrack: {
     enabled: !['0', 'false', 'no', 'off', ''].includes(String(process.env.YOUTRACK_ENABLED ?? '0').toLowerCase()),
     baseUrl: process.env.YOUTRACK_BASE_URL || '',
