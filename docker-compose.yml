@@ -29,6 +29,8 @@ services:
       YOUTRACK_PIPELINE_PATH: ${YOUTRACK_PIPELINE_PATH:-core/orchestration/pipeline.v1.yaml}
       IMPL_WORKSPACE: /workspace
       COMPOSE_PROJECT: shiptify-orchestrator
+      DEPLOY_HOST_PATH: /home/user/ka-prod-deploy
+      APP_IMAGE: shiptify-orchestrator-app
     depends_on:
       db:
         condition: service_healthy

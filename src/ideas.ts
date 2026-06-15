@@ -78,11 +78,19 @@ ${body}
     log: log.concat(pushed ? `Закоммичено (${sha}) и запушено. Запускаю пересборку прод…` : `Закоммичено (${sha}). PUSH НЕ УДАЛСЯ — см. лог.`).join('\n').slice(-60000),
   });
 
-  // Detached redeploy: переживёт перезапуск самого приложения.
+  // Редеплой в ОТДЕЛЬНОМ контейнере (нельзя пересобирать app из самого app —
+  // рестарт убьёт процесс деплоя). Деплоер health-чекает и откатывается при сбое.
+  const hostPath = process.env.DEPLOY_HOST_PATH || '/home/user/ka-prod-deploy';
+  const appImage = process.env.APP_IMAGE || `${COMPOSE_PROJECT}-app`;
   try {
-    const deploy = spawn('sh', ['-lc', `cd ${WORKSPACE} && docker compose -p ${COMPOSE_PROJECT} up -d --build app worker`], {
-      detached: true, stdio: 'ignore',
-    });
+    const deploy = spawn('docker', [
+      'run', '-d', '--rm',
+      '-e', `COMPOSE_PROJECT=${COMPOSE_PROJECT}`,
+      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      '-v', `${hostPath}:/ws`,
+      '-w', '/ws',
+      appImage, 'sh', '/ws/scripts/idea-deploy.sh',
+    ], { detached: true, stdio: 'ignore' });
     deploy.unref();
   } catch { /* деплой best-effort */ }
 }
