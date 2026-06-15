@@ -19,13 +19,19 @@ function suiteToDomain(suitePath: string[]): string {
   for (const [re, dom] of QA_RULES) if (re.test(s)) return dom;
   return 'TMS'; // основное приложение
 }
+const QA_STOP = new Set(('the a an of to in on for and or is are with без для при как что это нет под над или там где это req требование requirement открыть нажать проверить выбрать создать test tests check verify should когда если иначе страница page button кнопка поле field пользователь user able can does окно вкладка список view экран a-b shipper carrier admin').split(/\s+/));
+function tokens(s: string): string[] {
+  return [...new Set((String(s || '').toLowerCase().match(/[a-zа-яё0-9]{4,}/gi) || []).filter((w) => !QA_STOP.has(w)))];
+}
+type QaCase = { tk: Set<string>; auto: boolean };
 let _qaCache: any = null;
-function loadQa(): { available: boolean; byDomain: Record<string, { total: number; automated: number }> } {
+function loadQa(): { available: boolean; byDomain: Record<string, { total: number; automated: number }>; casesByDomain: Record<string, QaCase[]> } {
   if (_qaCache) return _qaCache;
   const p = path.resolve(process.cwd(), 'docs/qa/test-cases-MA-2026-05-25.json');
   try {
     const d = JSON.parse(readFileSync(p, 'utf8'));
     const byDomain: Record<string, { total: number; automated: number }> = {};
+    const casesByDomain: Record<string, QaCase[]> = {};
     (function walk(arr: any[], pathArr: string[]) {
       for (const x of arr || []) {
         const pp = pathArr.concat(x.title || x.name || '?');
@@ -33,22 +39,39 @@ function loadQa(): { available: boolean; byDomain: Record<string, { total: numbe
           if (c.status === 'deprecated') continue;
           const dom = suiteToDomain(pp);
           (byDomain[dom] = byDomain[dom] || { total: 0, automated: 0 }).total++;
-          if (c.automation === 'automated') byDomain[dom].automated++;
+          const auto = c.automation === 'automated';
+          if (auto) byDomain[dom].automated++;
+          const tk = new Set(tokens(pp.join(' ') + ' ' + (c.title || '') + ' ' + (c.description || '')));
+          (casesByDomain[dom] = casesByDomain[dom] || []).push({ tk, auto });
         }
         if (x.suites) walk(x.suites, pp);
       }
     })(d.suites || [], []);
-    _qaCache = { available: Object.keys(byDomain).length > 0, byDomain };
+    _qaCache = { available: Object.keys(byDomain).length > 0, byDomain, casesByDomain };
   } catch {
-    _qaCache = { available: false, byDomain: {} };
+    _qaCache = { available: false, byDomain: {}, casesByDomain: {} };
   }
   return _qaCache;
+}
+
+// Сколько тест-кейсов (в том же домене) текстово матчат требование (≥2 общих токена).
+function reqTestMatch(reqText: string, domain: string, qa: ReturnType<typeof loadQa>): { matched: number; automated: number } {
+  const rt = tokens(reqText);
+  if (rt.length < 1) return { matched: 0, automated: 0 };
+  const list = qa.casesByDomain[domain] || [];
+  let matched = 0, automated = 0;
+  for (const c of list) {
+    let n = 0;
+    for (const t of rt) { if (c.tk.has(t)) { n++; if (n >= 2) break; } }
+    if (n >= 2) { matched++; if (c.auto) automated++; }
+  }
+  return { matched, automated };
 }
 
 // Quality Coverage Engine — единый движок расчёта покрытия поверх графа знаний
 // (Data Lake = KnowledgeEntity/Relation). Источник один, представлений несколько.
 
-type Ent = { id: string; name: string; type: string; metadata: any };
+type Ent = { id: string; name: string; type: string; metadata: any; summary?: string | null };
 type Rel = { fromId: string; toId: string; type: string };
 
 function statusScore(s?: string | null): number {
@@ -106,8 +129,6 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
   }
 
   const qa = loadQa();
-  const qaTests = (domain: string): number | null => (qa.available ? ((qa.byDomain[domain]?.total || 0) > 0 ? 100 : 0) : null);
-  const qaAuto = (domain: string): number | null => { if (!qa.available) return null; const q = qa.byDomain[domain]; return q && q.total ? Math.round((q.automated / q.total) * 100) : 0; };
 
   // Доступность слоёв = есть ли подключённый источник данных.
   const layersAvailable: Record<string, boolean> = {
@@ -148,16 +169,31 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     return { docScore: Math.round((sum / list.length) * 100), breakdown: bd };
   }
 
-  // Компоненты покрытия (0..100 / null) для модуля или области (domain — для QA).
+  // Tests/Automation по требованиям домена (текстовый матчинг title/desc ↔ name/summary).
+  function reqLayers(reqIds: string[], domain: string): { tests: number | null; automation: number | null } {
+    if (!qa.available) return { tests: null, automation: null };
+    if (!reqIds.length) return { tests: 0, automation: 0 };
+    let matchedReqs = 0, mCases = 0, aCases = 0;
+    for (const rid of reqIds) {
+      const e = byId[rid];
+      const r = reqTestMatch((e?.name || '') + ' ' + (e?.summary || ''), domain, qa);
+      if (r.matched > 0) matchedReqs++;
+      mCases += r.matched; aCases += r.automated;
+    }
+    return { tests: Math.round((matchedReqs / reqIds.length) * 100), automation: mCases ? Math.round((aCases / mCases) * 100) : 0 };
+  }
+
+  // Компоненты покрытия (0..100 / null) для модуля.
   function components(docList: Ent[], reqIds: string[], domain: string): Comp {
     const { docScore } = scoreDocs(docList);
     const coveredReq = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
     const subreq = reqIds.length ? pct(coveredReq, reqIds.length) : (docList.length ? 100 : 0);
+    const tl = reqLayers(reqIds, domain);
     return {
       subreq: layersAvailable.subreq ? subreq : null,
       docs: docList.length ? docScore : null,
-      tests: qaTests(domain),
-      automation: qaAuto(domain),
+      tests: tl.tests,
+      automation: tl.automation,
       execution: layersAvailable.execution ? 0 : null,
       defects: layersAvailable.defects ? 100 : null,
       bugs: layersAvailable.defects ? 0 : null,
@@ -173,8 +209,10 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     const riskCount = m.docs.filter((d) => ['not-implemented', 'icebox', 'partial'].includes(d.metadata?.status)).length;
     const size = Math.max(reqIds.length, m.docs.length, 1);
 
+    // Области наследуют Tests/Auto модуля (нет req-level матчинга на уровне области).
     const areas = Object.entries(m.areas).map(([aid, list]) => {
       const c = components(list, [], name);
+      c.tests = comp.tests; c.automation = comp.automation;
       return { id: aid, name: aid, size: list.length, score: coverageScore(c, enabled), docCount: list.length, comp: c };
     }).sort((a, b) => b.size - a.size);
 
@@ -221,19 +259,18 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
   for (const r of rels) if (r.type === 'covered_by') (reqCoverDocs[r.fromId] = reqCoverDocs[r.fromId] || []).push(r.toId);
   const docDomain = (d?: Ent) => (d?.metadata?.domain && d.metadata.domain !== '?' ? d.metadata.domain : 'Прочее');
   const qa = loadQa();
-  const qaTests = (dm: string): number | null => (qa.available ? ((qa.byDomain[dm]?.total || 0) > 0 ? 100 : 0) : null);
-  const qaAuto = (dm: string): number | null => { if (!qa.available) return null; const q = qa.byDomain[dm]; return q && q.total ? Math.round((q.automated / q.total) * 100) : 0; };
 
   const rows = reqs.map((req) => {
     const dlist = (reqCoverDocs[req.id] || []).map((id) => byId[id]).filter(Boolean);
     const domain = dlist.length ? docDomain(dlist[0]) : 'Прочее';
     const hasDoc = dlist.length > 0;
     const docsPct = hasDoc ? Math.round(Math.max(...dlist.map((d) => statusScore(d.metadata?.status))) * 100) : 0;
+    const tm = reqTestMatch((req.name || '') + ' ' + (req.summary || ''), domain, qa);
     const comp: Comp = {
       subreq: hasDoc ? 100 : 0,
       docs: docsPct,
-      tests: qaTests(domain),
-      automation: qaAuto(domain),
+      tests: qa.available ? (tm.matched > 0 ? 100 : 0) : null,
+      automation: qa.available ? (tm.matched ? Math.round((tm.automated / tm.matched) * 100) : 0) : null,
       execution: null,
       defects: null,
       bugs: null,
@@ -241,7 +278,7 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
     const score = coverageScore(comp, enabled);
     const risk = score < 60 ? 'High' : score < 80 ? 'Medium' : 'Low';
     return {
-      requirement: req.name, summary: req.metadata?.summary || '', module: domain,
+      requirement: req.name, summary: req.summary || req.metadata?.summary || '', module: domain,
       subreq: comp.subreq, docs: comp.docs, tests: comp.tests, automation: comp.automation,
       execution: comp.execution, bugs: comp.bugs, score, risk,
       confluence: req.metadata?.confluence || null,
