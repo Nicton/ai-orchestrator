@@ -52,9 +52,10 @@
   <div class="kpis" id="kpis"></div>
 
   <div class="card" style="padding:12px 16px">
-    <span class="muted">Глубина покрытия (что считать за 100%):</span>
-    <span id="depth"></span>
+    <span class="muted">Режим Coverage Score:</span>
+    <span id="modeSel"></span>
     <span class="muted" id="depthNote" style="margin-left:8px"></span>
+    <div class="muted" style="margin-top:6px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Docs 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Run 10%</b> · <b>Bugs 10%</b></div>
   </div>
 
   <div class="tabs">
@@ -107,36 +108,38 @@
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-let DEPTH=['requirements','documentation'];
+let MODE='available';
 let DATA=null, CURRENT=null; // CURRENT = модуль для drill
+const ALL_LAYERS=[['subreq','SubReq'],['docs','Docs'],['tests','Tests'],['automation','Auto'],['execution','Run'],['defects','Bugs']];
 
-const ALL_LAYERS=[['requirements','Требования'],['documentation','Документация'],['tests','Тесты'],['automation','Автоматизация'],['execution','Прогоны']];
-
-function color(s){ // 0..100
-  const stops=[[0,'#b71c1c'],[40,'#e53935'],[55,'#fb8c00'],[70,'#fdd835'],[85,'#9ccc65'],[100,'#2e7d32']];
-  for(let i=stops.length-1;i>=0;i--) if(s>=stops[i][0]) return stops[i][1];
-  return stops[0][1];
+function color(s){ // heatmap по ТЗ
+  if(s<20) return '#8b0000'; // тёмно-красный
+  if(s<40) return '#e53935'; // красный
+  if(s<60) return '#fb8c00'; // оранжевый
+  if(s<80) return '#f9d423'; // жёлтый
+  if(s<95) return '#9ccc65'; // светло-зелёный
+  return '#2e7d32';          // зелёный
 }
 
 async function boot(){
   const me=await fetch('/api/auth/me'); if(!me.ok){location.href='/login';return;}
-  renderDepth();
+  renderMode();
   await load();
   buildTabs();
   loadSnaps();
 }
-function renderDepth(){
-  $('depth').innerHTML=ALL_LAYERS.map(([k,l])=>`<span class="chip ${DEPTH.includes(k)?'on':''}" data-k="${k}">${l}</span>`).join(' ');
-  $('depth').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
-    const k=c.dataset.k; if(DEPTH.includes(k))DEPTH=DEPTH.filter(x=>x!==k);else DEPTH.push(k);
-    renderDepth(); load();
-  }));
+function renderMode(){
+  const modes=[['available','По доступным данным'],['strict','Строгий (по ТЗ, нет данных = 0%)']];
+  $('modeSel').innerHTML=modes.map(([k,l])=>`<span class="chip ${MODE===k?'on':''}" data-m="${k}">${l}</span>`).join(' ');
+  $('modeSel').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{ MODE=c.dataset.m; renderMode(); load(); if($('matrix').innerHTML) loadMatrix(); }));
 }
 async function load(){
-  DATA=await fetch('/api/quality?depth='+encodeURIComponent(DEPTH.join(','))).then(r=>r.json());
+  DATA=await fetch('/api/quality?mode='+MODE).then(r=>r.json());
   renderKPI(); CURRENT=null; drawTreemap();
   const av=DATA.kpi.layersAvailable||{};
-  $('depthNote').textContent='доступно из данных: '+ALL_LAYERS.filter(([k])=>av[k]).map(([,l])=>l).join(', ')+'. Недоступные слои не штрафуют.';
+  const have=ALL_LAYERS.filter(([k])=>av[k]).map(([,l])=>l);
+  const miss=ALL_LAYERS.filter(([k])=>!av[k]).map(([,l])=>l);
+  $('depthNote').innerHTML=`данные есть: <b>${have.join(', ')||'—'}</b>`+(miss.length?` · источник не подключён: <b>${miss.join(', ')}</b>`:'');
   const mf=$('mfilter'); mf.innerHTML='<option value="">Все</option>'+DATA.modules.map(m=>`<option>${esc(m.name)}</option>`).join('');
 }
 function renderKPI(){
@@ -190,14 +193,16 @@ window.goRoot=()=>{CURRENT=null;drawTreemap();};
 
 async function loadMatrix(){
   const mod=$('mfilter').value;
-  const d=await fetch('/api/quality/matrix'+(mod?'?module='+encodeURIComponent(mod):'')).then(r=>r.json());
-  $('mcount').textContent=`${d.rows.length} из ${d.total} требований`;
-  const ic={ok:'<span class="cell ok">✓</span>',partial:'<span class="cell pa">~</span>',none:'<span class="cell no">✗</span>',nodata:'<span class="cell nd">—</span>'};
-  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>Docs</th><th>Tests</th><th>Auto</th><th>Exec</th><th>Risk</th></tr></thead><tbody>`+
+  const d=await fetch('/api/quality/matrix?mode='+MODE+(mod?'&module='+encodeURIComponent(mod):'')).then(r=>r.json());
+  $('mcount').textContent=`${d.rows.length} из ${d.total} требований (сорт. по Score)`;
+  const c=v=>v==null?'<span class="nd">—</span>':v+'%';
+  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>SubReq</th><th>Docs</th><th>Tests</th><th>Auto</th><th>Run</th><th>Bugs</th><th>Score</th><th>Risk</th></tr></thead><tbody>`+
     d.rows.map(r=>`<tr>
       <td>${r.confluence?`<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(r.confluence)}" target="_blank">${esc(r.requirement)}</a>`:esc(r.requirement)}<div class="muted">${esc(r.summary||'')}</div></td>
       <td>${esc(r.module)}</td>
-      <td>${ic[r.docs]||ic.nodata}</td><td>${ic[r.tests]}</td><td>${ic[r.automation]}</td><td>${ic[r.execution]}</td>
+      <td>${c(r.subreq)}</td><td>${c(r.docs)}</td><td>${c(r.tests)}</td><td>${c(r.automation)}</td><td>${c(r.execution)}</td>
+      <td>${r.bugs==null?'<span class="nd">—</span>':r.bugs}</td>
+      <td><b style="color:${color(r.score)}">${r.score}%</b></td>
       <td class="rk-${r.risk}">${r.risk}</td></tr>`).join('')+`</tbody>`;
 }
 $('mfilter').addEventListener('change',loadMatrix);

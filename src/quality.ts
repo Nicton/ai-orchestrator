@@ -17,9 +17,26 @@ function statusScore(s?: string | null): number {
 }
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 
-// Слои покрытия. Доступность определяется наличием данных в графе (динамический счёт:
-// недоступные слои НЕ штрафуют — 100% считается от доступных).
-const LAYERS = ['requirements', 'documentation', 'tests', 'automation', 'execution'] as const;
+// Веса Coverage Score из ТЗ (сумма = 100%).
+const W = { subreq: 20, docs: 15, tests: 25, automation: 20, execution: 10, defects: 10 } as const;
+
+// Компоненты покрытия (0..100 или null = «нет источника данных»).
+type Comp = { subreq: number | null; docs: number | null; tests: number | null; automation: number | null; execution: number | null; defects: number | null; bugs: number | null };
+
+// Coverage Score из компонентов.
+//   mode='available' — нормировка по слоям, где есть данные (недоступные не штрафуют);
+//   mode='strict'    — точная формула ТЗ (нет данных = 0).
+function coverageScore(c: Comp, mode: 'available' | 'strict'): number {
+  const m: Record<string, number | null> = { subreq: c.subreq, docs: c.docs, tests: c.tests, automation: c.automation, execution: c.execution, defects: c.defects };
+  if (mode === 'strict') {
+    let s = 0;
+    for (const k of Object.keys(W) as (keyof typeof W)[]) s += (m[k] ?? 0) * W[k];
+    return Math.round(s / 100);
+  }
+  let num = 0, den = 0;
+  for (const k of Object.keys(W) as (keyof typeof W)[]) { if (m[k] != null) { num += (m[k] as number) * W[k]; den += W[k]; } }
+  return den ? Math.round(num / den) : 0;
+}
 
 async function loadGraph() {
   const [ents, rels] = await Promise.all([
@@ -29,7 +46,7 @@ async function loadGraph() {
   return { ents, rels };
 }
 
-function compute(ents: Ent[], rels: Rel[], depth: string[]) {
+function compute(ents: Ent[], rels: Rel[], mode: 'available' | 'strict') {
   const byId: Record<string, Ent> = Object.fromEntries(ents.map((e) => [e.id, e]));
   const docs = ents.filter((e) => e.type === 'document');
   const reqs = ents.filter((e) => e.type === 'requirement');
@@ -48,15 +65,16 @@ function compute(ents: Ent[], rels: Rel[], depth: string[]) {
     reqDomain[req.id] = dlist.length ? docDomain(dlist[0]) : 'Прочее';
   }
 
-  // Какие слои реально есть данные?
+  // Доступность слоёв = есть ли подключённый источник данных в графе.
+  const has = (t: string) => ents.some((e) => e.type === t);
   const layersAvailable: Record<string, boolean> = {
-    requirements: reqs.length > 0,
-    documentation: docs.length > 0,
-    tests: ents.some((e) => e.type === 'test_case'),       // источник не подключён → false
-    automation: ents.some((e) => e.type === 'automation'), // источник не подключён → false
-    execution: ents.some((e) => e.type === 'execution'),
+    subreq: reqs.length > 0 || docs.length > 0,
+    docs: docs.length > 0,
+    tests: has('test_case'),
+    automation: has('automation'),
+    execution: has('execution'),
+    defects: has('defect'),
   };
-  const activeDepth = depth.filter((l) => layersAvailable[l]);
 
   // Группировка по модулю → области
   const modMap: Record<string, { docs: Ent[]; reqs: string[]; areas: Record<string, Ent[]> }> = {};
@@ -87,33 +105,39 @@ function compute(ents: Ent[], rels: Rel[], depth: string[]) {
     return { docScore: Math.round((sum / list.length) * 100), breakdown: bd };
   }
 
+  // Компоненты покрытия (0..100 / null) для модуля или области.
+  function components(docList: Ent[], reqIds: string[]): Comp {
+    const { docScore } = scoreDocs(docList);
+    const coveredReq = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
+    const subreq = reqIds.length ? pct(coveredReq, reqIds.length) : (docList.length ? 100 : 0);
+    return {
+      subreq: layersAvailable.subreq ? subreq : null,
+      docs: docList.length ? docScore : null,
+      tests: layersAvailable.tests ? 0 : null,
+      automation: layersAvailable.automation ? 0 : null,
+      execution: layersAvailable.execution ? 0 : null,
+      defects: layersAvailable.defects ? 100 : null,
+      bugs: layersAvailable.defects ? 0 : null,
+    };
+  }
+
   function moduleEntry(name: string, m: { docs: Ent[]; reqs: string[]; areas: Record<string, Ent[]> }) {
     const { docScore, breakdown } = scoreDocs(m.docs);
-    // requirement coverage: требование покрыто, если есть покрывающий док со статусом implemented/partial
     const reqIds = m.reqs;
     const coveredReq = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
-    const reqScore = pct(coveredReq, reqIds.length);
-
-    // динамический Coverage Score — среднее по активным слоям, для которых есть значение
-    const layerScore: Record<string, number | null> = {
-      requirements: reqIds.length ? reqScore : null,
-      documentation: m.docs.length ? docScore : null,
-      tests: null, automation: null, execution: null,
-    };
-    const vals = activeDepth.map((l) => layerScore[l]).filter((v): v is number => v != null);
-    const coverageScore = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
-
+    const comp = components(m.docs, reqIds);
+    const score = coverageScore(comp, mode);
     const riskCount = m.docs.filter((d) => ['not-implemented', 'icebox', 'partial'].includes(d.metadata?.status)).length;
-    const riskScore = 100 - coverageScore;
     const size = Math.max(reqIds.length, m.docs.length, 1);
 
     const areas = Object.entries(m.areas).map(([aid, list]) => {
-      const sd = scoreDocs(list);
-      return { id: aid, name: aid, size: list.length, score: sd.docScore, docCount: list.length };
+      const c = components(list, []);
+      return { id: aid, name: aid, size: list.length, score: coverageScore(c, mode), docCount: list.length, comp: c };
     }).sort((a, b) => b.size - a.size);
 
     return {
-      name, size, coverageScore, docScore, reqScore, riskScore,
+      name, size, coverageScore: score, comp,
+      docScore, reqScore: comp.subreq ?? 0, riskScore: 100 - score,
       docCount: m.docs.length, reqCount: reqIds.length, coveredReq,
       featureCount: (modFeat[name] || new Set()).size, screenCount: (modScr[name] || new Set()).size,
       riskCount, breakdown, areas,
@@ -130,8 +154,8 @@ function compute(ents: Ent[], rels: Rel[], depth: string[]) {
     coverage: wAvg((m) => m.coverageScore),
     documentation: wAvg((m) => m.docScore),
     requirementCoverage: wAvg((m) => m.reqScore),
-    testCoverage: layersAvailable.tests ? wAvg((m) => 0) : null,
-    automationCoverage: layersAvailable.automation ? 0 : null,
+    testCoverage: layersAvailable.tests ? wAvg((m) => m.comp.tests ?? 0) : null,
+    automationCoverage: layersAvailable.automation ? wAvg((m) => m.comp.automation ?? 0) : null,
     riskScore: wAvg((m) => m.riskScore),
     modulesCount: modules.length,
     requirementsTotal: reqs.length,
@@ -139,54 +163,65 @@ function compute(ents: Ent[], rels: Rel[], depth: string[]) {
     topRiskModules: [...modules].sort((a, b) => b.riskScore - a.riskScore).slice(0, 5).map((m) => ({ name: m.name, score: m.coverageScore, risk: m.riskScore })),
     topUncovered: [...modules].sort((a, b) => a.coverageScore - b.coverageScore).slice(0, 5).map((m) => ({ name: m.name, score: m.coverageScore })),
     layersAvailable,
-    activeDepth,
+    mode,
+    weights: W,
   };
 
   return { kpi, modules };
 }
 
-// Матрица трассируемости: требования × {Docs, Tests, Auto, Exec, Risk}
-function buildMatrix(ents: Ent[], rels: Rel[], moduleFilter?: string) {
+// Матрица трассируемости: требование × {SubReq, Docs, Tests, Auto, Run, Bugs, Score}
+function buildMatrix(ents: Ent[], rels: Rel[], mode: 'available' | 'strict', moduleFilter?: string) {
   const byId: Record<string, Ent> = Object.fromEntries(ents.map((e) => [e.id, e]));
   const reqs = ents.filter((e) => e.type === 'requirement');
   const reqCoverDocs: Record<string, string[]> = {};
   for (const r of rels) if (r.type === 'covered_by') (reqCoverDocs[r.fromId] = reqCoverDocs[r.fromId] || []).push(r.toId);
   const docDomain = (d?: Ent) => (d?.metadata?.domain && d.metadata.domain !== '?' ? d.metadata.domain : 'Прочее');
+  const has = (t: string) => ents.some((e) => e.type === t);
+  const av = { tests: has('test_case'), automation: has('automation'), execution: has('execution'), defects: has('defect') };
 
   const rows = reqs.map((req) => {
     const dlist = (reqCoverDocs[req.id] || []).map((id) => byId[id]).filter(Boolean);
     const domain = dlist.length ? docDomain(dlist[0]) : 'Прочее';
     const hasDoc = dlist.length > 0;
-    const docImpl = dlist.some((d) => statusScore(d.metadata?.status) >= 0.5);
-    const risk = !hasDoc ? 'High' : docImpl ? 'Low' : 'Medium';
+    const docsPct = hasDoc ? Math.round(Math.max(...dlist.map((d) => statusScore(d.metadata?.status))) * 100) : 0;
+    const comp: Comp = {
+      subreq: hasDoc ? 100 : 0,
+      docs: docsPct,
+      tests: av.tests ? 0 : null,
+      automation: av.automation ? 0 : null,
+      execution: av.execution ? 0 : null,
+      defects: av.defects ? 100 : null,
+      bugs: av.defects ? 0 : null,
+    };
+    const score = coverageScore(comp, mode);
+    const risk = score < 60 ? 'High' : score < 80 ? 'Medium' : 'Low';
     return {
-      requirement: req.name,
-      summary: req.metadata?.summary || (req as any).summary || '',
-      module: domain,
-      docs: hasDoc ? (docImpl ? 'ok' : 'partial') : 'none',
-      tests: 'nodata', automation: 'nodata', execution: 'nodata',
-      risk,
+      requirement: req.name, summary: req.metadata?.summary || '', module: domain,
+      subreq: comp.subreq, docs: comp.docs, tests: comp.tests, automation: comp.automation,
+      execution: comp.execution, bugs: comp.bugs, score, risk,
       confluence: req.metadata?.confluence || null,
     };
-  });
+  }).sort((a, b) => a.score - b.score);
   return moduleFilter ? rows.filter((r) => r.module === moduleFilter) : rows;
 }
 
 export async function registerQualityApi(app: FastifyInstance) {
   // Полный отчёт: KPI + treemap(модули/области) + матрица.
+  const getMode = (req: any): 'available' | 'strict' => (String(req.query?.mode || 'available') === 'strict' ? 'strict' : 'available');
+
   app.get('/api/quality', async (req: any, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
-    const depth = String(req.query?.depth || 'requirements,documentation').split(',').map((s) => s.trim()).filter(Boolean);
     const { ents, rels } = await loadGraph();
-    const { kpi, modules } = compute(ents, rels, depth.length ? depth : ['requirements', 'documentation']);
-    return reply.send({ kpi, modules, generatedAt: undefined });
+    const { kpi, modules } = compute(ents, rels, getMode(req));
+    return reply.send({ kpi, modules });
   });
 
   // Матрица трассируемости (опц. фильтр по модулю).
   app.get('/api/quality/matrix', async (req: any, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
     const { ents, rels } = await loadGraph();
-    const rows = buildMatrix(ents, rels, req.query?.module ? String(req.query.module) : undefined);
+    const rows = buildMatrix(ents, rels, getMode(req), req.query?.module ? String(req.query.module) : undefined);
     return reply.send({ rows: rows.slice(0, 1500), total: rows.length });
   });
 
@@ -194,7 +229,7 @@ export async function registerQualityApi(app: FastifyInstance) {
   app.post('/api/quality/snapshots', async (req: any, reply) => {
     const admin = await requireAdmin(req, reply); if (!admin) return;
     const { ents, rels } = await loadGraph();
-    const { kpi, modules } = compute(ents, rels, ['requirements', 'documentation']);
+    const { kpi, modules } = compute(ents, rels, 'available');
     const snap = await prisma.qualitySnapshot.create({
       data: { label: (req.body?.label || '').toString().slice(0, 120) || null, createdBy: admin.name, data: { kpi, modules: modules.map((m) => ({ name: m.name, size: m.size, coverageScore: m.coverageScore, riskScore: m.riskScore })) } as any },
     });
