@@ -1,7 +1,49 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from './db.js';
 import { requireAuth, requireAdmin } from './auth.js';
+
+// ── Источник тестов (Layer 1): экспорт Qase docs/qa/*.json ──────────────────
+// Кейсы не имеют тегов/REQ-ID, поэтому маппим по именам сьютов на домен.
+const QA_RULES: Array<[RegExp, string]> = [
+  [/slot|slotbook|dock|gate|visit|\bzone|planning|tv\s*display|load view/i, 'DOCK'],
+  [/heppner|dhl|fedex|\bups\b|inttra|edifact|\bedi\b|\bsap\b|\bp44\b|shippeo|aftership|teliae|teliway|calvacom|dachser|kuehne|schenker|integration|webhook|emailing|brinks/i, 'Integrations'],
+  [/role|team|spectator|booker|invite|permission/i, 'Admin-App'],
+  [/\bchat\b|message|discussion|notification/i, 'Chat'],
+  [/mini[-\s]?app|driver app|carrier portal|quick shipment/i, 'Mini-Apps'],
+];
+function suiteToDomain(suitePath: string[]): string {
+  const s = suitePath.join(' / ');
+  for (const [re, dom] of QA_RULES) if (re.test(s)) return dom;
+  return 'TMS'; // основное приложение
+}
+let _qaCache: any = null;
+function loadQa(): { available: boolean; byDomain: Record<string, { total: number; automated: number }> } {
+  if (_qaCache) return _qaCache;
+  const p = path.resolve(process.cwd(), 'docs/qa/test-cases-MA-2026-05-25.json');
+  try {
+    const d = JSON.parse(readFileSync(p, 'utf8'));
+    const byDomain: Record<string, { total: number; automated: number }> = {};
+    (function walk(arr: any[], pathArr: string[]) {
+      for (const x of arr || []) {
+        const pp = pathArr.concat(x.title || x.name || '?');
+        for (const c of (x.cases || [])) {
+          if (c.status === 'deprecated') continue;
+          const dom = suiteToDomain(pp);
+          (byDomain[dom] = byDomain[dom] || { total: 0, automated: 0 }).total++;
+          if (c.automation === 'automated') byDomain[dom].automated++;
+        }
+        if (x.suites) walk(x.suites, pp);
+      }
+    })(d.suites || [], []);
+    _qaCache = { available: Object.keys(byDomain).length > 0, byDomain };
+  } catch {
+    _qaCache = { available: false, byDomain: {} };
+  }
+  return _qaCache;
+}
 
 // Quality Coverage Engine — единый движок расчёта покрытия поверх графа знаний
 // (Data Lake = KnowledgeEntity/Relation). Источник один, представлений несколько.
@@ -63,15 +105,18 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     reqDomain[req.id] = dlist.length ? docDomain(dlist[0]) : 'Прочее';
   }
 
-  // Доступность слоёв = есть ли подключённый источник данных в графе.
-  const has = (t: string) => ents.some((e) => e.type === t);
+  const qa = loadQa();
+  const qaTests = (domain: string): number | null => (qa.available ? ((qa.byDomain[domain]?.total || 0) > 0 ? 100 : 0) : null);
+  const qaAuto = (domain: string): number | null => { if (!qa.available) return null; const q = qa.byDomain[domain]; return q && q.total ? Math.round((q.automated / q.total) * 100) : 0; };
+
+  // Доступность слоёв = есть ли подключённый источник данных.
   const layersAvailable: Record<string, boolean> = {
     subreq: reqs.length > 0 || docs.length > 0,
     docs: docs.length > 0,
-    tests: has('test_case'),
-    automation: has('automation'),
-    execution: has('execution'),
-    defects: has('defect'),
+    tests: qa.available,
+    automation: qa.available,
+    execution: false,
+    defects: false,
   };
 
   // Группировка по модулю → области
@@ -103,16 +148,16 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     return { docScore: Math.round((sum / list.length) * 100), breakdown: bd };
   }
 
-  // Компоненты покрытия (0..100 / null) для модуля или области.
-  function components(docList: Ent[], reqIds: string[]): Comp {
+  // Компоненты покрытия (0..100 / null) для модуля или области (domain — для QA).
+  function components(docList: Ent[], reqIds: string[], domain: string): Comp {
     const { docScore } = scoreDocs(docList);
     const coveredReq = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
     const subreq = reqIds.length ? pct(coveredReq, reqIds.length) : (docList.length ? 100 : 0);
     return {
       subreq: layersAvailable.subreq ? subreq : null,
       docs: docList.length ? docScore : null,
-      tests: layersAvailable.tests ? 0 : null,
-      automation: layersAvailable.automation ? 0 : null,
+      tests: qaTests(domain),
+      automation: qaAuto(domain),
       execution: layersAvailable.execution ? 0 : null,
       defects: layersAvailable.defects ? 100 : null,
       bugs: layersAvailable.defects ? 0 : null,
@@ -123,13 +168,13 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     const { docScore, breakdown } = scoreDocs(m.docs);
     const reqIds = m.reqs;
     const coveredReq = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
-    const comp = components(m.docs, reqIds);
+    const comp = components(m.docs, reqIds, name);
     const score = coverageScore(comp, enabled);
     const riskCount = m.docs.filter((d) => ['not-implemented', 'icebox', 'partial'].includes(d.metadata?.status)).length;
     const size = Math.max(reqIds.length, m.docs.length, 1);
 
     const areas = Object.entries(m.areas).map(([aid, list]) => {
-      const c = components(list, []);
+      const c = components(list, [], name);
       return { id: aid, name: aid, size: list.length, score: coverageScore(c, enabled), docCount: list.length, comp: c };
     }).sort((a, b) => b.size - a.size);
 
@@ -175,8 +220,9 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
   const reqCoverDocs: Record<string, string[]> = {};
   for (const r of rels) if (r.type === 'covered_by') (reqCoverDocs[r.fromId] = reqCoverDocs[r.fromId] || []).push(r.toId);
   const docDomain = (d?: Ent) => (d?.metadata?.domain && d.metadata.domain !== '?' ? d.metadata.domain : 'Прочее');
-  const has = (t: string) => ents.some((e) => e.type === t);
-  const av = { tests: has('test_case'), automation: has('automation'), execution: has('execution'), defects: has('defect') };
+  const qa = loadQa();
+  const qaTests = (dm: string): number | null => (qa.available ? ((qa.byDomain[dm]?.total || 0) > 0 ? 100 : 0) : null);
+  const qaAuto = (dm: string): number | null => { if (!qa.available) return null; const q = qa.byDomain[dm]; return q && q.total ? Math.round((q.automated / q.total) * 100) : 0; };
 
   const rows = reqs.map((req) => {
     const dlist = (reqCoverDocs[req.id] || []).map((id) => byId[id]).filter(Boolean);
@@ -186,11 +232,11 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
     const comp: Comp = {
       subreq: hasDoc ? 100 : 0,
       docs: docsPct,
-      tests: av.tests ? 0 : null,
-      automation: av.automation ? 0 : null,
-      execution: av.execution ? 0 : null,
-      defects: av.defects ? 100 : null,
-      bugs: av.defects ? 0 : null,
+      tests: qaTests(domain),
+      automation: qaAuto(domain),
+      execution: null,
+      defects: null,
+      bugs: null,
     };
     const score = coverageScore(comp, enabled);
     const risk = score < 60 ? 'High' : score < 80 ? 'Medium' : 'Low';
