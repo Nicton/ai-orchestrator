@@ -10,9 +10,19 @@ import { requireAuth, requireAdmin } from './auth.js';
 const WORKSPACE = process.env.IMPL_WORKSPACE || '/workspace';
 const COMPOSE_PROJECT = process.env.COMPOSE_PROJECT || 'shiptify-orchestrator';
 
-function sh(cmd: string, args: string[], opts: { cwd?: string; timeoutMs?: number } = {}): Promise<{ code: number; out: string }> {
+// Запускаем агент/git от uid 1000 (node) — совпадает с владельцем смонтированного
+// репо (нет git "dubious ownership") и снимает запрет Claude на bypass под root.
+const RUN_UID = Number(process.env.IMPL_UID || 1000);
+const RUN_GID = Number(process.env.IMPL_GID || 1000);
+const RUN_HOME = process.env.IMPL_HOME || '/home/node';
+
+function sh(cmd: string, args: string[], opts: { cwd?: string; timeoutMs?: number; asUser?: boolean } = {}): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
-    const proc = spawn(cmd, args, { cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn(cmd, args, {
+      cwd: opts.cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(opts.asUser ? { uid: RUN_UID, gid: RUN_GID, env: { ...process.env, HOME: RUN_HOME } } : {}),
+    });
     let out = '';
     const cap = (b: Buffer) => { out += b.toString(); if (out.length > 60000) out = out.slice(-60000); };
     proc.stdout.on('data', cap);
@@ -49,25 +59,26 @@ ${body}
 Требования: внеси минимальные корректные изменения по задаче; не ломай сборку; не трогай секреты/.env; если задача неясна или вне скоупа — поясни и НЕ делай вредных изменений. По завершении кратко перечисли изменённые файлы.`;
 
   await flush('Агент Claude работает над задачей…');
-  const agent = await sh('claude', ['-p', task, '--permission-mode', 'bypassPermissions', '--model', process.env.ANSWER_MODEL || 'claude-sonnet-4-6'], { cwd: WORKSPACE, timeoutMs: 15 * 60 * 1000 });
+  const agent = await sh('claude', ['-p', task, '--permission-mode', 'bypassPermissions', '--model', process.env.ANSWER_MODEL || 'claude-sonnet-4-6'], { cwd: WORKSPACE, timeoutMs: 15 * 60 * 1000, asUser: true });
   log.push('--- ВЫВОД АГЕНТА ---', agent.out.slice(-20000), `--- агент завершил (код ${agent.code}) ---`);
   await flush();
 
-  const diff = await sh('git', ['-C', WORKSPACE, 'status', '--porcelain'], { timeoutMs: 30000 });
+  const G = ['-C', WORKSPACE, '-c', 'safe.directory=*'];
+  const diff = await sh('git', [...G, 'status', '--porcelain'], { timeoutMs: 30000, asUser: true });
   if (!diff.out.trim()) {
     await setIdea(ideaId, { status: 'FAILED', log: log.concat('Агент не внёс изменений в файлы — нечего коммитить.').join('\n') });
     return;
   }
   log.push('Изменённые файлы:', diff.out.trim().slice(0, 4000));
 
-  await sh('git', ['-C', WORKSPACE, 'add', '-A'], { timeoutMs: 30000 });
+  await sh('git', [...G, 'add', '-A'], { timeoutMs: 30000, asUser: true });
   const commitMsg = `feat(idea): ${title}\n\nAuto-implemented from idea ${ideaId} (approved by ${adminName}).\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>`;
-  const commit = await sh('git', ['-C', WORKSPACE, '-c', 'user.name=Ideas Bot', '-c', 'user.email=ideas@shiptify.local', 'commit', '-m', commitMsg], { timeoutMs: 30000 });
+  const commit = await sh('git', [...G, '-c', 'user.name=Ideas Bot', '-c', 'user.email=ideas@shiptify.local', 'commit', '-m', commitMsg], { timeoutMs: 30000, asUser: true });
   log.push('--- commit ---', commit.out.slice(-2000));
-  const shaRes = await sh('git', ['-C', WORKSPACE, 'rev-parse', '--short', 'HEAD'], { timeoutMs: 15000 });
+  const shaRes = await sh('git', [...G, 'rev-parse', '--short', 'HEAD'], { timeoutMs: 15000, asUser: true });
   const sha = shaRes.out.trim().slice(0, 12);
 
-  const push = await sh('git', ['-C', WORKSPACE, 'push'], { timeoutMs: 120000 });
+  const push = await sh('git', [...G, 'push'], { timeoutMs: 120000, asUser: true });
   log.push('--- push ---', push.out.slice(-2000));
   const pushed = push.code === 0;
 
