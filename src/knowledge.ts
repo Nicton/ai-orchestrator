@@ -1009,28 +1009,38 @@ Retrieval plan:
 Evidence:
 ${evidence}`;
 
+  let llmAnswer = '';
   try {
     const result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel);
-    const answer = result.text.trim();
-    if (answer) return { mode: 'llm', answer, usedGraph };
-    if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition', usedGraph };
-    return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic', usedGraph };
+    llmAnswer = result.text.trim();
   } catch {
-    if (profile?.isDefinitionQuery) {
-      return {
-        mode: 'fallback',
-        answer: buildDefinitionFallback(hits, lang, profile),
-        fallbackKind: 'definition',
-        usedGraph,
-      };
-    }
-    return {
-      mode: 'fallback',
-      answer: copy.synthesisUnavailable[lang],
-      fallbackKind: 'generic',
-      usedGraph,
-    };
+    llmAnswer = '';
   }
+  if (llmAnswer) return { mode: 'llm', answer: llmAnswer, usedGraph };
+
+  // LLM недоступен/пуст. Для структурных вопросов отвечаем ПРЯМО из графа (без LLM).
+  if (graphCtx) return { mode: 'llm', answer: formatGraphAnswer(graphCtx, lang), usedGraph: true };
+  if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition', usedGraph };
+  return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic', usedGraph };
+}
+
+// Превращает структурный блок графа в чистый markdown-ответ (без LLM).
+function formatGraphAnswer(block: string, lang: string): string {
+  const intro = lang === 'en' ? 'From the knowledge graph:' : lang === 'fr' ? 'Depuis le graphe de connaissances :' : 'По графу знаний:';
+  const out: string[] = [intro, ''];
+  for (const section of block.split('\n\n')) {
+    const lines = section.split('\n');
+    const head = (lines[0] || '').replace(/:$/, '').trim();
+    if (head) out.push(`### ${head}`);
+    for (const ln of lines.slice(1)) {
+      const m = ln.match(/^\s*(.+?)\s*\((\d+)\):\s*(.+)$/);
+      if (m) out.push(`- **${m[1]} (${m[2]}):** ${m[3]}`);
+      else if (ln.trim()) out.push(ln.trim());
+    }
+    out.push('');
+  }
+  out.push(lang === 'en' ? '_Detailed sources below._' : lang === 'fr' ? '_Sources détaillées ci-dessous._' : '_Подробные источники — ниже._');
+  return out.join('\n');
 }
 
 async function registerGap(question: string, confidence: number, hitCount: number, intent: string, terms: string[]) {
