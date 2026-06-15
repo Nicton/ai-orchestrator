@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Идеи к улучшению — Searchify</title>
+<style>
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; }
+  *{box-sizing:border-box} body{margin:0;font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+  a{color:var(--blue);text-decoration:none}
+  header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:16px}
+  header.bar .title{font-size:18px;font-weight:600}.spacer{flex:1}
+  .toplink{color:var(--muted);cursor:pointer;font-size:14px}.toplink:hover{color:var(--blue)}
+  .wrap{max-width:960px;margin:24px auto;padding:0 20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 1px 3px rgba(32,33,36,.06)}
+  h2{font-size:16px;margin:0 0 12px}.muted{color:var(--muted);font-size:13px}
+  input,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;margin-bottom:10px}
+  textarea{min-height:90px;resize:vertical}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16px;font-size:14px;background:var(--blue);color:#fff}
+  button.ghost{background:#fff;border:1px solid var(--line);color:#3c4043}
+  button.danger{background:#fff;border:1px solid #f3c2bd;color:#d93025}
+  button:disabled{opacity:.5;cursor:default}
+  .idea{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
+  .idea h3{font-size:14px;margin:0 0 4px}.idea p{margin:4px 0;font-size:13px;color:#3c4043;white-space:pre-wrap}
+  .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
+  .b-PENDING{background:#fef7e0;color:#b06000}.b-APPROVED{background:#e6f4ea;color:#137333}.b-REJECTED{background:#fce8e6;color:#c5221f}
+  .b-IN_PROGRESS{background:#e8f0fe;color:#1a73e8}.b-APPLIED{background:#e6f4ea;color:#0b8043}.b-FAILED{background:#fce8e6;color:#c5221f}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .who{font-size:12px;color:var(--muted)}
+  pre.log{background:#0d1117;color:#c9d1d9;border-radius:8px;padding:10px;font-size:11px;max-height:240px;overflow:auto;white-space:pre-wrap;margin-top:8px;display:none}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tab{padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;border:1px solid var(--line);background:#fff;color:#3c4043}
+  .tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="title">💡 Идеи к улучшению</span>
+  <span class="spacer"></span>
+  <span class="toplink" onclick="location.href='/'">← Поиск</span>
+  <span class="toplink" onclick="location.href='/graph'">Graph</span>
+  <span class="toplink" id="adminTab" style="display:none" onclick="showAdmin()">Admin: все идеи</span>
+</header>
+<div class="wrap">
+  <div class="card">
+    <h2>Предложить улучшение</h2>
+    <div class="muted" style="margin-bottom:10px">Опишите, что хочется улучшить или добавить. Идею рассмотрит администратор; одобренную можно реализовать автоматически.</div>
+    <input id="title" maxlength="200" placeholder="Коротко: суть идеи" />
+    <textarea id="body" maxlength="8000" placeholder="Подробно: что и зачем улучшить/добавить"></textarea>
+    <button id="submitBtn">Отправить идею</button>
+    <span id="msg" class="muted" style="margin-left:10px"></span>
+  </div>
+
+  <div id="userView">
+    <div class="tabs"><div class="tab active">Мои идеи</div></div>
+    <div id="myIdeas"></div>
+  </div>
+
+  <div id="adminView" style="display:none">
+    <div class="tabs"><div class="tab active">Все идеи (админ)</div></div>
+    <div id="allIdeas"></div>
+  </div>
+</div>
+<script>
+let ME=null;
+const $=id=>document.getElementById(id);
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+const STATUS={PENDING:'на рассмотрении',APPROVED:'одобрено',REJECTED:'отклонено',IN_PROGRESS:'выполняется…',APPLIED:'применено',FAILED:'ошибка'};
+function badge(s){return `<span class="badge b-${s}">${STATUS[s]||s}</span>`}
+
+async function boot(){
+  const me=await fetch('/api/auth/me'); if(!me.ok){location.href='/login';return;}
+  ME=(await me.json()).user||await me.json();
+  if(ME && ME.role==='admin') $('adminTab').style.display='inline';
+  loadMine();
+}
+$('submitBtn').addEventListener('click',async()=>{
+  const title=$('title').value.trim(), body=$('body').value.trim();
+  if(title.length<3||body.length<3){$('msg').textContent='Заполните заголовок и описание.';return;}
+  $('submitBtn').disabled=true;
+  const r=await fetch('/api/ideas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,body})});
+  $('submitBtn').disabled=false;
+  if(r.ok){$('title').value='';$('body').value='';$('msg').textContent='Идея отправлена ✓';loadMine();}
+  else $('msg').textContent='Ошибка отправки';
+});
+
+function ideaCard(i,admin){
+  const who = admin ? `<div class="who">от: ${esc(i.user?.name||i.userLabel||'—')} ${i.user?.email?'· '+esc(i.user.email):''}</div>` : '';
+  let actions='';
+  if(admin){
+    actions=`<div class="row">
+      ${i.status==='PENDING'?`<button class="ghost" data-act="APPROVED" data-id="${i.id}">Одобрить</button>
+      <button class="danger" data-act="REJECTED" data-id="${i.id}">Отклонить</button>`:''}
+      ${(i.status==='APPROVED'||i.status==='PENDING'||i.status==='FAILED')?`<button data-impl="${i.id}">⚙ Реализовать (CLI)</button>`:''}
+      ${i.status==='IN_PROGRESS'?`<button disabled>Выполняется…</button>`:''}
+      ${i.log?`<button class="ghost" data-log="${i.id}">Лог</button>`:''}
+      ${i.commitSha?`<span class="who">commit ${esc(i.commitSha)}</span>`:''}
+    </div>
+    <pre class="log" id="log-${i.id}">${esc(i.log||'')}</pre>`;
+  }
+  return `<div class="idea">
+    <h3>${esc(i.title)} ${badge(i.status)}</h3>
+    <p>${esc(i.body)}</p>
+    ${who}${actions}
+  </div>`;
+}
+
+async function loadMine(){
+  const r=await fetch('/api/ideas/mine'); const d=await r.json();
+  $('myIdeas').innerHTML=(d.ideas||[]).map(i=>ideaCard(i,false)).join('')||'<div class="muted">Пока нет идей.</div>';
+}
+
+async function showAdmin(){
+  $('userView').style.display='none'; $('adminView').style.display='block';
+  await loadAll();
+}
+async function loadAll(){
+  const r=await fetch('/api/admin/ideas'); if(!r.ok){$('allIdeas').innerHTML='<div class="muted">Нет доступа.</div>';return;}
+  const d=await r.json();
+  $('allIdeas').innerHTML=(d.ideas||[]).map(i=>ideaCard(i,true)).join('')||'<div class="muted">Пока нет идей.</div>';
+  $('allIdeas').querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',async()=>{
+    await fetch(`/api/admin/ideas/${b.dataset.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.dataset.act})});
+    loadAll();
+  }));
+  $('allIdeas').querySelectorAll('[data-impl]').forEach(b=>b.addEventListener('click',async()=>{
+    if(!confirm('Запустить автономную реализацию через Claude CLI? Агент изменит код, закоммитит, запушит и обновит прод.'))return;
+    b.disabled=true; b.textContent='Запуск…';
+    await fetch(`/api/admin/ideas/${b.dataset.impl}/implement`,{method:'POST'});
+    setTimeout(loadAll,1500);
+    // авто-обновление пока IN_PROGRESS
+    const poll=setInterval(async()=>{const r=await fetch('/api/admin/ideas');const d=await r.json();const cur=(d.ideas||[]).find(x=>x.id===b.dataset.impl);if(cur&&cur.status!=='IN_PROGRESS'){clearInterval(poll);loadAll();}},5000);
+  }));
+  $('allIdeas').querySelectorAll('[data-log]').forEach(b=>b.addEventListener('click',()=>{
+    const el=$('log-'+b.dataset.log); el.style.display=el.style.display==='block'?'none':'block';
+  }));
+}
+boot();
+</script>
+</body>
+</html>

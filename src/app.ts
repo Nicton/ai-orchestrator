@@ -14,6 +14,7 @@ import { wfCreateTask, wfEnqueueJob, wfSetStatus } from './workflow.js';
 import { readRecentEvents } from './bus/sink.js';
 import { registerIntakeApi } from './intake.js';
 import { registerKnowledgeApi, seedKnowledgeGraph } from './knowledge.js';
+import { registerIdeasApi } from './ideas.js';
 import { loadGraphIntoDb } from './graphLoader.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
 import { TaskStatus, WfJobType, WfTaskStatus } from './prismaEnums.js';
@@ -38,6 +39,7 @@ app.register(fastifyMultipart, {
 await registerAuthApi(app);
 await registerIntakeApi(app);
 await registerKnowledgeApi(app);
+await registerIdeasApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -813,6 +815,11 @@ app.get('/admin', async (_, reply) => {
 // Knowledge graph + traceability visualization.
 app.get('/graph', async (_, reply) => {
   return reply.sendFile('graph.html');
+});
+
+// Improvement ideas (user submissions + admin review/implement).
+app.get('/ideas', async (_, reply) => {
+  return reply.sendFile('ideas.html');
 });
 
 // Legacy internal orchestrator dashboard (engineering use).

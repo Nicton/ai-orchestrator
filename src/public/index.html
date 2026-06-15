@@ -278,6 +278,7 @@
 <div class="topbar" id="topbar" style="display:none">
   <span class="spacer"></span>
   <span class="toplink" id="graphBtn">Graph</span>
+  <span class="toplink" id="ideasBtn">Идеи</span>
   <span class="toplink" id="histBtn">History</span>
   <span class="toplink" id="adminBtn" style="display:none">Admin</span>
   <div class="usermenu">
@@ -863,6 +864,7 @@ $('userMenu').addEventListener('click', (e) => e.stopPropagation());
 $('menuLogout').addEventListener('click', async () => { await API.logout(); currentUser = null; location.href = '/'; });
 $('adminBtn').addEventListener('click', () => location.href = '/admin');
 $('graphBtn').addEventListener('click', () => location.href = '/graph');
+$('ideasBtn').addEventListener('click', () => location.href = '/ideas');
 $('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add('hidden'); openChangePassword(); });
 
 // ===================================================================

@@ -27,6 +27,8 @@ services:
       YOUTRACK_QUERY: ${YOUTRACK_QUERY:-}
       YOUTRACK_TRIGGER_STATE: ${YOUTRACK_TRIGGER_STATE:-In Progress}
       YOUTRACK_PIPELINE_PATH: ${YOUTRACK_PIPELINE_PATH:-core/orchestration/pipeline.v1.yaml}
+      IMPL_WORKSPACE: /workspace
+      COMPOSE_PROJECT: shiptify-orchestrator
     depends_on:
       db:
         condition: service_healthy
@@ -39,6 +41,10 @@ services:
       # Claude Code auth (shared with host) — primary LLM engine via subscription.
       - /home/user/.claude:/root/.claude
       - /home/user/.claude.json:/root/.claude.json:ro
+      # Ideas "implement" pipeline: edit the deploy repo, push, redeploy via host docker.
+      - /home/user/ka-prod-deploy:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/user/.ssh:/root/.ssh:ro
     command: ["sh","-lc","until node -e \"const net=require('net');const s=net.connect(5432,'db');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),500);\"; do echo 'waiting for db...'; sleep 1; done; npm run db:push && npm run start:app"]
     restart: unless-stopped
 

@@ -600,8 +600,30 @@ model AppUser {
   queries     KnowledgeQuery[]
   feedbacks   KnowledgeFeedback[]
   corrections KnowledgeCorrection[]
+  ideas       Idea[]
 
   @@index([role])
+}
+
+// Идеи к улучшению (Improvement ideas). Пользователь предлагает; админ
+// рассматривает/реализует. Статусы: PENDING|APPROVED|REJECTED|IN_PROGRESS|APPLIED|FAILED.
+model Idea {
+  id           String   @id @default(cuid())
+  userId       String
+  userLabel    String?
+  title        String
+  body         String
+  status       String   @default("PENDING")
+  log          String?  // вывод агента / результат реализации
+  commitSha    String?
+  reviewedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }
 
 model AppSession {
