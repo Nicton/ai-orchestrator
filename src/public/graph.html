@@ -5,28 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Knowledge Graph — Searchify</title>
 <style>
-  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; --shadow:0 1px 4px rgba(32,33,36,.12); }
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
   a { color:var(--blue); text-decoration:none; }
   button,select,input { font-family:inherit; }
-  header.bar { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header.bar { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   header.bar .title { font-size:17px; font-weight:600; }
   header.bar .spacer { flex:1; }
   .ghost { border:1px solid var(--line); background:#fff; color:#3c4043; padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; }
   .ghost.active { background:var(--blue); color:#fff; border-color:var(--blue); }
-  input.search { border:1px solid var(--line); border-radius:8px; padding:7px 11px; font-size:13px; width:220px; }
+  input.search { border:1px solid var(--line); border-radius:8px; padding:7px 11px; font-size:13px; width:200px; }
   select { border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:13px; }
   .wrap { display:flex; height:calc(100vh - 53px); }
-  .canvas { flex:1; position:relative; overflow:hidden; background:radial-gradient(circle at 50% 40%, #fff, #eef1f6); }
+  .canvas { flex:1; position:relative; overflow:hidden; background:radial-gradient(circle at 50% 45%, #fbfcfe, #eceff4); }
   svg { width:100%; height:100%; display:block; cursor:grab; }
   svg.drag { cursor:grabbing; }
-  .edge { stroke:#cdd4de; stroke-width:1; }
-  .edge.cross { stroke:#f439a0; stroke-width:1.4; opacity:.55; }
-  .edge.hl { stroke:var(--blue); stroke-width:2.2; opacity:1; }
+  .edge { stroke:#cdd4de; stroke-width:1; vector-effect:non-scaling-stroke; }
+  .edge.cross { stroke:#f439a0; stroke-opacity:.5; }
+  .edge.hl { stroke:var(--blue); stroke-width:2; stroke-opacity:1; }
   .node circle { cursor:pointer; stroke:#fff; stroke-width:1.5; }
-  .node text { font-size:10px; fill:#3c4043; pointer-events:none; }
-  .node.dim { opacity:.12; }
+  .node text { font-size:10px; fill:#3c4043; pointer-events:none; paint-order:stroke; stroke:#fff; stroke-width:2.5px; stroke-linejoin:round; }
+  .node.dim { opacity:.1; }
   .node.risk circle { stroke:#d93025; stroke-width:3; }
   .side { width:340px; border-left:1px solid var(--line); background:var(--panel); padding:16px; overflow-y:auto; }
   .side h2 { font-size:15px; margin:0 0 4px; }
@@ -39,7 +39,8 @@
   .stat { display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; border-bottom:1px dashed var(--line); }
   .empty { padding:60px 20px; text-align:center; color:var(--muted); }
   .pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; background:#eef1f5; color:#5f6368; }
-  .hint { position:absolute; bottom:10px; left:12px; font-size:11px; color:#9aa0a6; background:rgba(255,255,255,.7); padding:3px 8px; border-radius:6px; }
+  .hint { position:absolute; bottom:10px; left:12px; font-size:11px; color:#9aa0a6; background:rgba(255,255,255,.75); padding:3px 8px; border-radius:6px; }
+  .spin { position:absolute; top:10px; left:12px; font-size:11px; color:#5f6368; background:rgba(255,255,255,.85); padding:3px 8px; border-radius:6px; display:none; }
 </style>
 </head>
 <body>
@@ -49,6 +50,7 @@
   <select id="domain"><option value="">Все домены</option></select>
   <span class="layers" id="layers"></span>
   <button class="ghost" id="risksBtn">⚠ Риски</button>
+  <button class="ghost" id="relayoutBtn">↻ Раскладка</button>
   <span class="spacer"></span>
   <span class="muted" id="counts"></span>
   <a class="ghost" href="/">← Поиск</a>
@@ -56,11 +58,12 @@
 <div class="wrap">
   <div class="canvas" id="canvas">
     <div class="empty" id="msg">Загрузка графа…</div>
-    <div class="hint">Колесо — зум · тяни фон — сдвиг · клик по узлу — связи</div>
+    <div class="spin" id="spin">расчёт раскладки…</div>
+    <div class="hint">колесо — зум · тяни фон — сдвиг · тяни узел — двигать · клик — связи</div>
   </div>
   <div class="side" id="side">
     <h2>Граф знаний проекта</h2>
-    <div class="muted">Глубина изученности: модули → фичи → экраны/модалки → доки → код. Размер узла = охват/глубина, цвет = тип/статус. Розовые рёбра — кросс-модульные связи.</div>
+    <div class="muted">Силовой граф: узлы расталкиваются, связи притягивают. Размер = охват/глубина, цвет = тип/статус. Розовые рёбра — кросс-модульные связи.</div>
     <div id="stats" style="margin-top:12px"></div>
     <div id="detail"></div>
   </div>
@@ -76,32 +79,31 @@ const TYPE = {
   requirement: { color:'#d93025', label:'Требования', on:false },
   confluence:  { color:'#12b5cb', label:'Confluence', on:false },
 };
-const STATUS_TINT = { implemented:null, partial:'#f9ab00', 'not-implemented':'#d93025', icebox:'#9aa0a6' };
+const STATUS_TINT = { partial:'#f9ab00', 'not-implemented':'#d93025', icebox:'#9aa0a6' };
 function colorFor(n){
   if (n.type==='document' && n.status && STATUS_TINT[n.status]) return STATUS_TINT[n.status];
   return (TYPE[n.type]||{}).color || '#7b8794';
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-let NODES=[], EDGES=[], BYID={}, pos={}, deg={}, domains={};
+let NODES=[], EDGES=[], BYID={}, pos={}, deg={}, span={};
 let view={x:0,y:0,k:1}, W=0, H=0, sel=null, risksOn=false;
+let sim={raf:0, nodes:[], edges:[], running:false, alpha:0};
 
 async function boot(){
   const me = await fetch('/api/auth/me'); if(!me.ok){ location.href='/login'; return; }
   const data = await fetch('/api/knowledge/graph').then(r=>r.json());
   NODES = data.nodes||[]; EDGES = data.edges||[];
   if(!NODES.length){ document.getElementById('msg').innerHTML='Граф пуст. Запустите загрузку graph.json.'; return; }
-  BYID = {}; NODES.forEach(n=>BYID[n.id]=n);
-  deg = {}; EDGES.forEach(e=>{ deg[e.from]=(deg[e.from]||0)+1; deg[e.to]=(deg[e.to]||0)+1; });
-  // domain span per feature (cross-module breadth) for depth sizing
-  computeFeatureSpan();
+  BYID={}; NODES.forEach(n=>BYID[n.id]=n);
+  deg={}; EDGES.forEach(e=>{ deg[e.from]=(deg[e.from]||0)+1; deg[e.to]=(deg[e.to]||0)+1; });
+  computeSpan();
   buildControls();
+  document.getElementById('msg').remove();
   relayout();
 }
 
-// how many distinct domains each feature/modal touches (via connected docs)
-let span={};
-function computeFeatureSpan(){
+function computeSpan(){
   const acc={};
   EDGES.forEach(e=>{
     const a=BYID[e.from], b=BYID[e.to]; if(!a||!b) return;
@@ -116,68 +118,35 @@ function buildControls(){
   const L=document.getElementById('layers');
   L.innerHTML = Object.entries(TYPE).map(([t,c])=>
     `<span class="chip ${c.on?'':'off'}" data-t="${t}"><span class="dot" style="background:${c.color}"></span>${c.label}</span>`).join('');
-  L.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{
-    TYPE[ch.dataset.t].on=!TYPE[ch.dataset.t].on; ch.classList.toggle('off'); relayout();
-  }));
+  L.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{ TYPE[ch.dataset.t].on=!TYPE[ch.dataset.t].on; ch.classList.toggle('off'); relayout(); }));
   const dom=document.getElementById('domain');
-  const ds=Array.from(new Set(NODES.map(n=>n.domain).filter(Boolean))).sort();
-  ds.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d; dom.appendChild(o); });
+  Array.from(new Set(NODES.map(n=>n.domain).filter(Boolean))).sort().forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d; dom.appendChild(o); });
   dom.addEventListener('change',relayout);
-  document.getElementById('risksBtn').addEventListener('click',()=>{ risksOn=!risksOn; document.getElementById('risksBtn').classList.toggle('active',risksOn); draw(); renderStats(); });
-  const s=document.getElementById('search');
-  s.addEventListener('input',()=>doSearch(s.value.trim().toLowerCase()));
+  document.getElementById('risksBtn').addEventListener('click',()=>{ risksOn=!risksOn; document.getElementById('risksBtn').classList.toggle('active',risksOn); draw(true); renderStats(); });
+  document.getElementById('relayoutBtn').addEventListener('click',()=>relayout());
+  const s=document.getElementById('search'); s.addEventListener('change',()=>doSearch(s.value.trim().toLowerCase()));
 }
 
 function visible(){
   const dom=document.getElementById('domain').value;
   const nodes = NODES.filter(n=>{
-    const t = TYPE[n.type]; if(!t||!t.on) return false;
-    if(dom && (n.type==='document'||n.type==='feature'||n.type==='modal'||n.type==='screen') && n.domain && n.domain!==dom) return false;
-    if(dom && n.type==='module' && n.id!==dom) return false;
+    const t=TYPE[n.type]; if(!t||!t.on) return false;
+    if(dom){
+      if(n.type==='module') return n.id===dom;
+      if(['document','feature','modal','screen'].includes(n.type)) return !n.domain || n.domain===dom;
+    }
     return true;
   });
   const ids=new Set(nodes.map(n=>n.id));
-  const edges = EDGES.filter(e=>ids.has(e.from)&&ids.has(e.to));
-  return {nodes,edges,ids};
-}
-
-// Cluster layout: modules anchored on a circle; each node placed near the
-// modules it connects to (cross-module features land between modules).
-function relayout(){
-  const c=document.getElementById('canvas'); W=c.clientWidth; H=c.clientHeight;
-  const {nodes,edges} = visible();
-  const mods = nodes.filter(n=>n.type==='module');
-  const cx=W/2, cy=H/2, R=Math.max(160, Math.min(cx,cy)-80);
-  const anchor={};
-  mods.forEach((m,i)=>{ const a=(i/Math.max(1,mods.length))*Math.PI*2-Math.PI/2; anchor[m.id]={x:cx+R*Math.cos(a),y:cy+R*Math.sin(a)}; pos[m.id]=anchor[m.id]; });
-  // map node -> connected module anchors
-  const modOf={};
-  edges.forEach(e=>{
-    const am=anchor[e.from], bm=anchor[e.to];
-    if(am){ (modOf[e.to]=modOf[e.to]||[]).push(am); }
-    if(bm){ (modOf[e.from]=modOf[e.from]||[]).push(bm); }
-  });
-  let orphan=0;
-  nodes.forEach((n,i)=>{
-    if(n.type==='module') return;
-    const ms=modOf[n.id];
-    if(ms&&ms.length){
-      let x=0,y=0; ms.forEach(p=>{x+=p.x;y+=p.y;}); x/=ms.length; y/=ms.length;
-      const j=(i%12)/12*Math.PI*2, rr=26+(i%5)*12;
-      pos[n.id]={x:x+rr*Math.cos(j)+(ms.length>1?0:0), y:y+rr*Math.sin(j)};
-    } else {
-      const a=(orphan++/Math.max(1,nodes.length))*Math.PI*2; pos[n.id]={x:cx+(R+90)*Math.cos(a), y:cy+(R+90)*Math.sin(a)};
-    }
-  });
-  view={x:0,y:0,k:1}; sel=null;
-  draw(); renderStats();
+  const edges=EDGES.filter(e=>ids.has(e.from)&&ids.has(e.to));
+  return {nodes,edges};
 }
 
 function radius(n){
-  if(n.type==='module') return 9+Math.min(16,(deg[n.id]||0)*0.6);
-  if(n.type==='feature'||n.type==='modal') return 6+Math.min(14,(span[n.id]||1)*1.6); // breadth = cross-module depth
-  if(n.type==='document') return 5+Math.min(12,(n.codeRefs||0)*1.4);                  // depth = code coverage
-  return 4+Math.min(8,(deg[n.id]||0)*0.5);
+  if(n.type==='module') return 8+Math.min(18,(deg[n.id]||0)*0.5);
+  if(n.type==='feature'||n.type==='modal') return 5+Math.min(16,(span[n.id]||1)*1.7);
+  if(n.type==='document') return 4+Math.min(12,(n.codeRefs||0)*1.3);
+  return 3.5+Math.min(8,(deg[n.id]||0)*0.5);
 }
 function isRisk(n){
   if(n.type==='document' && (n.status==='not-implemented'||n.status==='icebox'||n.status==='partial')) return true;
@@ -185,55 +154,126 @@ function isRisk(n){
   return false;
 }
 
-function draw(){
+// ── force-directed layout ────────────────────────────────────────────────
+function relayout(){
+  const c=document.getElementById('canvas'); W=c.clientWidth; H=c.clientHeight;
   const {nodes,edges}=visible();
+  const spread=Math.max(W,H)*0.55;
+  nodes.forEach((n,i)=>{
+    if(!pos[n.id]){
+      const a=i*2.399963; const r=spread*Math.sqrt(i/Math.max(1,nodes.length)); // phyllotaxis seed
+      pos[n.id]={x:W/2+r*Math.cos(a), y:H/2+r*Math.sin(a), vx:0, vy:0, pinned:false};
+    } else { pos[n.id].vx=0; pos[n.id].vy=0; }
+  });
+  sim.nodes=nodes; sim.edges=edges; sim.alpha=1; sel=null;
+  view={x:0,y:0,k:1};
+  startSim();
+}
+
+const LINK=66, CELL=96;
+function tick(){
+  const nodes=sim.nodes, edges=sim.edges;
+  for(const n of nodes){ const p=pos[n.id]; p.fx=0; p.fy=0; }
+  // repulsion via spatial grid (≈O(n))
+  const grid=new Map();
+  for(const n of nodes){ const p=pos[n.id]; const k=(p.x/CELL|0)+'_'+(p.y/CELL|0); let a=grid.get(k); if(!a){a=[];grid.set(k,a);} a.push(n); }
+  const REP=2600*sim.alpha+900;
+  for(const n of nodes){ const p=pos[n.id]; const cx=p.x/CELL|0, cy=p.y/CELL|0;
+    for(let gx=cx-1;gx<=cx+1;gx++) for(let gy=cy-1;gy<=cy+1;gy++){
+      const arr=grid.get(gx+'_'+gy); if(!arr) continue;
+      for(const m of arr){ if(m===n) continue; const q=pos[m.id];
+        let dx=p.x-q.x, dy=p.y-q.y, d2=dx*dx+dy*dy; if(d2<0.01){dx=Math.random()-0.5;dy=Math.random()-0.5;d2=1;}
+        if(d2>CELL*CELL*4) continue; const f=REP/d2; const d=Math.sqrt(d2); p.fx+=dx/d*f; p.fy+=dy/d*f; }
+    }
+  }
+  // spring attraction along edges
+  for(const e of edges){ const a=pos[e.from], b=pos[e.to]; if(!a||!b) continue;
+    let dx=b.x-a.x, dy=b.y-a.y, d=Math.sqrt(dx*dx+dy*dy)||1; const f=(d-LINK)*0.018; const ux=dx/d, uy=dy/d;
+    a.fx+=ux*f; a.fy+=uy*f; b.fx-=ux*f; b.fy-=uy*f; }
+  // gravity to center + integrate
+  for(const n of nodes){ const p=pos[n.id]; if(p.pinned) continue;
+    p.fx+=(W/2-p.x)*0.006; p.fy+=(H/2-p.y)*0.006;
+    p.vx=(p.vx+p.fx)*0.86; p.vy=(p.vy+p.fy)*0.86;
+    const sp=Math.hypot(p.vx,p.vy), MX=42; if(sp>MX){p.vx*=MX/sp;p.vy*=MX/sp;}
+    p.x+=p.vx; p.y+=p.vy; }
+}
+function startSim(){
+  if(sim.raf) cancelAnimationFrame(sim.raf);
+  sim.running=true; sim.alpha=1; let frame=0;
+  const big=sim.nodes.length>320, maxF=big?150:240;
+  document.getElementById('spin').style.display='block';
+  const loop=()=>{
+    const ticks=big?1:2; for(let i=0;i<ticks;i++) tick();
+    const drawEdges = !big || frame%3===0 || sim.alpha<0.15;
+    draw(drawEdges);
+    frame++; sim.alpha*=0.985;
+    if(frame<maxF && sim.alpha>0.015 && sim.running){ sim.raf=requestAnimationFrame(loop); }
+    else { sim.running=false; document.getElementById('spin').style.display='none'; draw(true); renderStats(); }
+  };
+  loop();
+}
+
+function draw(showEdges=true){
+  const {nodes,edges}=sim.nodes.length?sim:visible();
   const conn=new Set();
   if(sel){ edges.forEach(e=>{ if(e.from===sel||e.to===sel){conn.add(e.from);conn.add(e.to);} }); }
   const T=`translate(${view.x},${view.y}) scale(${view.k})`;
-  const edgeSvg=edges.map(e=>{
-    const a=pos[e.from], b=pos[e.to]; if(!a||!b) return '';
-    const cross = e.type==='mentions';
-    const hl = sel&&(e.from===sel||e.to===sel);
-    return `<line class="edge ${cross?'cross':''} ${hl?'hl':''}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
-  }).join('');
-  const nodeSvg=nodes.map(n=>{
-    const p=pos[n.id]; if(!p) return '';
-    const dim=sel&&n.id!==sel&&!conn.has(n.id);
-    const r=radius(n);
-    const showLabel = n.type==='module' || r>9 || (sel&&conn.has(n.id));
+  let edgeSvg='';
+  if(showEdges){
+    edgeSvg=edges.map(e=>{ const a=pos[e.from], b=pos[e.to]; if(!a||!b) return '';
+      const cross=e.type==='mentions', hl=sel&&(e.from===sel||e.to===sel);
+      if(sel && !hl) return ''; // when a node selected, only show its edges (perf+focus)
+      return `<line class="edge ${cross?'cross':''} ${hl?'hl':''}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+    }).join('');
+    if(!sel){ // draw all edges when nothing selected
+      edgeSvg=edges.map(e=>{ const a=pos[e.from], b=pos[e.to]; if(!a||!b) return '';
+        const cross=e.type==='mentions';
+        return `<line class="edge ${cross?'cross':''}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+      }).join('');
+    }
+  }
+  const nodeSvg=nodes.map(n=>{ const p=pos[n.id]; if(!p) return '';
+    const dim=sel&&n.id!==sel&&!conn.has(n.id); const r=radius(n);
+    const showLabel=n.type==='module'||r>8.5||(sel&&conn.has(n.id));
     const risk=risksOn&&isRisk(n);
-    return `<g class="node ${dim?'dim':''} ${risk?'risk':''}" data-id="${esc(n.id)}" transform="translate(${p.x},${p.y})">
-      <circle r="${r}" fill="${colorFor(n)}"></circle>
-      ${showLabel?`<text x="${r+3}" y="3">${esc(n.name).slice(0,38)}</text>`:''}</g>`;
+    return `<g class="node ${dim?'dim':''} ${risk?'risk':''}" data-id="${esc(n.id)}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
+      <circle r="${r.toFixed(1)}" fill="${colorFor(n)}"></circle>
+      ${showLabel?`<text x="${(r+3).toFixed(1)}" y="3">${esc(n.name).slice(0,40)}</text>`:''}</g>`;
   }).join('');
-  document.getElementById('canvas').querySelector('#msg')?.remove();
   let svg=document.getElementById('gsvg');
-  const inner=`<g transform="${T}">${edgeSvg}${nodeSvg}</g>`;
-  if(!svg){
-    document.getElementById('canvas').insertAdjacentHTML('beforeend',`<svg id="gsvg">${inner}</svg>`);
-    svg=document.getElementById('gsvg'); attachPanZoom(svg);
-  } else svg.innerHTML=inner;
-  svg.querySelectorAll('.node').forEach(g=>g.addEventListener('click',ev=>{ev.stopPropagation();select(g.dataset.id);}));
+  const inner=`<g id="vp" transform="${T}">${edgeSvg}${nodeSvg}</g>`;
+  if(!svg){ document.getElementById('canvas').insertAdjacentHTML('beforeend',`<svg id="gsvg">${inner}</svg>`); svg=document.getElementById('gsvg'); attachInput(svg); }
+  else svg.innerHTML=inner;
+  svg.querySelectorAll('.node').forEach(g=>{
+    g.addEventListener('mousedown',ev=>startNodeDrag(ev,g.dataset.id));
+    g.addEventListener('click',ev=>{ ev.stopPropagation(); if(!dragMoved) select(g.dataset.id); });
+  });
 }
 
-function attachPanZoom(svg){
-  let dragging=false,sx=0,sy=0;
+// ── interaction: pan, zoom, node drag ───────────────────────────────────
+let dragNode=null, dragMoved=false, panning=false, psx=0, psy=0;
+function screenToWorld(cx,cy){ return { x:(cx-view.x)/view.k, y:(cy-view.y)/view.k }; }
+function attachInput(svg){
   svg.addEventListener('wheel',e=>{ e.preventDefault(); const f=e.deltaY<0?1.12:0.89; const r=svg.getBoundingClientRect();
-    const mx=e.clientX-r.left, my=e.clientY-r.top; view.x=mx-(mx-view.x)*f; view.y=my-(my-view.y)*f; view.k*=f; draw(); },{passive:false});
-  svg.addEventListener('mousedown',e=>{ if(e.target.closest('.node'))return; dragging=true; svg.classList.add('drag'); sx=e.clientX-view.x; sy=e.clientY-view.y; });
-  window.addEventListener('mousemove',e=>{ if(!dragging)return; view.x=e.clientX-sx; view.y=e.clientY-sy; draw(); });
-  window.addEventListener('mouseup',()=>{ dragging=false; svg.classList.remove('drag'); });
-  svg.addEventListener('click',()=>{ if(sel){sel=null; draw(); document.getElementById('detail').innerHTML='';} });
+    const mx=e.clientX-r.left, my=e.clientY-r.top; view.x=mx-(mx-view.x)*f; view.y=my-(my-view.y)*f; view.k*=f; draw(true); },{passive:false});
+  svg.addEventListener('mousedown',e=>{ if(e.target.closest('.node'))return; panning=true; svg.classList.add('drag'); psx=e.clientX-view.x; psy=e.clientY-view.y; });
+  window.addEventListener('mousemove',e=>{
+    if(panning){ view.x=e.clientX-psx; view.y=e.clientY-psy; draw(true); return; }
+    if(dragNode){ dragMoved=true; const r=svg.getBoundingClientRect(); const w=screenToWorld(e.clientX-r.left,e.clientY-r.top);
+      const p=pos[dragNode]; p.x=w.x; p.y=w.y; p.vx=0; p.vy=0; p.pinned=true; if(!sim.running){ sim.alpha=0.5; startSim(); } }
+  });
+  window.addEventListener('mouseup',()=>{ panning=false; svg.classList.remove('drag'); if(dragNode){ const p=pos[dragNode]; if(p)p.pinned=false; } dragNode=null; setTimeout(()=>dragMoved=false,30); });
+  svg.addEventListener('click',e=>{ if(!e.target.closest('.node')&&sel){ sel=null; draw(true); document.getElementById('detail').innerHTML=''; } });
 }
+function startNodeDrag(ev,id){ ev.stopPropagation(); ev.preventDefault(); dragNode=id; dragMoved=false; }
 
 function select(id){
-  sel=id; draw();
+  sel=id; draw(true);
   const n=BYID[id]; if(!n) return;
   const out=EDGES.filter(e=>e.from===id).map(e=>({type:e.type,o:BYID[e.to]}));
   const inc=EDGES.filter(e=>e.to===id).map(e=>({type:e.type,o:BYID[e.from]}));
-  const link = n.url ? `<a href="${esc(n.url)}" target="_blank">Confluence ↗</a>`
-            : (n.confluence ? `<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(n.confluence)}" target="_blank">Confluence ↗</a>` : '');
-  const spanInfo = (n.type==='feature'||n.type==='modal')&&span[id]>1 ? `<div class="muted">встречается в ${span[id]} доменах (кросс-модульно)</div>`:'';
+  const link=n.url?`<a href="${esc(n.url)}" target="_blank">Confluence ↗</a>`:(n.confluence?`<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(n.confluence)}" target="_blank">Confluence ↗</a>`:'');
+  const spanInfo=(n.type==='feature'||n.type==='modal')&&span[id]>1?`<div class="muted">встречается в ${span[id]} доменах (кросс-модульно)</div>`:'';
   document.getElementById('detail').innerHTML=`
     <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
     <h2>${esc(n.name)} <span class="pill" style="background:${colorFor(n)}22;color:${colorFor(n)}">${esc(n.type)}</span></h2>
@@ -248,29 +288,27 @@ function select(id){
 
 function doSearch(q){
   if(!q) return;
-  const hit=NODES.find(n=>n.name.toLowerCase().includes(q)&&TYPE[n.type]?.on) || NODES.find(n=>n.name.toLowerCase().includes(q));
+  const hit=NODES.find(n=>n.name.toLowerCase().includes(q)&&TYPE[n.type]?.on)||NODES.find(n=>n.name.toLowerCase().includes(q));
   if(!hit) return;
-  if(!TYPE[hit.type].on){ TYPE[hit.type].on=true; document.querySelector(`.chip[data-t="${hit.type}"]`)?.classList.remove('off'); relayout(); }
-  const p=pos[hit.id]; if(p){ view.k=1.6; view.x=W/2-p.x*view.k; view.y=H/2-p.y*view.k; }
-  select(hit.id);
+  if(!TYPE[hit.type].on){ TYPE[hit.type].on=true; document.querySelector(`.chip[data-t="${hit.type}"]`)?.classList.remove('off'); relayout(); setTimeout(()=>focusNode(hit.id),900); return; }
+  focusNode(hit.id);
 }
+function focusNode(id){ const p=pos[id]; if(p){ view.k=1.7; view.x=W/2-p.x*view.k; view.y=H/2-p.y*view.k; } select(id); }
 
 function renderStats(){
   const {nodes,edges}=visible();
   const byType={}; nodes.forEach(n=>byType[n.type]=(byType[n.type]||0)+1);
-  const cross = NODES.filter(n=>(n.type==='feature'||n.type==='modal')&&span[n.id]>1).length;
-  const risks = NODES.filter(isRisk).length;
+  const cross=NODES.filter(n=>(n.type==='feature'||n.type==='modal')&&span[n.id]>1).length;
+  const risks=NODES.filter(isRisk).length;
   document.getElementById('counts').textContent=`${nodes.length} узлов · ${edges.length} связей`;
   let html='<div style="font-size:11px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Видно сейчас</div>';
-  Object.entries(byType).sort((a,b)=>b[1]-a[1]).forEach(([t,c])=>{
-    html+=`<div class="stat"><span><span class="dot" style="background:${(TYPE[t]||{}).color||'#999'}"></span> ${esc((TYPE[t]||{}).label||t)}</span><b>${c}</b></div>`;
-  });
+  Object.entries(byType).sort((a,b)=>b[1]-a[1]).forEach(([t,c])=>{ html+=`<div class="stat"><span><span class="dot" style="background:${(TYPE[t]||{}).color||'#999'}"></span> ${esc((TYPE[t]||{}).label||t)}</span><b>${c}</b></div>`; });
   html+=`<div class="stat" style="margin-top:6px"><span>🔗 кросс-модульных фич/модалок</span><b>${cross}</b></div>`;
   html+=`<div class="stat"><span>⚠ потенциальных рисков</span><b>${risks}</b></div>`;
   document.getElementById('stats').innerHTML=html;
 }
 
-window.addEventListener('resize',()=>{ if(NODES.length) relayout(); });
+let rzTimer; window.addEventListener('resize',()=>{ clearTimeout(rzTimer); rzTimer=setTimeout(()=>{ if(NODES.length) relayout(); },200); });
 boot();
 </script>
 </body>
