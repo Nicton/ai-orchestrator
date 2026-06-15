@@ -871,7 +871,7 @@ function buildDefinitionFallback(hits: KnowledgeSearchHit[], language: string, p
 // Токены запроса с транслитерацией кириллицы (тмс → tms) для сопоставления с узлами графа.
 function gcTokens(q: string): string[] {
   const tr: Record<string, string> = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'i',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
-  const stop = new Set(['что','как','где','для','под','саб','sub','the','what','which','есть','модули','модуль','module','modules','подмодули']);
+  const stop = new Set(['что','как','где','для','под','саб','sub','the','what','which','есть','модули','модуль','module','modules','подмодули','про','pro','мне','расскажи','rasskazhi','покажи','дай','tell','about','show','рассказать','какие','какой','this','есть','your','our']);
   const out = new Set<string>();
   for (const w of (q.toLowerCase().match(/[a-zа-я0-9]{3,}/gi) || [])) {
     if (!stop.has(w)) out.add(w);
@@ -880,19 +880,43 @@ function gcTokens(q: string): string[] {
   return [...out];
 }
 
+// Расстояние Левенштейна (для нечёткого сопоставления «док»→«dock», «тмс»→«tms»).
+function lev(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+
 // Граф-навигация: для структурных вопросов («какие саб-модули/фичи/экраны в X»)
 // собираем авторитетный контекст прямо из графа знаний (KnowledgeEntity/Relation).
 async function graphContext(question: string, plan?: KnowledgeQueryPlan): Promise<string> {
   try {
     const terms = [...new Set([...(plan?.entities || []).map((s) => s.toLowerCase()), ...gcTokens(question)])].filter((t) => t.length >= 3);
     if (!terms.length) return '';
-    const filters = terms.map((t) => ({ name: { contains: t, mode: 'insensitive' as const } }));
-    const roots = await prisma.knowledgeEntity.findMany({ where: { type: { in: ['module', 'area', 'feature'] }, OR: filters }, take: 40 });
-    if (!roots.length) return '';
-    const score = (e: any) => { const n = e.name.toLowerCase(); let s = ({ module: 3, area: 2, feature: 1 } as any)[e.type] || 0; if (terms.includes(n)) s += 6; else if (terms.some((t) => n.startsWith(t))) s += 2; else if (terms.some((t) => n.includes(t))) s += 1; return s; };
-    roots.sort((a: any, b: any) => score(b) - score(a));
+    // Берём все модули/области/фичи (немного) и сопоставляем нечётко в JS —
+    // SQL `contains` не ловит «dok»→«dock», поэтому матчим по сегментам + Левенштейну.
+    const cands = await prisma.knowledgeEntity.findMany({ where: { type: { in: ['module', 'area', 'feature'] } }, take: 2000 });
+    const score = (e: any) => {
+      const segs = [e.name.toLowerCase(), ...e.name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)];
+      let best = 0;
+      for (const t of terms) for (const s of segs) {
+        if (s === t) best = Math.max(best, 6);
+        else if (s.length >= 3 && (s.startsWith(t) || t.startsWith(s))) best = Math.max(best, 3);
+        else { const d = lev(s, t); const mx = Math.max(s.length, t.length); if (mx >= 3 && d <= (mx < 6 ? 1 : 2)) best = Math.max(best, 4 - d); }
+      }
+      const typeW = ({ module: 3, area: 2, feature: 1 } as any)[e.type] || 0;
+      return best > 0 ? best + typeW : 0;
+    };
+    const ranked = cands.map((e: any) => ({ e, s: score(e) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+    if (!ranked.length) return '';
     const blocks: string[] = [];
-    for (const root of roots.slice(0, 2)) {
+    for (const root of ranked.slice(0, 2).map((x) => x.e)) {
       const rels = await prisma.knowledgeRelation.findMany({ where: { OR: [{ fromId: root.id }, { toId: root.id }] }, take: 500 });
       const otherIds = [...new Set(rels.map((r: any) => (r.fromId === root.id ? r.toId : r.fromId)))];
       const others = await prisma.knowledgeEntity.findMany({ where: { id: { in: otherIds } } });
