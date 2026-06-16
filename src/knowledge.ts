@@ -945,11 +945,13 @@ async function composeAnswer(
   language: string,
   plan?: KnowledgeQueryPlan,
   profile?: QueryProfile,
+  progress?: { stage: (msg: string) => void; delta: (text: string) => void },
 ): Promise<{ mode: 'llm' | 'fallback'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean; llmLog?: string }> {
   const lang = normalizeAnswerLanguage(language);
   const copy = localizedAnswerCopy(lang);
   const graphCtx = await graphContext(question, plan);
   const usedGraph = !!graphCtx;
+  progress?.stage(graphCtx ? '🕸 Контекст из графа знаний найден' : '🕸 Граф знаний: прямых совпадений нет');
 
   if (!hits.length && !graphCtx) {
     return {
@@ -1014,15 +1016,17 @@ Retrieval plan:
 Evidence:
 ${evidence}`;
 
+  progress?.stage(`🤖 Запрос к Claude (${config.answerModel})…`);
   let llmAnswer = '';
   let result: Awaited<ReturnType<typeof runRolePrompt>> | undefined;
   let threw = '';
   try {
-    result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel);
+    result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel, progress?.delta);
     llmAnswer = (result.text || '').trim();
   } catch (e: any) {
     threw = String(e?.message || e);
   }
+  progress?.stage(llmAnswer ? '✅ Ответ сформирован' : '⚠️ Claude не вернул ответ');
   // Лог запроса к LLM (показывается в Истории) — движок, модель, исход, ответ.
   const mkLog = (outcome: string) => [
     `engine: ${result?.engine || 'none'}`,
@@ -1221,6 +1225,101 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
       },
       sources: hits,
     });
+  });
+
+  // Стрим-версия /ask (SSE): отдаёт прогресс-стадии и текст ответа по мере генерации,
+  // чтобы во фронте была «живая» динамика, а не глухой лоадер. Финал — событие `done`
+  // с той же полезной нагрузкой, что и у /api/knowledge/ask.
+  app.post('/api/knowledge/ask/stream', async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+
+    const parsed = askSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    const send = (event: string, data: any) => {
+      try { raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* client gone */ }
+    };
+    // keep-alive пинг, чтобы прокси не рвал соединение во время долгой генерации
+    const ping = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* noop */ } }, 15000);
+
+    try {
+      send('stage', { msg: '🔎 Поиск по документам и графу…' });
+      const started = Date.now();
+      const language = normalizeAnswerLanguage(parsed.data.languageHint || detectQuestionLanguage(parsed.data.question));
+      const { hits, terms, suggestion, plan, profile } = await searchKnowledge(parsed.data.question, parsed.data.languageHint);
+      const intent = plan.intent || inferIntent(parsed.data.question);
+      send('stage', { msg: `📚 Источников найдено: ${hits.length}` });
+
+      const progress = {
+        stage: (msg: string) => send('stage', { msg }),
+        delta: (text: string) => send('delta', { text }),
+      };
+      const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile, progress);
+      const latencyMs = Date.now() - started;
+      let confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
+      if (composed.usedGraph && composed.mode === 'llm') confidence = Math.max(confidence, 0.8);
+
+      const saved = await prisma.knowledgeQuery.create({
+        data: {
+          userId: user.id,
+          userLabel: user.name,
+          channel: parsed.data.channel || 'web',
+          inputMode: parsed.data.inputMode,
+          question: parsed.data.question,
+          normalizedQuestion: normalizeQuery(parsed.data.question),
+          answer: composed.answer,
+          answerMode: composed.mode,
+          llmLog: composed.llmLog || null,
+          intent,
+          confidence,
+          latencyMs,
+          sourceCount: hits.length,
+          sources: hits.map((hit) => ({
+            path: hit.path,
+            title: hit.title,
+            score: hit.score,
+            rootLabel: hit.rootLabel,
+            sourceUrl: hit.sourceUrl,
+            sourceType: hit.sourceType,
+          })),
+        },
+      });
+
+      await registerGap(parsed.data.question, confidence, hits.length, intent, terms);
+
+      send('done', {
+        queryId: saved.id,
+        answer: composed.answer,
+        llmLog: composed.llmLog || null,
+        intent,
+        confidence,
+        latencyMs,
+        language,
+        suggestion,
+        retrievalPlan: {
+          normalizedQuestion: plan.normalizedQuestion,
+          intent: plan.intent,
+          answerStyle: plan.answerStyle,
+          entities: plan.entities,
+          searchQueries: plan.searchQueries,
+        },
+        sources: hits,
+      });
+    } catch (e: any) {
+      send('error', { message: String(e?.message || e).slice(0, 300) });
+    } finally {
+      clearInterval(ping);
+      try { raw.end(); } catch { /* noop */ }
+    }
   });
 
   // Rating (1..5). A rating below 4 is the signal the UI uses to open feedback.

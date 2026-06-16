@@ -19,12 +19,18 @@ export type TranscriptionResult = {
   language?: string;
 };
 
-export async function runRolePrompt(role: string, prompt: string, model?: string): Promise<LlmResult> {
+export async function runRolePrompt(
+  role: string,
+  prompt: string,
+  model?: string,
+  onDelta?: (text: string) => void,
+): Promise<LlmResult> {
   // Единственный движок генерации ответов — Claude Code CLI. ChatGPT/OpenAI из схемы
   // ответов исключён. Никогда не бросает — возвращает движок + диагностический лог.
+  // onDelta (если передан) получает текст ответа по мере генерации (stream-json).
   const diag: string[] = [];
   try {
-    const r = await runClaudeCli(role, prompt, model);
+    const r = await runClaudeCli(role, prompt, model, onDelta);
     diag.push(`claude (${r.model}): ${r.text && r.text.trim() ? `ok, ${r.text.length} chars` : 'empty output'}`);
     if (r.text && r.text.trim()) return { ...r, engine: 'claude', diag };
   } catch (e: any) {
@@ -33,28 +39,78 @@ export async function runRolePrompt(role: string, prompt: string, model?: string
   return { text: '', model: model || config.model, engine: 'none', diag };
 }
 
-function runClaudeCli(role: string, prompt: string, model?: string): Promise<LlmResult> {
+function runClaudeCli(role: string, prompt: string, model?: string, onDelta?: (text: string) => void): Promise<LlmResult> {
   const useModel = model || config.model;
+  const streaming = typeof onDelta === 'function';
 
   return new Promise((resolve, reject) => {
     const args = [
       '-p', prompt,
       '--system-prompt', `You are acting as this role: ${role}`,
-      '--output-format', 'json',
+      '--output-format', streaming ? 'stream-json' : 'json',
       '--model', useModel,
     ];
+    // В стрим-режиме просим построчный JSON с инкрементальными дельтами текста.
+    if (streaming) args.push('--verbose', '--include-partial-messages');
 
     const proc = spawn('claude', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';
+    let buf = '';
+    let finalResult: any = null;
 
-    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    const handleLine = (line: string) => {
+      const s = line.trim();
+      if (!s) return;
+      let obj: any;
+      try { obj = JSON.parse(s); } catch { return; }
+      if (obj.type === 'stream_event' && obj.event?.type === 'content_block_delta' && obj.event.delta?.type === 'text_delta') {
+        const txt = obj.event.delta.text;
+        if (txt && onDelta) { try { onDelta(txt); } catch { /* ignore consumer errors */ } }
+      } else if (obj.type === 'result') {
+        finalResult = obj;
+      }
+    };
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+      const str = chunk.toString();
+      if (streaming) {
+        buf += str;
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          handleLine(buf.slice(0, nl));
+          buf = buf.slice(nl + 1);
+        }
+      } else {
+        stdout += str;
+      }
+    });
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
     proc.on('close', (code: number | null) => {
+      if (streaming && buf.trim()) handleLine(buf);
       if (code !== 0) {
         reject(new Error(`claude CLI exited with code ${code}: ${stderr.trim()}`));
+        return;
+      }
+
+      if (streaming) {
+        if (!finalResult) { resolve({ text: '', model: useModel }); return; }
+        if (finalResult.is_error) {
+          reject(new Error(`claude CLI error: ${finalResult.result || stderr.trim()}`));
+          return;
+        }
+        resolve({
+          text: finalResult.result ?? '',
+          model: finalResult.modelUsage ? Object.keys(finalResult.modelUsage)[0] || useModel : useModel,
+          promptTokens: finalResult.usage?.input_tokens,
+          completionTokens: finalResult.usage?.output_tokens,
+          totalTokens:
+            typeof finalResult.usage?.input_tokens === 'number' && typeof finalResult.usage?.output_tokens === 'number'
+              ? finalResult.usage.input_tokens + finalResult.usage.output_tokens
+              : undefined,
+        });
         return;
       }
 

@@ -971,17 +971,92 @@ async function runSearch(){
   area.style.display = '';
   area.innerHTML = `<div class="loading"><span class="spinner"></span> ${escapeHtml(t('searching'))}</div>`;
   try {
-    const r = await API.ask(q, inputMode, currentLanguageHint());
-    if (r.status === 401){ showLogin(); return; }
-    const data = await r.json();
-    if (!r.ok){ area.innerHTML = `<div class="empty">${escapeHtml(data.error||'Something went wrong')}</div>`; return; }
-    lastQuery = { id: data.queryId, rating: null };
-    renderAnswer(data);
+    const streamed = await runSearchStream(q, inputMode, area);
+    if (streamed === 'auth'){ showLogin(); return; }
+    if (streamed === true){ if (inputMode === 'voice') setVoiceWorkflowStage('sent'); return; }
+    // Стрим недоступен — обычный запрос (фолбэк).
+    await runSearchPlain(q, inputMode, area);
     if (inputMode === 'voice') setVoiceWorkflowStage('sent');
   } catch(_){ area.innerHTML = `<div class="empty">${escapeHtml(t('networkErrorRetry'))}</div>`; }
   finally {
     voiceAutoSubmitPending = false;
   }
+}
+
+// Обычный (нестримовый) запрос — фолбэк, если SSE недоступен.
+async function runSearchPlain(q, inputMode, area){
+  const r = await API.ask(q, inputMode, currentLanguageHint());
+  if (r.status === 401){ showLogin(); return; }
+  const data = await r.json();
+  if (!r.ok){ area.innerHTML = `<div class="empty">${escapeHtml(data.error||'Something went wrong')}</div>`; return; }
+  lastQuery = { id: data.queryId, rating: null };
+  renderAnswer(data);
+}
+
+// Стрим ответа через SSE: живой лог стадий + текст ответа по мере генерации.
+// Возвращает true (успех), 'auth' (401) или false (стрим недоступен → фолбэк).
+async function runSearchStream(q, inputMode, area){
+  let resp;
+  try {
+    resp = await fetch('/api/knowledge/ask/stream', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({question:q, inputMode, languageHint: currentLanguageHint()}),
+    });
+  } catch(_) { return false; }
+  if (resp.status === 401) return 'auth';
+  if (!resp.ok || !resp.body || !resp.body.getReader) return false;
+
+  area.innerHTML = `
+    <div class="answer-meta"><span class="chip"><span class="spinner"></span> ${escapeHtml(t('searching'))}</span></div>
+    <pre id="liveLog" style="white-space:pre-wrap;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:10px 12px;font-size:11px;line-height:1.6;max-height:200px;overflow:auto;margin:6px 0 12px"></pre>
+    <div class="answer" id="liveAnswer"></div>`;
+  const logEl = $('liveLog'); const ansEl = $('liveAnswer');
+  const stages = []; let liveText = ''; let gotDone = false; let gotAny = false; let finalData = null; let streamErr = '';
+  const pushStage = (m) => { stages.push(m); logEl.textContent = stages.join('\n'); logEl.scrollTop = logEl.scrollHeight; };
+  let renderPending = false;
+  const flushAns = () => {
+    if (renderPending) return;
+    renderPending = true;
+    requestAnimationFrame(() => { renderPending = false; ansEl.innerHTML = renderMarkdown(liveText); });
+  };
+  const handleBlock = (block) => {
+    let ev = 'message'; let dataStr = '';
+    block.split('\n').forEach(line => {
+      if (line.startsWith('event:')) ev = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
+    });
+    if (!dataStr) return; // комментарии-пинги (": ping") игнорируем
+    let data; try { data = JSON.parse(dataStr); } catch { return; }
+    gotAny = true;
+    if (ev === 'stage') pushStage(data.msg || '');
+    else if (ev === 'delta'){ liveText += (data.text || ''); flushAns(); }
+    else if (ev === 'done'){ gotDone = true; finalData = data; }
+    else if (ev === 'error'){ streamErr = data.message || 'stream error'; }
+  };
+
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  try {
+    while (true){
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream:true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) >= 0){
+        const block = buf.slice(0, idx); buf = buf.slice(idx + 2);
+        if (block.trim()) handleBlock(block);
+      }
+    }
+  } catch(_) {
+    if (!gotAny) return false;     // ничего не получили — можно фолбэкнуться
+    streamErr = streamErr || t('networkErrorRetry');
+  }
+
+  if (gotDone && finalData){ lastQuery = { id: finalData.queryId, rating: null }; renderAnswer(finalData); return true; }
+  if (!gotAny) return false;       // соединение открылось, но пусто → фолбэк
+  area.innerHTML = `<div class="empty">${escapeHtml(streamErr || t('networkErrorRetry'))}</div>`;
+  return true;                     // уже что-то показали — повторно не дёргаем /ask
 }
 
 function sourceBadge(type){
