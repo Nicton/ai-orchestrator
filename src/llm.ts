@@ -32,6 +32,13 @@ export async function runRolePrompt(role: string, prompt: string, model?: string
   } catch (e: any) {
     diag.push(`claude: FAILED — ${String(e?.message || e).slice(0, 300)}`);
   }
+  // OpenAI/ChatGPT — только как ЯВНО включённый аварийный фолбэк. По умолчанию ВЫКЛ:
+  // движок Searchify = Claude CLI. Включить можно env LLM_OPENAI_FALLBACK=1.
+  const allowOpenAi = ['1', 'true', 'yes', 'on'].includes(String(process.env.LLM_OPENAI_FALLBACK || '').toLowerCase());
+  if (!allowOpenAi) {
+    diag.push('openai fallback: disabled (Claude-only mode) — set LLM_OPENAI_FALLBACK=1 to enable');
+    return { text: '', model: model || config.model, engine: 'none', diag };
+  }
   try {
     const o = await runOpenAiChat(role, prompt);
     diag.push(`openai (${o.model}): ${o.text && o.text.trim() ? `ok, ${o.text.length} chars` : 'empty output'}`);
