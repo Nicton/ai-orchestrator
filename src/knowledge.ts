@@ -940,7 +940,7 @@ async function composeAnswer(
   language: string,
   plan?: KnowledgeQueryPlan,
   profile?: QueryProfile,
-): Promise<{ mode: 'llm' | 'fallback'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean }> {
+): Promise<{ mode: 'llm' | 'fallback'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean; llmLog?: string }> {
   const lang = normalizeAnswerLanguage(language);
   const copy = localizedAnswerCopy(lang);
   const graphCtx = await graphContext(question, plan);
@@ -1010,22 +1010,35 @@ Evidence:
 ${evidence}`;
 
   let llmAnswer = '';
+  let result: Awaited<ReturnType<typeof runRolePrompt>> | undefined;
+  let threw = '';
   try {
-    const result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel);
-    llmAnswer = result.text.trim();
-  } catch {
-    llmAnswer = '';
+    result = await runRolePrompt('knowledge_assistant.answer', prompt, config.answerModel);
+    llmAnswer = (result.text || '').trim();
+  } catch (e: any) {
+    threw = String(e?.message || e);
   }
+  // Лог запроса к LLM (показывается в Истории) — движок, модель, исход, ответ.
+  const mkLog = (outcome: string) => [
+    `engine: ${result?.engine || 'none'}`,
+    `model: ${config.answerModel}`,
+    `prompt: ${prompt.length} chars${graphCtx ? ' (+ graph context)' : ''}, evidence sources: ${hits.length}`,
+    `outcome: ${outcome}`,
+    '--- engine log ---',
+    (result?.diag?.join('\n') || threw || 'no diagnostics'),
+    llmAnswer ? `--- LLM answer (${llmAnswer.length} chars, first 2000) ---\n${llmAnswer.slice(0, 2000)}` : '',
+  ].filter(Boolean).join('\n');
+
   // Основной ответ — от LLM; структуру из графа добавляем ПОСЛЕ него (дополнением).
   if (llmAnswer) {
     const answer = graphCtx ? `${llmAnswer}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : llmAnswer;
-    return { mode: 'llm', answer, usedGraph };
+    return { mode: 'llm', answer, usedGraph, llmLog: mkLog('LLM answer used' + (graphCtx ? ' + graph appended' : '')) };
   }
 
   // LLM недоступен/пуст — для структурных вопросов отвечаем из графа (резерв).
-  if (graphCtx) return { mode: 'llm', answer: formatGraphAnswer(graphCtx, lang), usedGraph: true };
-  if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition', usedGraph };
-  return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic', usedGraph };
+  if (graphCtx) return { mode: 'llm', answer: formatGraphAnswer(graphCtx, lang), usedGraph: true, llmLog: mkLog('LLM produced no text → graph-only answer') };
+  if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition', usedGraph, llmLog: mkLog('LLM empty → definition fallback') };
+  return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic', usedGraph, llmLog: mkLog('LLM empty → generic fallback') };
 }
 
 // Превращает структурный блок графа в чистый markdown-ответ (без LLM).
@@ -1158,6 +1171,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         normalizedQuestion: normalizeQuery(parsed.data.question),
         answer: composed.answer,
         answerMode: composed.mode,
+        llmLog: composed.llmLog || null,
         intent,
         confidence,
         latencyMs,
@@ -1178,6 +1192,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     return reply.send({
       queryId: saved.id,
       answer: composed.answer,
+      llmLog: composed.llmLog || null,
       intent,
       confidence,
       latencyMs,
@@ -1354,6 +1369,8 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         createdAt: row.createdAt,
         question: row.question,
         answer: row.answer,
+        answerMode: row.answerMode,
+        llmLog: row.llmLog || null,
         intent: row.intent,
         confidence: row.confidence,
         rating: row.rating,

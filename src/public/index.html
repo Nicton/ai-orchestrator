@@ -1020,10 +1020,9 @@ function renderAnswer(data){
       ${data.intent ? `<span class="chip">${escapeHtml(data.intent)}</span>` : ''}
       <span class="chip">${data.latencyMs||0} ms</span>
       <span class="chip">${sources.length} ${escapeHtml(sources.length===1 ? t('sourceOne') : t('sourceMany'))}</span>
+      ${data.llmLog ? `<span class="chip" id="llmLogToggle" style="cursor:pointer">🧠 LLM-лог</span>` : ''}
     </div>
     ${suggestion}
-    <div class="answer">${renderMarkdown(data.answer||'')}</div>
-    ${sourcesHtml}
     <div class="feedback-row">
       <span class="rate-label">${escapeHtml(t('helpful'))}</span>
       <div class="emojis" id="emojis">
@@ -1033,7 +1032,13 @@ function renderAnswer(data){
       <span style="flex:1"></span>
       <button class="action-btn" id="suggestBtn">${escapeHtml(t('suggestCorrection'))}</button>
     </div>
+    <div class="answer">${renderMarkdown(data.answer||'')}</div>
+    ${data.llmLog ? `<pre id="llmLogBox" style="display:none;white-space:pre-wrap;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:10px;font-size:11px;line-height:1.4;max-height:320px;overflow:auto;margin-top:10px">${escapeHtml(data.llmLog)}</pre>` : ''}
+    ${sourcesHtml}
   `;
+
+  const llmT = $('llmLogToggle'); const llmB = $('llmLogBox');
+  if (llmT && llmB) llmT.addEventListener('click', () => { llmB.style.display = llmB.style.display === 'none' ? 'block' : 'none'; });
 
   area.querySelectorAll('.emoji').forEach(btn => {
     btn.addEventListener('click', () => onRate(parseInt(btn.dataset.rating,10)));
@@ -1372,16 +1377,22 @@ async function openHistory(){
   const data = await API.history();
   const body = $('drBody');
   if (!data.queries || !data.queries.length){ body.innerHTML = `<div class="empty">No questions yet.</div>`; return; }
-  body.innerHTML = data.queries.map(q => `
+  body.innerHTML = data.queries.map((q, i) => `
     <div class="hist-item" data-q="${escapeHtml(q.question)}">
       <div class="hist-q">${escapeHtml(q.question)}</div>
       <div class="hist-meta">
         <span>${new Date(q.createdAt).toLocaleString()}</span>
         ${q.rating ? `<span>${['😣','🙁','😐','🙂','😄'][q.rating-1]}</span>` : ''}
         <span>${q.sourceCount} src</span>
+        ${q.answerMode ? `<span>${escapeHtml(q.answerMode)}</span>` : ''}
         ${q.inputMode==='voice' ? '<span>🎙️ voice</span>' : ''}
+        ${q.llmLog ? `<span class="hist-log-toggle" data-i="${i}" style="cursor:pointer;color:var(--blue)">🧠 LLM-лог</span>` : ''}
       </div>
+      ${q.llmLog ? `<pre class="hist-log" id="histLog${i}" style="display:none;white-space:pre-wrap;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:10px;font-size:11px;line-height:1.4;max-height:300px;overflow:auto;margin-top:8px">${escapeHtml(q.llmLog)}</pre>` : ''}
     </div>`).join('');
+  body.querySelectorAll('.hist-log-toggle').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); const box = $('histLog'+el.dataset.i); if (box) box.style.display = box.style.display==='none' ? 'block' : 'none'; });
+  });
   body.querySelectorAll('.hist-item').forEach(el => {
     el.addEventListener('click', () => { $('q').value = el.dataset.q; closeDrawer(); runSearch(); });
   });

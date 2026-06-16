@@ -95,6 +95,34 @@ function reqAutoMatch(reqText: string): number {
   return m;
 }
 
+// ── Открытые дефекты Jira как слой Defects ("отсутствие дефектов") ───────────
+let _defCache: any = null;
+function loadDefects(): { available: boolean; total: number; byDomain: Record<string, { open: number; weight: number; high: number }>; items: { d: string; w: number; tk: Set<string> }[] } {
+  if (_defCache) return _defCache;
+  const p = path.resolve(process.cwd(), 'docs/qa/defects-index.json');
+  try {
+    const d = JSON.parse(readFileSync(p, 'utf8'));
+    const items = (d.items || []).map((it: any) => ({ d: it.d, w: it.w, tk: new Set<string>(it.tk || []) }));
+    _defCache = { available: items.length > 0, total: items.length, byDomain: d.byDomain || {}, items };
+  } catch { _defCache = { available: false, total: 0, byDomain: {}, items: [] }; }
+  return _defCache;
+}
+// Сколько открытых дефектов (того же домена) текстово матчат требование (≥2 токена) + сумма весов (severity).
+function reqDefectMatch(reqText: string, domain: string): { matched: number; weight: number } {
+  const rt = tokens(reqText);
+  if (rt.length < 1) return { matched: 0, weight: 0 };
+  const def = loadDefects();
+  let matched = 0, weight = 0;
+  // ≥3 общих токена (строже, чем для тестов) — чтобы общие слова не давали ложные совпадения.
+  for (const it of def.items) {
+    if (it.d !== domain) continue;
+    let n = 0;
+    for (const t of rt) { if (it.tk.has(t)) { n++; if (n >= 3) break; } }
+    if (n >= 3) { matched++; weight += it.w; }
+  }
+  return { matched, weight };
+}
+
 // Quality Coverage Engine — единый движок расчёта покрытия поверх графа знаний
 // (Data Lake = KnowledgeEntity/Relation). Источник один, представлений несколько.
 
@@ -158,6 +186,7 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
   const qa = loadQa();
 
   const auto = loadAuto();
+  const def = loadDefects();
   // Доступность слоёв = есть ли подключённый источник данных.
   const layersAvailable: Record<string, boolean> = {
     subreq: reqs.length > 0 || docs.length > 0,
@@ -165,7 +194,7 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     tests: qa.available,
     automation: auto.available,
     execution: false,
-    defects: false,
+    defects: def.available,
   };
 
   // Группировка по модулю → области
@@ -197,19 +226,33 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     return { docScore: Math.round((sum / list.length) * 100), breakdown: bd };
   }
 
-  // Tests/Automation по требованиям домена (текстовый матчинг title/desc ↔ name/summary).
-  function reqLayers(reqIds: string[], domain: string): { tests: number | null; automation: number | null } {
-    const tOn = qa.available, aOn = auto.available;
-    if (!reqIds.length) return { tests: tOn ? 0 : null, automation: aOn ? 0 : null };
-    let matchedT = 0, matchedA = 0;
+  // Tests / Automation / Defects по требованиям домена (текстовый матчинг).
+  function reqLayers(reqIds: string[], domain: string): { tests: number | null; automation: number | null; defects: number | null; bugs: number | null } {
+    const tOn = qa.available, aOn = auto.available, dOn = def.available;
+    if (!reqIds.length) {
+      const open = def.byDomain[domain]?.open || 0; // нет требований — сигнал на уровне домена
+      return {
+        tests: tOn ? 0 : null, automation: aOn ? 0 : null,
+        defects: dOn ? (open > 0 ? Math.max(10, 100 - Math.min(90, open * 4)) : 100) : null,
+        bugs: dOn ? open : null,
+      };
+    }
+    let matchedT = 0, matchedA = 0, reqsWithDef = 0, bugs = 0;
     for (const rid of reqIds) {
       const txt = (byId[rid]?.name || '') + ' ' + (byId[rid]?.summary || '');
       if (tOn && reqTestMatch(txt, domain, qa).matched > 0) matchedT++;
       if (aOn && reqAutoMatch(txt) > 0) matchedA++;
+      if (dOn) { const dm = reqDefectMatch(txt, domain); if (dm.matched > 0) { reqsWithDef++; bugs += dm.matched; } }
     }
+    // «отсутствие дефектов»: соотношение багов к числу требований (плотность),
+    // мягкий порог — нужно в среднем DEFECT_DENOM открытых бага на требование, чтобы дойти до 0%.
+    const DEFECT_DENOM = 3;
+    const density = bugs / reqIds.length; // багов на требование
     return {
       tests: tOn ? Math.round((matchedT / reqIds.length) * 100) : null,
       automation: aOn ? Math.round((matchedA / reqIds.length) * 100) : null,
+      defects: dOn ? Math.max(0, Math.round(100 - Math.min(100, (density / DEFECT_DENOM) * 100))) : null,
+      bugs: dOn ? bugs : null,
     };
   }
 
@@ -225,8 +268,8 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
       tests: tl.tests,
       automation: tl.automation,
       execution: layersAvailable.execution ? 0 : null,
-      defects: layersAvailable.defects ? 100 : null,
-      bugs: layersAvailable.defects ? 0 : null,
+      defects: tl.defects,
+      bugs: tl.bugs,
     };
   }
 
@@ -242,7 +285,7 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     // Области наследуют Tests/Auto модуля (нет req-level матчинга на уровне области).
     const areas = Object.entries(m.areas).map(([aid, list]) => {
       const c = components(list, [], name);
-      c.tests = comp.tests; c.automation = comp.automation;
+      c.tests = comp.tests; c.automation = comp.automation; c.defects = comp.defects; c.bugs = comp.bugs;
       return { id: aid, name: aid, size: list.length, score: coverageScore(c, enabled), docCount: list.length, comp: c };
     }).sort((a, b) => b.size - a.size);
 
@@ -267,6 +310,8 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     requirementCoverage: wAvg((m) => m.reqScore),
     testCoverage: layersAvailable.tests ? wAvg((m) => m.comp.tests ?? 0) : null,
     automationCoverage: layersAvailable.automation ? wAvg((m) => m.comp.automation ?? 0) : null,
+    defectScore: layersAvailable.defects ? wAvg((m) => m.comp.defects ?? 100) : null,
+    bugsTotal: layersAvailable.defects ? def.total ?? modules.reduce((a, m) => a + (m.comp.bugs || 0), 0) : null,
     riskScore: wAvg((m) => m.riskScore),
     modulesCount: modules.length,
     requirementsTotal: reqs.length,
@@ -289,6 +334,7 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
   for (const r of rels) if (r.type === 'covered_by') (reqCoverDocs[r.fromId] = reqCoverDocs[r.fromId] || []).push(r.toId);
   const docDomain = (d?: Ent) => (d?.metadata?.domain && d.metadata.domain !== '?' ? d.metadata.domain : 'Прочее');
   const qa = loadQa();
+  const def = loadDefects();
 
   const rows = reqs.map((req) => {
     const dlist = (reqCoverDocs[req.id] || []).map((id) => byId[id]).filter(Boolean);
@@ -298,14 +344,15 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
     const reqText = (req.name || '') + ' ' + (req.summary || '');
     const tm = reqTestMatch(reqText, domain, qa);
     const am = reqAutoMatch(reqText);
+    const dm = reqDefectMatch(reqText, domain);
     const comp: Comp = {
       subreq: hasDoc ? 100 : 0,
       docs: docsPct,
       tests: qa.available ? (tm.matched > 0 ? 100 : 0) : null,
       automation: loadAuto().available ? (am > 0 ? 100 : 0) : null,
       execution: null,
-      defects: null,
-      bugs: null,
+      defects: def.available ? (dm.matched > 0 ? Math.max(40, 100 - dm.matched * 20) : 100) : null,
+      bugs: def.available ? dm.matched : null,
     };
     const score = coverageScore(comp, enabled);
     const risk = score < 60 ? 'High' : score < 80 ? 'Medium' : 'Low';

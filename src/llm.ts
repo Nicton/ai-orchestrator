@@ -9,6 +9,8 @@ export type LlmResult = {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  engine?: 'claude' | 'openai' | 'none';
+  diag?: string[];
 };
 
 export type TranscriptionResult = {
@@ -19,14 +21,25 @@ export type TranscriptionResult = {
 
 export async function runRolePrompt(role: string, prompt: string, model?: string): Promise<LlmResult> {
   // Prefer the Claude CLI when present; fall back to the OpenAI chat API (e.g. in
-  // containers without the CLI) so answer generation always has a working engine.
+  // containers without the CLI). Never throws — returns a diagnostic log so the
+  // caller can record WHY the LLM produced (or failed to produce) an answer.
+  const diag: string[] = [];
+  const ts = () => '';
   try {
     const r = await runClaudeCli(role, prompt, model);
-    if (r.text && r.text.trim()) return r;
-  } catch {
-    // CLI missing or failed — fall through to OpenAI.
+    diag.push(`claude (${r.model}): ${r.text && r.text.trim() ? `ok, ${r.text.length} chars` : 'empty output'}`);
+    if (r.text && r.text.trim()) return { ...r, engine: 'claude', diag };
+  } catch (e: any) {
+    diag.push(`claude: FAILED — ${String(e?.message || e).slice(0, 300)}`);
   }
-  return runOpenAiChat(role, prompt);
+  try {
+    const o = await runOpenAiChat(role, prompt);
+    diag.push(`openai (${o.model}): ${o.text && o.text.trim() ? `ok, ${o.text.length} chars` : 'empty output'}`);
+    return { ...o, engine: 'openai', diag };
+  } catch (e: any) {
+    diag.push(`openai: FAILED — ${String(e?.message || e).slice(0, 300)}`);
+  }
+  return { text: '', model: model || config.model, engine: 'none', diag };
 }
 
 async function runOpenAiChat(role: string, prompt: string): Promise<LlmResult> {

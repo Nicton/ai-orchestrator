@@ -55,7 +55,7 @@
     <span class="muted">Слои покрытия (кликом отключайте с конца — 100% пересчитается):</span>
     <span id="modeSel"></span>
     <div class="muted" id="depthNote" style="margin-top:6px"></div>
-    <div class="muted" style="margin-top:4px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Docs 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Run 10%</b> · <b>Bugs 10%</b></div>
+    <div class="muted" style="margin-top:4px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Docs 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">(Run 10% скрыт — нет данных о прогонах)</span></div>
   </div>
 
   <div class="tabs">
@@ -108,7 +108,7 @@
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-const ALL_LAYERS=[['subreq','SubReq'],['docs','Docs'],['tests','Tests'],['automation','Auto'],['execution','Run'],['defects','Bugs']];
+const ALL_LAYERS=[['subreq','SubReq'],['docs','Docs'],['tests','Tests'],['automation','Auto'],['defects','Bugs']]; // Run (execution) скрыт — нет источника
 let ENABLED=ALL_LAYERS.map(([k])=>k); // все включены; пользователь отключает с конца
 let DATA=null, CURRENT=null; // CURRENT = модуль для drill
 
@@ -202,11 +202,11 @@ async function loadMatrix(){
   const d=await fetch('/api/quality/matrix?layers='+ENABLED.join(',')+(mod?'&module='+encodeURIComponent(mod):'')).then(r=>r.json());
   $('mcount').textContent=`${d.rows.length} из ${d.total} требований (сорт. по Score)`;
   const c=v=>v==null?'<span class="nd">—</span>':v+'%';
-  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>SubReq</th><th>Docs</th><th>Tests</th><th>Auto</th><th>Run</th><th>Bugs</th><th>Score</th><th>Risk</th></tr></thead><tbody>`+
+  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>SubReq</th><th>Docs</th><th>Tests</th><th>Auto</th><th>Bugs</th><th>Score</th><th>Risk</th></tr></thead><tbody>`+
     d.rows.map(r=>`<tr>
       <td>${r.confluence?`<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(r.confluence)}" target="_blank">${esc(r.requirement)}</a>`:esc(r.requirement)}<div class="muted">${esc(r.summary||'')}</div></td>
       <td>${esc(r.module)}</td>
-      <td>${c(r.subreq)}</td><td>${c(r.docs)}</td><td>${c(r.tests)}</td><td>${c(r.automation)}</td><td>${c(r.execution)}</td>
+      <td>${c(r.subreq)}</td><td>${c(r.docs)}</td><td>${c(r.tests)}</td><td>${c(r.automation)}</td>
       <td>${r.bugs==null?'<span class="nd">—</span>':r.bugs}</td>
       <td><b style="color:${color(r.score)}">${r.score}%</b></td>
       <td class="rk-${r.risk}">${r.risk}</td></tr>`).join('')+`</tbody>`;
