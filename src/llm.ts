@@ -20,11 +20,9 @@ export type TranscriptionResult = {
 };
 
 export async function runRolePrompt(role: string, prompt: string, model?: string): Promise<LlmResult> {
-  // Prefer the Claude CLI when present; fall back to the OpenAI chat API (e.g. in
-  // containers without the CLI). Never throws — returns a diagnostic log so the
-  // caller can record WHY the LLM produced (or failed to produce) an answer.
+  // Единственный движок генерации ответов — Claude Code CLI. ChatGPT/OpenAI из схемы
+  // ответов исключён. Никогда не бросает — возвращает движок + диагностический лог.
   const diag: string[] = [];
-  const ts = () => '';
   try {
     const r = await runClaudeCli(role, prompt, model);
     diag.push(`claude (${r.model}): ${r.text && r.text.trim() ? `ok, ${r.text.length} chars` : 'empty output'}`);
@@ -32,50 +30,7 @@ export async function runRolePrompt(role: string, prompt: string, model?: string
   } catch (e: any) {
     diag.push(`claude: FAILED — ${String(e?.message || e).slice(0, 300)}`);
   }
-  // OpenAI/ChatGPT — только как ЯВНО включённый аварийный фолбэк. По умолчанию ВЫКЛ:
-  // движок Searchify = Claude CLI. Включить можно env LLM_OPENAI_FALLBACK=1.
-  const allowOpenAi = ['1', 'true', 'yes', 'on'].includes(String(process.env.LLM_OPENAI_FALLBACK || '').toLowerCase());
-  if (!allowOpenAi) {
-    diag.push('openai fallback: disabled (Claude-only mode) — set LLM_OPENAI_FALLBACK=1 to enable');
-    return { text: '', model: model || config.model, engine: 'none', diag };
-  }
-  try {
-    const o = await runOpenAiChat(role, prompt);
-    diag.push(`openai (${o.model}): ${o.text && o.text.trim() ? `ok, ${o.text.length} chars` : 'empty output'}`);
-    return { ...o, engine: 'openai', diag };
-  } catch (e: any) {
-    diag.push(`openai: FAILED — ${String(e?.message || e).slice(0, 300)}`);
-  }
   return { text: '', model: model || config.model, engine: 'none', diag };
-}
-
-async function runOpenAiChat(role: string, prompt: string): Promise<LlmResult> {
-  const apiKey = config.chat.openaiApiKey;
-  if (!apiKey) throw new Error('No LLM engine available (no Claude CLI, no OpenAI key)');
-  const res = await fetch(`${config.chat.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: config.chat.model,
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: `You are acting as this role: ${role}` },
-        { role: 'user', content: prompt },
-      ],
-    }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`OpenAI chat failed (${res.status}): ${detail.slice(0, 200)}`);
-  }
-  const data: any = await res.json();
-  return {
-    text: String(data.choices?.[0]?.message?.content || '').trim(),
-    model: data.model || config.chat.model,
-    promptTokens: data.usage?.prompt_tokens,
-    completionTokens: data.usage?.completion_tokens,
-    totalTokens: data.usage?.total_tokens,
-  };
 }
 
 function runClaudeCli(role: string, prompt: string, model?: string): Promise<LlmResult> {

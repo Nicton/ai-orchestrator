@@ -57,16 +57,19 @@ Re-run the indexer scripts after updating their sources, then commit the regener
 `/api/knowledge/ask` → `searchKnowledge` (lexical hits) → `composeAnswer`:
 1. `graphContext(question)` — fuzzy-matches modules/areas/features (Levenshtein, transliteration
    `тмс→tms`, `док→dock`) and pulls the structural answer from the graph.
-2. **LLM** via `runRolePrompt` (Claude CLI → OpenAI fallback). LLM answer is primary; the graph
-   structure is appended **after** it (`---`). If the LLM returns nothing, the graph answer is the
-   fallback. Every query stores an **`llmLog`** (engine, model, outcome, raw) shown in `/` and History.
+2. **LLM** via `runRolePrompt` (**Claude CLI only** — ChatGPT/OpenAI is NOT in the answer scheme).
+   LLM answer is primary; the graph structure is appended **after** it (`---`). If Claude CLI is
+   unavailable, the answer is an explicit notice (`copy.llmUnavailable`, "Адаптированный ответ
+   временно недоступен… обратитесь к Алеху Асмалоускому") + the graph structure below it as raw data.
+   Every query stores an **`llmLog`** (engine, model, outcome, raw) shown in `/` and History.
 3. Confidence from hits; graph-backed answers are not under-rated.
 
-**LLM engine (`src/llm.ts` `runRolePrompt`)**: tries `claude` CLI first (model `config.answerModel`),
-then OpenAI chat (`config.chat`), else returns empty with a diagnostic log. Never throws.
+**LLM engine (`src/llm.ts` `runRolePrompt`)**: **only** `claude` CLI (model `config.answerModel`),
+else returns empty with a diagnostic log. Never throws. ChatGPT/OpenAI was removed from the answer
+scheme per product decision (OpenAI is still used ONLY for Whisper voice STT in `transcribeAudioFile`).
 - Claude CLI auth in the container: env **`CLAUDE_CODE_OAUTH_TOKEN`** (from `claude setup-token`) —
-  do NOT bind-mount the host `~/.claude` (concurrent refresh wiped it before). OpenAI key has no quota
-  in this env. If neither works, answers degrade to graph-only — the `llmLog` shows exactly why.
+  do NOT bind-mount the host `~/.claude` (concurrent refresh wiped it before). If Claude has no auth,
+  answers show the "temporarily unavailable / contact Aleh Asmalouski" notice — the `llmLog` shows why.
 
 ## Quality Coverage Engine (`src/quality.ts`)
 

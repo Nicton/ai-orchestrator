@@ -220,6 +220,11 @@ function localizedAnswerCopy(language: string) {
       en: 'I found relevant source materials, but I could not synthesize the final answer right now. I left the sources below so you can open the right documents immediately.',
       fr: 'J’ai trouvé des sources pertinentes, mais je n’ai pas réussi à synthétiser la réponse finale pour le moment. J’ai laissé les sources ci-dessous pour que tu puisses ouvrir directement les bons documents.',
     },
+    llmUnavailable: {
+      ru: '⚠️ Адаптированный (LLM) ответ временно недоступен из-за проблем с подключением к Claude Code CLI. Обратитесь к Алеху Асмалоускому (aleh.asmalouski@shiptify.com).',
+      en: '⚠️ The adapted (LLM) answer is temporarily unavailable due to a Claude Code CLI connection issue. Please contact Aleh Asmalouski (aleh.asmalouski@shiptify.com).',
+      fr: '⚠️ La réponse adaptée (LLM) est temporairement indisponible en raison d’un problème de connexion à Claude Code CLI. Veuillez contacter Aleh Asmalouski (aleh.asmalouski@shiptify.com).',
+    },
   } as const;
 }
 
@@ -1035,10 +1040,19 @@ ${evidence}`;
     return { mode: 'llm', answer, usedGraph, llmLog: mkLog('LLM answer used' + (graphCtx ? ' + graph appended' : '')) };
   }
 
-  // LLM недоступен/пуст — для структурных вопросов отвечаем из графа (резерв).
-  if (graphCtx) return { mode: 'llm', answer: formatGraphAnswer(graphCtx, lang), usedGraph: true, llmLog: mkLog('LLM produced no text → graph-only answer') };
-  if (profile?.isDefinitionQuery) return { mode: 'fallback', answer: buildDefinitionFallback(hits, lang, profile), fallbackKind: 'definition', usedGraph, llmLog: mkLog('LLM empty → definition fallback') };
-  return { mode: 'fallback', answer: copy.synthesisUnavailable[lang], fallbackKind: 'generic', usedGraph, llmLog: mkLog('LLM empty → generic fallback') };
+  // Claude CLI не дал ответа (нет авторизации/связи) — показываем явное сообщение.
+  // Структуру из графа, если она есть, оставляем НИЖЕ как «сырые» данные.
+  const notice = copy.llmUnavailable[lang];
+  if (graphCtx) {
+    return {
+      mode: 'fallback',
+      answer: `${notice}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}`,
+      fallbackKind: 'generic',
+      usedGraph: true,
+      llmLog: mkLog('Claude CLI unavailable → notice + graph data'),
+    };
+  }
+  return { mode: 'fallback', answer: notice, fallbackKind: 'generic', usedGraph, llmLog: mkLog('Claude CLI unavailable → notice (no graph)') };
 }
 
 // Превращает структурный блок графа в чистый markdown-ответ (без LLM).
