@@ -66,6 +66,7 @@
     <div class="muted">Силовой граф: узлы расталкиваются, связи притягивают. Размер = охват/глубина, цвет = тип/статус. Розовые рёбра — кросс-модульные связи.</div>
     <div id="stats" style="margin-top:12px"></div>
     <div id="detail"></div>
+    <div id="legend" style="margin-top:18px;border-top:1px solid #e8eaed;padding-top:12px"></div>
   </div>
 </div>
 <script>
@@ -88,6 +89,34 @@ function colorFor(n){
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Пояснение типов узлов: что это и чем отличается от соседних слоёв
+const LEGEND_DESC = [
+  ['module',     'Модуль / домен — верхний уровень продукта (TMS, DOCK, Back-Office…). Объединяет области, доки и требования.'],
+  ['area',       'Под-область внутри модуля (напр. shipments/list). Группирует доки и экраны одной темы.'],
+  ['spec',       'Спека — тестируемый контракт с acceptance-критериями (Дано/Когда/Тогда). Это «качественное требование»: что и как проверяемо. Специфицирует требования (covered_by) и ссылается на доки (specifies).'],
+  ['requirement','Требование (RTM, REQ-*) — ЧТО система должна делать (1 строка). Покрывается спекой/докой. Спека отвечает на «как проверить», требование — на «что нужно».'],
+  ['document',   'Дока — документационная страница (README / feature-docs / technical-view): описывает реализацию «как есть». В отличие от спеки — без формальных acceptance-критериев.'],
+  ['code_file',  'Файл кода — реальный исходник, который документирует дока (ребро documents). Это сама реализация, а не описание.'],
+  ['feature',    'Фича — функциональная возможность/сущность, извлечённая из доков; может быть кросс-модульной (розовые рёбра).'],
+  ['screen',     'Экран — страница UI с маршрутом (URL), которую видит пользователь.'],
+  ['modal',      'Модалка — модальное окно / диалог / вкладка внутри экрана (не отдельная страница).'],
+  ['confluence', 'Confluence — опубликованная страница в вики (ребро published_as от доки/спеки). Это место публикации, а не сам контент-узел.'],
+];
+function renderLegend(){
+  const cnt = {}; for(const n of NODES) cnt[n.type]=(cnt[n.type]||0)+1;
+  const rows = LEGEND_DESC.map(([t,desc])=>{
+    const c=(TYPE[t]||{}).color||'#7b8794'; const label=(TYPE[t]||{}).label||t; const n=cnt[t]||0;
+    return `<div style="display:flex;gap:8px;margin-bottom:9px;align-items:flex-start">
+      <span style="flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:${c};margin-top:3px"></span>
+      <div><b>${esc(label)}</b> <span class="muted">· ${n}</span><div class="muted" style="font-size:11px;line-height:1.45">${esc(desc)}</div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('legend').innerHTML =
+    `<h2 style="font-size:14px;margin:0 0 8px">Что означают типы узлов</h2>`+
+    `<div class="muted" style="font-size:11px;margin-bottom:10px">Цепочка трассировки: <b>Требование → Спека → Дока/Код</b>, опубликовано в <b>Confluence</b>. Включайте/выключайте слои чипами вверху.</div>`+
+    rows;
+}
+
 let NODES=[], EDGES=[], BYID={}, pos={}, deg={}, span={};
 let view={x:0,y:0,k:1}, W=0, H=0, sel=null, risksOn=false;
 let sim={raf:0, nodes:[], edges:[], running:false, alpha:0};
@@ -101,6 +130,7 @@ async function boot(){
   deg={}; EDGES.forEach(e=>{ deg[e.from]=(deg[e.from]||0)+1; deg[e.to]=(deg[e.to]||0)+1; });
   computeSpan();
   buildControls();
+  renderLegend();
   document.getElementById('msg').remove();
   relayout();
 }
