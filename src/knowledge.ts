@@ -1008,6 +1008,7 @@ async function composeAnswer(
   plan?: KnowledgeQueryPlan,
   profile?: QueryProfile,
   progress?: { stage: (msg: string) => void; delta: (text: string) => void },
+  allowSpeculative = true,
 ): Promise<{ mode: 'llm' | 'fallback' | 'speculative'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean; llmLog?: string }> {
   const lang = normalizeAnswerLanguage(language);
   const copy = localizedAnswerCopy(lang);
@@ -1115,7 +1116,7 @@ ${evidence}`;
   // РЕЖИМ «ДОДУМЫВАНИЯ»: точного ответа в документации нет, но Claude доступен →
   // второй проход с РАСШИРЕННЫМ контекстом (все хиты целиком + код-рефы графа) и
   // разрешением на обоснованное предположение, с ОБЯЗАТЕЛЬНОЙ пометкой.
-  if (result?.engine === 'claude') {
+  if (result?.engine === 'claude' && allowSpeculative) {
     progress?.stage('🔎 Глубокий поиск + режим додумывания…');
     const deepEvidence = hits
       .slice(0, 8)
@@ -1237,6 +1238,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     channel: z.string().min(1).max(120).optional(),
     languageHint: z.enum(['ru', 'en', 'fr']).optional(),
     inputMode: z.enum(['text', 'voice']).default('text'),
+    allowSpeculative: z.boolean().optional().default(true), // режим «Додумывания» при пустом ответе
   });
 
   app.get('/api/knowledge/status', async () => {
@@ -1277,7 +1279,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     const language = normalizeAnswerLanguage(parsed.data.languageHint || detectQuestionLanguage(parsed.data.question));
     const { hits, terms, suggestion, plan, profile } = await searchKnowledge(parsed.data.question, parsed.data.languageHint);
     const intent = plan.intent || inferIntent(parsed.data.question);
-    const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile);
+    const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile, undefined, parsed.data.allowSpeculative);
     const latencyMs = Date.now() - started;
     let confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
     // Ответ, построенный по графу знаний, — структурно достоверен: не занижаем уверенность.
@@ -1367,7 +1369,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         stage: (msg: string) => send('stage', { msg }),
         delta: (text: string) => send('delta', { text }),
       };
-      const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile, progress);
+      const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile, progress, parsed.data.allowSpeculative);
       const latencyMs = Date.now() - started;
       let confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
       if (composed.usedGraph && composed.mode === 'llm') confidence = Math.max(confidence, 0.8);

@@ -342,6 +342,9 @@
     </div>
 
     <div class="composer-tools">
+      <label class="tool-btn" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="Если точного ответа в документации нет — дать обоснованное предположение с пометкой «требует проверки»">
+        <input type="checkbox" id="specToggle" checked style="margin:0"> 🔎 Додумывание
+      </label>
       <button class="tool-btn" id="voicePanelToggleBtn">Voice controls</button>
       <div class="lang-switch">
         <span style="font-size:12px; color:var(--muted); font-weight:600;">Language</span>
@@ -384,12 +387,13 @@
 <div id="toastMount"></div>
 
 <script>
+const allowSpeculative = () => { const c = document.getElementById('specToggle'); return c ? c.checked : true; };
 const API = {
   me: () => fetch('/api/auth/me').then(r => r.ok ? r.json() : null),
   login: (email, password) => fetch('/api/auth/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email, password}) }),
   logout: () => fetch('/api/auth/logout', { method:'POST' }),
   changePw: (currentPassword, newPassword) => fetch('/api/auth/change-password', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({currentPassword, newPassword}) }),
-  ask: (question, inputMode, languageHint) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode, languageHint}) }),
+  ask: (question, inputMode, languageHint) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode, languageHint, allowSpeculative: allowSpeculative()}) }),
   rate: (id, rating) => fetch(`/api/knowledge/queries/${id}/rating`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({rating}) }),
   feedback: (id, kind, text, rating) => fetch(`/api/knowledge/queries/${id}/feedback`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({kind, text, rating}) }),
   correction: (id, payload) => fetch(`/api/knowledge/queries/${id}/correction`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) }),
@@ -1000,7 +1004,7 @@ async function runSearchStream(q, inputMode, area){
   try {
     resp = await fetch('/api/knowledge/ask/stream', {
       method:'POST', headers:{'content-type':'application/json'},
-      body: JSON.stringify({question:q, inputMode, languageHint: currentLanguageHint()}),
+      body: JSON.stringify({question:q, inputMode, languageHint: currentLanguageHint(), allowSpeculative: allowSpeculative()}),
     });
   } catch(_) { return false; }
   if (resp.status === 401) return 'auth';
