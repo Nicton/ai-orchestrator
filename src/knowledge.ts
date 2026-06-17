@@ -1004,12 +1004,18 @@ async function composeAnswer(
     };
   }
 
+  // Evidence для топ-хитов строим на ФИНАЛЬНЫХ хитах (после слияния query-вариантов),
+  // доставая полный текст дока из кэша по path — чтобы тело спеки гарантированно попало в контекст.
+  const evTerms = tokenize(question);
+  const { docs: cachedDocs } = await loadKnowledgeDocs();
+  const textByPath = new Map(cachedDocs.map((d) => [d.path, d.text]));
   const docEvidence = hits
     .slice(0, 5)
-    .map(
-      (hit, index) =>
-        `Source ${index + 1}\ntitle: ${hit.title}\n${hit.sourceUrl ? `link: ${hit.sourceUrl}\n` : `path: ${hit.path}\n`}type: ${hit.sourceType}\nexcerpt: ${hit.evidence || hit.snippet}`,
-    )
+    .map((hit, index) => {
+      const full = textByPath.get(hit.path);
+      const excerpt = (index < 3 && full) ? buildEvidence(full, evTerms) : (hit.evidence || hit.snippet);
+      return `Source ${index + 1}\ntitle: ${hit.title}\n${hit.sourceUrl ? `link: ${hit.sourceUrl}\n` : `path: ${hit.path}\n`}type: ${hit.sourceType}\nexcerpt: ${excerpt}`;
+    })
     .join('\n\n');
   const evidence = (graphCtx ? `ГРАФ ЗНАНИЙ (структура проекта — авторитетно для вопросов «что входит в X / какие саб-модули, фичи, экраны»):\n${graphCtx}\n\n` : '') + docEvidence;
 
