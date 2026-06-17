@@ -578,22 +578,24 @@ function buildSnippet(text: string, terms: string[]) {
 function buildEvidence(text: string, terms: string[]) {
   const compact = normalizeWhitespace(text);
   if (!compact) return '';
+  // Короткий док (типичная спека/use-case) — отдаём ЦЕЛИКОМ: ответ гарантированно в контексте.
+  if (compact.length <= 6000) return compact;
+  // Длинный док — лид (структура) + окна вокруг совпадений терминов (до 8 на термин).
   const lower = compact.toLowerCase();
   const positions: number[] = [];
   for (const t of [...new Set(terms)].filter((x) => x && x.length >= 3)) {
     let from = 0, idx: number, count = 0;
-    while ((idx = lower.indexOf(t, from)) >= 0 && count < 3) { positions.push(idx); from = idx + t.length; count++; }
+    while ((idx = lower.indexOf(t, from)) >= 0 && count < 8) { positions.push(idx); from = idx + t.length; count++; }
   }
-  if (!positions.length) return compact.slice(0, 2600);
   positions.sort((a, b) => a - b);
-  const wins: Array<{ s: number; e: number }> = [];
+  const wins: Array<{ s: number; e: number }> = [{ s: 0, e: 1600 }]; // всегда включаем начало
   for (const p of positions) {
-    const s = Math.max(0, p - 400), e = Math.min(compact.length, p + 400);
+    const s = Math.max(0, p - 350), e = Math.min(compact.length, p + 450);
     const last = wins[wins.length - 1];
-    if (last && s <= last.e + 60) last.e = Math.max(last.e, e);
+    if (s <= last.e + 60) last.e = Math.max(last.e, e);
     else wins.push({ s, e });
   }
-  let out = '', budget = 2800;
+  let out = '', budget = 5000;
   for (const w of wins) {
     if (budget <= 0) break;
     const chunk = compact.slice(w.s, w.s + Math.min(w.e - w.s, budget));
