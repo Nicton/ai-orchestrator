@@ -1,0 +1,17 @@
+[
+  { "area": "Tracking", "q": "What business rule determines the language of the public tracking page link?" },
+  { "area": "Analytics/KPI", "q": "Does the KPI use the booked_in date while the Bookings export uses booking_creation_date?" },
+  { "area": "Notifications/Spectator", "q": "Why does a PML-linked spectator from another company appear as a recipient when requesting a document (MD) in a slot chat?" },
+  { "area": "Auth", "q": "Is there rate limiting on the password reset endpoint?" },
+  { "area": "Public API", "q": "What does the Activated API toggle control and why does POST galaxy carrier shipments return Recognized Shipper is not available for this carrier?" },
+  { "area": "Tracking", "q": "Can a tracking point be replanned with only a date, without specifying the time?" },
+  { "area": "Permissions", "q": "How does spectator listing work for a Booker account at CSW1 and can the booker see all spectators?" },
+  { "area": "Public API/Dock", "q": "When creating a shipment via API without a zone, is the dock single zone applied automatically?" },
+  { "area": "Rate Sheets", "q": "Why does a shipment price turn orange in the rate sheet in TMS?" },
+  { "area": "Dock", "q": "Is there a limit on the number of dock orders imported via CSV?" },
+  { "area": "Notifications/SMS", "q": "Why do I get the error Message with length more than 149 symbols is not allowed by sms provider?" },
+  { "area": "Dock API", "q": "Why does loading dock orders return a 500 and what does orderDirection is required mean?" },
+  { "area": "Public API", "q": "Why do I get Unable to find active carrier to attach user as active shipper carrier user?" },
+  { "area": "Integrations/FedEx", "q": "What does the error Could not validate FedEx account mean and what should I do?" },
+  { "area": "Notifications/Email", "q": "Why does a user with all notifications disabled still receive automatic document emails?" }
+]
