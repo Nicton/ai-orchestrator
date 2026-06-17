@@ -227,6 +227,11 @@ function localizedAnswerCopy(language: string) {
       en: '⚠️ The adapted (LLM) answer is temporarily unavailable due to a Claude Code CLI connection issue. Please contact Aleh Asmalouski (aleh.asmalouski@shiptify.com).',
       fr: '⚠️ La réponse adaptée (LLM) est temporairement indisponible en raison d’un problème de connexion à Claude Code CLI. Veuillez contacter Aleh Asmalouski (aleh.asmalouski@shiptify.com).',
     },
+    speculativeNotice: {
+      ru: '⚠️ **Режим «Додумывания».** Точного ответа в документации нет — ниже обоснованное предположение на основе общей логики приложения и смежных материалов. **Требует проверки**, не используйте как подтверждённый факт.',
+      en: '⚠️ **Speculative ("best-guess") mode.** No exact answer is documented — below is a reasoned inference from the general application logic and related materials. **Needs verification**, do not treat as confirmed fact.',
+      fr: '⚠️ **Mode « supposition ».** Aucune réponse exacte n’est documentée — ci-dessous une déduction raisonnée à partir de la logique générale de l’application. **À vérifier**, ne pas considérer comme un fait confirmé.',
+    },
   } as const;
 }
 
@@ -504,7 +509,7 @@ function confidenceFromHits(
   hits: KnowledgeSearchHit[],
   termCount: number,
   profile: QueryProfile,
-  answerMode: 'llm' | 'fallback',
+  answerMode: 'llm' | 'fallback' | 'speculative',
   fallbackKind?: 'definition' | 'generic',
 ) {
   if (!hits.length) return 0.08;
@@ -551,6 +556,9 @@ function confidenceFromHits(
     )
     : (topHit.rootLabel === 'knowledge-base' ? 0.84 : 0.76);
 
+  // Режим «Додумывания» — это предположение: жёстко ограничиваем уверенность.
+  if (answerMode === 'speculative') return Number(Math.max(0.08, Math.min(0.4, adjusted)).toFixed(2));
+
   return Number(Math.max(0.08, Math.min(cap, adjusted)).toFixed(2));
 }
 
@@ -570,6 +578,17 @@ function buildSnippet(text: string, terms: string[]) {
   const end = Math.min(compact.length, idx + 180);
   const snippet = compact.slice(start, end);
   return `${start > 0 ? '…' : ''}${snippet}${end < compact.length ? '…' : ''}`;
+}
+
+// Признак «ответ по сути не дан» — триггер для режима глубокого додумывания.
+function looksInsufficient(text: string): boolean {
+  const t = (text || '').toLowerCase();
+  if (!t) return true;
+  return [
+    'evidence does not', 'does not contain', 'not contain', 'insufficient', 'no information',
+    'cannot answer', 'unable to answer', 'only the header', 'only its title', 'only a one-line',
+    'нет данных', 'не содержит', 'недостаточно', 'не могу ответить', 'нет информации', 'не удалось найти',
+  ].some((m) => t.includes(m));
 }
 
 // Крупный фрагмент тела дока для контекста LLM: окна (±400) вокруг ВСЕХ вхождений
@@ -989,7 +1008,7 @@ async function composeAnswer(
   plan?: KnowledgeQueryPlan,
   profile?: QueryProfile,
   progress?: { stage: (msg: string) => void; delta: (text: string) => void },
-): Promise<{ mode: 'llm' | 'fallback'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean; llmLog?: string }> {
+): Promise<{ mode: 'llm' | 'fallback' | 'speculative'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean; llmLog?: string }> {
   const lang = normalizeAnswerLanguage(language);
   const copy = localizedAnswerCopy(lang);
   const graphCtx = await graphContext(question, plan);
@@ -1087,14 +1106,50 @@ ${evidence}`;
     llmAnswer ? `--- LLM answer (${llmAnswer.length} chars, first 2000) ---\n${llmAnswer.slice(0, 2000)}` : '',
   ].filter(Boolean).join('\n');
 
-  // Основной ответ — от LLM; структуру из графа добавляем ПОСЛЕ него (дополнением).
-  if (llmAnswer) {
+  // Грунтованный ответ от LLM (по документации) — основной путь. Граф добавляем дополнением.
+  if (llmAnswer && !looksInsufficient(llmAnswer)) {
     const answer = graphCtx ? `${llmAnswer}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : llmAnswer;
     return { mode: 'llm', answer, usedGraph, llmLog: mkLog('LLM answer used' + (graphCtx ? ' + graph appended' : '')) };
   }
 
-  // Claude CLI не дал ответа (нет авторизации/связи) — показываем явное сообщение.
-  // Структуру из графа, если она есть, оставляем НИЖЕ как «сырые» данные.
+  // РЕЖИМ «ДОДУМЫВАНИЯ»: точного ответа в документации нет, но Claude доступен →
+  // второй проход с РАСШИРЕННЫМ контекстом (все хиты целиком + код-рефы графа) и
+  // разрешением на обоснованное предположение, с ОБЯЗАТЕЛЬНОЙ пометкой.
+  if (result?.engine === 'claude') {
+    progress?.stage('🔎 Глубокий поиск + режим додумывания…');
+    const deepEvidence = hits
+      .slice(0, 8)
+      .map((hit, i) => {
+        const full = textByPath.get(hit.path);
+        const ex = full ? buildEvidence(full, evTerms) : (hit.evidence || hit.snippet);
+        return `Source ${i + 1}\ntitle: ${hit.title}\npath: ${hit.path}\nexcerpt: ${ex}`;
+      })
+      .join('\n\n');
+    const deepPrompt = `You are a senior Shiptify engineer. The documentation does NOT directly answer the question.
+Give the MOST LIKELY answer by REASONING from the general logic of the application and the broad evidence below
+(specs, docs, code references, knowledge graph). You MAY infer, but mark uncertainty and never fabricate exact
+identifiers (API paths, DB columns, flags) that are not in the evidence — if you infer them, say "(предположительно)".
+Respond in language: ${lang}. Be concrete and useful for a support engineer. Start directly with the answer
+(the system prepends a disclaimer). End with a "Sources:" line.
+
+Question:
+${question}
+
+${graphCtx ? `ГРАФ ЗНАНИЙ:\n${graphCtx}\n\n` : ''}Broad evidence:
+${deepEvidence}`;
+    let deep = '';
+    let r2: Awaited<ReturnType<typeof runRolePrompt>> | undefined;
+    try {
+      r2 = await runRolePrompt('knowledge_assistant.answer_speculative', deepPrompt, config.answerModel, progress?.delta);
+      deep = (r2.text || '').trim();
+    } catch { /* ignore */ }
+    if (deep) {
+      const answer = `${copy.speculativeNotice[lang]}\n\n${deep}${graphCtx ? `\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : ''}`;
+      return { mode: 'speculative', answer, usedGraph, llmLog: mkLog(`deep/speculative mode (${deep.length} chars)`) };
+    }
+  }
+
+  // Claude CLI недоступен (нет авторизации/связи) — явное сообщение + граф как «сырые» данные.
   const notice = copy.llmUnavailable[lang];
   if (graphCtx) {
     return {
