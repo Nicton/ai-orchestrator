@@ -33,6 +33,8 @@ type KnowledgeSearchHit = {
   rawScore: number;
   termMatches: number;
   snippet: string;
+  evidence?: string; // крупный фрагмент тела (для топ-хитов → в контекст LLM)
+  _text?: string;    // временно: полный текст дока (удаляется после отбора топа)
   sourceUrl?: string;
   sourceType: SourceType;
 };
@@ -371,6 +373,7 @@ function rankKnowledgeDocs(docs: KnowledgeDoc[], query: string, profile: QueryPr
         rawScore: Number(rawScore.toFixed(2)),
         termMatches: matchedTerms,
         snippet: buildSnippet(doc.text, terms),
+        _text: doc.text,
         sourceUrl: doc.sourceUrl,
         sourceType: doc.sourceType,
       };
@@ -378,6 +381,13 @@ function rankKnowledgeDocs(docs: KnowledgeDoc[], query: string, profile: QueryPr
     .filter((hit) => hit.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
+
+  // Топ-хитам даём крупный фрагмент тела (вокруг всех совпадений) для контекста LLM;
+  // остальным хватает короткого snippet. _text удаляем, чтобы не утёк в ответ/БД.
+  hits.forEach((h, i) => {
+    if (i < 3) h.evidence = buildEvidence(h._text || '', terms);
+    delete h._text;
+  });
 
   return { hits, terms };
 }
@@ -560,6 +570,37 @@ function buildSnippet(text: string, terms: string[]) {
   const end = Math.min(compact.length, idx + 180);
   const snippet = compact.slice(start, end);
   return `${start > 0 ? '…' : ''}${snippet}${end < compact.length ? '…' : ''}`;
+}
+
+// Крупный фрагмент тела дока для контекста LLM: окна (±400) вокруг ВСЕХ вхождений
+// терминов запроса, слитые и ограниченные бюджетом (~2800 симв). Если совпадений нет —
+// первые ~2600 символов. Решает кейс, когда термин матчит заголовок, а ответ — в теле.
+function buildEvidence(text: string, terms: string[]) {
+  const compact = normalizeWhitespace(text);
+  if (!compact) return '';
+  const lower = compact.toLowerCase();
+  const positions: number[] = [];
+  for (const t of [...new Set(terms)].filter((x) => x && x.length >= 3)) {
+    let from = 0, idx: number, count = 0;
+    while ((idx = lower.indexOf(t, from)) >= 0 && count < 3) { positions.push(idx); from = idx + t.length; count++; }
+  }
+  if (!positions.length) return compact.slice(0, 2600);
+  positions.sort((a, b) => a - b);
+  const wins: Array<{ s: number; e: number }> = [];
+  for (const p of positions) {
+    const s = Math.max(0, p - 400), e = Math.min(compact.length, p + 400);
+    const last = wins[wins.length - 1];
+    if (last && s <= last.e + 60) last.e = Math.max(last.e, e);
+    else wins.push({ s, e });
+  }
+  let out = '', budget = 2800;
+  for (const w of wins) {
+    if (budget <= 0) break;
+    const chunk = compact.slice(w.s, w.s + Math.min(w.e - w.s, budget));
+    out += `${w.s > 0 ? '…' : ''}${chunk}${w.e < compact.length ? '…' : ''}\n`;
+    budget -= chunk.length;
+  }
+  return out.trim();
 }
 
 async function walkDocs(absRoot: string, label: string) {
@@ -965,7 +1006,7 @@ async function composeAnswer(
     .slice(0, 5)
     .map(
       (hit, index) =>
-        `Source ${index + 1}\ntitle: ${hit.title}\n${hit.sourceUrl ? `link: ${hit.sourceUrl}\n` : `path: ${hit.path}\n`}type: ${hit.sourceType}\nexcerpt: ${hit.snippet}`,
+        `Source ${index + 1}\ntitle: ${hit.title}\n${hit.sourceUrl ? `link: ${hit.sourceUrl}\n` : `path: ${hit.path}\n`}type: ${hit.sourceType}\nexcerpt: ${hit.evidence || hit.snippet}`,
     )
     .join('\n\n');
   const evidence = (graphCtx ? `ГРАФ ЗНАНИЙ (структура проекта — авторитетно для вопросов «что входит в X / какие саб-модули, фичи, экраны»):\n${graphCtx}\n\n` : '') + docEvidence;
