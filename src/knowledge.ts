@@ -1680,10 +1680,13 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     return reply.send({
       nodes: entities.map((e: any) => {
         const m = (e.metadata || {}) as any;
+        // Спека — отдельный тип-слой в графе (документ с docType: spec), узел трассировки.
+        const isSpec = m.docType === 'spec';
         return {
           id: e.id,
           name: e.name,
-          type: e.type,
+          type: isSpec ? 'spec' : e.type,
+          docType: m.docType || null,
           summary: e.summary,
           entryCount: e._count.entries,
           domain: m.domain || null,

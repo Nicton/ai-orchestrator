@@ -72,6 +72,7 @@
 const TYPE = {
   module:      { color:'#34a853', label:'Модули',   on:true  },
   area:        { color:'#827717', label:'Области',  on:true  },
+  spec:        { color:'#0b8043', label:'Спека',    on:true  },
   feature:     { color:'#1a73e8', label:'Фичи',     on:true  },
   modal:       { color:'#a142f4', label:'Модалки',  on:true  },
   screen:      { color:'#e37400', label:'Экраны',   on:false },
@@ -134,7 +135,7 @@ function visible(){
     const t=TYPE[n.type]; if(!t||!t.on) return false;
     if(dom){
       if(n.type==='module') return n.id===dom;
-      if(['document','feature','modal','screen','area'].includes(n.type)) return !n.domain || n.domain===dom;
+      if(['spec','document','feature','modal','screen','area'].includes(n.type)) return !n.domain || n.domain===dom;
     }
     return true;
   });
@@ -147,6 +148,7 @@ function radius(n){
   if(n.type==='module') return 8+Math.min(18,(deg[n.id]||0)*0.5);
   if(n.type==='area') return 6+Math.min(14,(deg[n.id]||0)*0.4);
   if(n.type==='feature'||n.type==='modal') return 5+Math.min(16,(span[n.id]||1)*1.7);
+  if(n.type==='spec') return 6+Math.min(15,(deg[n.id]||1)*1.1); // спека крупнее — узловой объект трассировки
   if(n.type==='document') return 4+Math.min(12,(n.codeRefs||0)*1.3);
   return 3.5+Math.min(8,(deg[n.id]||0)*0.5);
 }
@@ -158,12 +160,13 @@ const EDGE_DESC = {
   has_modal:'содержит модалку', feature:'содержит фичу', screen:'содержит экран', modal:'содержит модалку',
   code:'опирается на код', requirement:'покрывает требование', mentions:'упоминает (кросс-модуль)',
   opens:'открывает модальное окно', verified_on:'проверяется на экране', child_of:'вложен в страницу',
+  specifies:'специфицирует (спека → документ)',
 };
 function relLabel(t){ return EDGE_DESC[t] || t; }
 
 // Риски: почему узел помечен (пояснение раскрывается в панели)
 function riskReason(n){
-  if(n.type==='document'){
+  if(n.type==='document'||n.type==='spec'){
     if(n.status==='not-implemented') return 'документировано, но НЕ реализовано в коде';
     if(n.status==='icebox') return 'заморожено (icebox) — не в активной разработке';
     if(n.status==='partial') return 'реализовано частично';
