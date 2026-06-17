@@ -168,6 +168,9 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
   const byId: Record<string, Ent> = Object.fromEntries(ents.map((e) => [e.id, e]));
   const docs = ents.filter((e) => e.type === 'document');
   const reqs = ents.filter((e) => e.type === 'requirement');
+  // Слой «Спецификации»: спека — документ с метаданными type: spec (специфицирует требование
+  // через acceptance-критерии). Балл слоя считается по покрытию требований именно спеками.
+  const isSpec = (d?: Ent) => d?.metadata?.docType === 'spec';
 
   // covered_by: req -> [docId]
   const reqCoverDocs: Record<string, string[]> = {};
@@ -190,7 +193,7 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
   // Доступность слоёв = есть ли подключённый источник данных.
   const layersAvailable: Record<string, boolean> = {
     subreq: reqs.length > 0 || docs.length > 0,
-    docs: docs.length > 0,
+    docs: docs.some(isSpec), // слой доступен, если есть хотя бы одна спека (type: spec)
     tests: qa.available,
     automation: auto.available,
     execution: false,
@@ -258,13 +261,17 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
 
   // Компоненты покрытия (0..100 / null) для модуля.
   function components(docList: Ent[], reqIds: string[], domain: string): Comp {
-    const { docScore } = scoreDocs(docList);
     const coveredReq = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
     const subreq = reqIds.length ? pct(coveredReq, reqIds.length) : (docList.length ? 100 : 0);
+    // Слой «Спецификации»: доля требований, покрытых СПЕКОЙ (type: spec, статус ≥ 0.5).
+    // Без требований — 100, если в наборе есть хотя бы одна спека.
+    const specInList = docList.filter(isSpec);
+    const specCovered = reqIds.filter((rid) => (reqCoverDocs[rid] || []).some((did) => isSpec(byId[did]) && statusScore(byId[did]?.metadata?.status) >= 0.5)).length;
+    const specScore = reqIds.length ? pct(specCovered, reqIds.length) : (specInList.length ? 100 : 0);
     const tl = reqLayers(reqIds, domain);
     return {
       subreq: layersAvailable.subreq ? subreq : null,
-      docs: docList.length ? docScore : null,
+      docs: layersAvailable.docs ? specScore : null,
       tests: tl.tests,
       automation: tl.automation,
       execution: layersAvailable.execution ? 0 : null,
@@ -307,6 +314,7 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     overallQuality: wAvg((m) => m.coverageScore),
     coverage: wAvg((m) => m.coverageScore),
     documentation: wAvg((m) => m.docScore),
+    specCoverage: layersAvailable.docs ? wAvg((m) => m.comp.docs ?? 0) : null,
     requirementCoverage: wAvg((m) => m.reqScore),
     testCoverage: layersAvailable.tests ? wAvg((m) => m.comp.tests ?? 0) : null,
     automationCoverage: layersAvailable.automation ? wAvg((m) => m.comp.automation ?? 0) : null,
@@ -316,6 +324,7 @@ function compute(ents: Ent[], rels: Rel[], enabled: string[]) {
     modulesCount: modules.length,
     requirementsTotal: reqs.length,
     docsTotal: docs.length,
+    specsTotal: docs.filter(isSpec).length,
     topRiskModules: [...modules].sort((a, b) => b.riskScore - a.riskScore).slice(0, 5).map((m) => ({ name: m.name, score: m.coverageScore, risk: m.riskScore })),
     topUncovered: [...modules].sort((a, b) => a.coverageScore - b.coverageScore).slice(0, 5).map((m) => ({ name: m.name, score: m.coverageScore })),
     layersAvailable,
@@ -333,6 +342,7 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
   const reqCoverDocs: Record<string, string[]> = {};
   for (const r of rels) if (r.type === 'covered_by') (reqCoverDocs[r.fromId] = reqCoverDocs[r.fromId] || []).push(r.toId);
   const docDomain = (d?: Ent) => (d?.metadata?.domain && d.metadata.domain !== '?' ? d.metadata.domain : 'Прочее');
+  const isSpec = (d?: Ent) => d?.metadata?.docType === 'spec';
   const qa = loadQa();
   const def = loadDefects();
 
@@ -340,7 +350,9 @@ function buildMatrix(ents: Ent[], rels: Rel[], enabled: string[], moduleFilter?:
     const dlist = (reqCoverDocs[req.id] || []).map((id) => byId[id]).filter(Boolean);
     const domain = dlist.length ? docDomain(dlist[0]) : 'Прочее';
     const hasDoc = dlist.length > 0;
-    const docsPct = hasDoc ? Math.round(Math.max(...dlist.map((d) => statusScore(d.metadata?.status))) * 100) : 0;
+    // Колонка «Спека»: требование покрыто спекой (type: spec, статус ≥ 0.5)?
+    const hasSpec = dlist.some((d) => isSpec(d) && statusScore(d.metadata?.status) >= 0.5);
+    const docsPct = hasSpec ? 100 : 0;
     const reqText = (req.name || '') + ' ' + (req.summary || '');
     const tm = reqTestMatch(reqText, domain, qa);
     const am = reqAutoMatch(reqText);

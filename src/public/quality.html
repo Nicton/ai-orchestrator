@@ -55,7 +55,8 @@
     <span class="muted">Слои покрытия (кликом отключайте с конца — 100% пересчитается):</span>
     <span id="modeSel"></span>
     <div class="muted" id="depthNote" style="margin-top:6px"></div>
-    <div class="muted" style="margin-top:4px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Docs 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">(Run 10% скрыт — нет данных о прогонах)</span></div>
+    <div class="muted" style="margin-top:4px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Спека 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">(Run 10% скрыт — нет данных о прогонах)</span></div>
+    <div class="muted" style="margin-top:2px;opacity:.7">Слой «Спека» = доля требований, покрытых спецификацией (type: spec) с acceptance-критериями.</div>
   </div>
 
   <div class="tabs">
@@ -108,7 +109,7 @@
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-const ALL_LAYERS=[['subreq','SubReq'],['docs','Docs'],['tests','Tests'],['automation','Auto'],['defects','Bugs']]; // Run (execution) скрыт — нет источника
+const ALL_LAYERS=[['subreq','SubReq'],['docs','Спека'],['tests','Tests'],['automation','Auto'],['defects','Bugs']]; // Run (execution) скрыт; «Спека» = слой docs (покрытие спецификацией)
 let ENABLED=ALL_LAYERS.map(([k])=>k); // все включены; пользователь отключает с конца
 let DATA=null, CURRENT=null; // CURRENT = модуль для drill
 
@@ -150,7 +151,7 @@ async function load(){
 }
 function renderKPI(){
   const k=DATA.kpi;
-  const cards=[['Overall Quality',k.overallQuality+'%'],['Coverage',k.coverage+'%'],['Documentation',k.documentation+'%'],['Requirement Cov.',k.requirementCoverage+'%'],['Risk Score',k.riskScore+'%'],['Модулей',k.modulesCount],['Требований',k.requirementsTotal],['Документов',k.docsTotal]];
+  const cards=[['Overall Quality',k.overallQuality+'%'],['Coverage',k.coverage+'%'],['Покрытие спекой',(k.specCoverage==null?'—':k.specCoverage+'%')],['Requirement Cov.',k.requirementCoverage+'%'],['Risk Score',k.riskScore+'%'],['Модулей',k.modulesCount],['Требований',k.requirementsTotal],['Спек / Доков',(k.specsTotal==null?'—':k.specsTotal)+' / '+k.docsTotal]];
   $('kpis').innerHTML=cards.map(([l,v])=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')
     +`<div class="kpi" style="min-width:220px"><div class="l" style="margin:0 0 4px">Top Risk Modules</div>${(k.topRiskModules||[]).map(m=>`<div style="font-size:12px;display:flex;justify-content:space-between"><span>${esc(m.name)}</span><b style="color:${color(m.score)}">${m.score}%</b></div>`).join('')}</div>`;
 }
@@ -202,7 +203,7 @@ async function loadMatrix(){
   const d=await fetch('/api/quality/matrix?layers='+ENABLED.join(',')+(mod?'&module='+encodeURIComponent(mod):'')).then(r=>r.json());
   $('mcount').textContent=`${d.rows.length} из ${d.total} требований (сорт. по Score)`;
   const c=v=>v==null?'<span class="nd">—</span>':v+'%';
-  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>SubReq</th><th>Docs</th><th>Tests</th><th>Auto</th><th>Bugs</th><th>Score</th><th>Risk</th></tr></thead><tbody>`+
+  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>SubReq</th><th>Спека</th><th>Tests</th><th>Auto</th><th>Bugs</th><th>Score</th><th>Risk</th></tr></thead><tbody>`+
     d.rows.map(r=>`<tr>
       <td>${r.confluence?`<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(r.confluence)}" target="_blank">${esc(r.requirement)}</a>`:esc(r.requirement)}<div class="muted">${esc(r.summary||'')}</div></td>
       <td>${esc(r.module)}</td>

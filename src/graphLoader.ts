@@ -59,7 +59,7 @@ function buildEntities(nodes: any): EntitySpec[] {
       const metadata: any = { source: 'graph', group };
       if (group === 'doc') {
         summary = [node.domain, node.status].filter(Boolean).join(' · ');
-        Object.assign(metadata, { domain: node.domain, status: node.status, confluence: node.confluence, repo: node.repo, codeRefs: node.code_refs });
+        Object.assign(metadata, { domain: node.domain, status: node.status, confluence: node.confluence, repo: node.repo, codeRefs: node.code_refs, docType: node.type });
       } else if (group === 'feature') {
         name = node.name || id;
         summary = 'Фича / сущность';
