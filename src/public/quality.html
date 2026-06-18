@@ -55,11 +55,11 @@
   <div class="kpis" id="kpis"></div>
 
   <div class="card" style="padding:12px 16px">
-    <span class="muted">Слои покрытия (кликом отключайте с конца — 100% пересчитается):</span>
+    <span class="muted" id="layersNote">Слои покрытия (кликом отключайте с конца — 100% пересчитается):</span>
     <span id="modeSel"></span>
     <div class="muted" id="depthNote" style="margin-top:6px"></div>
-    <div class="muted" style="margin-top:4px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Спека 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">(Run 10% скрыт — нет данных о прогонах)</span></div>
-    <div class="muted" style="margin-top:2px;opacity:.7">Слой «Спека» = доля требований, покрытых спецификацией (type: spec) с acceptance-критериями.</div>
+    <div class="muted" id="weightsNote" style="margin-top:4px">Веса (ТЗ): <b>SubReq 20%</b> · <b>Спека 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">(Run 10% скрыт — нет данных о прогонах)</span></div>
+    <div class="muted" id="specLayerNote" style="margin-top:2px;opacity:.7">Слой «Спека» = доля требований, покрытых спецификацией (type: spec) с acceptance-критериями.</div>
   </div>
 
   <div class="tabs">
@@ -73,15 +73,15 @@
     <div class="card">
       <div class="crumb" id="crumb"></div>
       <svg class="tm" id="tm"></svg>
-      <div class="legend">Покрытие: <span>0%</span>
+      <div class="legend"><span id="tmCoverage">Покрытие:</span> <span>0%</span>
         <i style="background:#b71c1c"></i><i style="background:#e53935"></i><i style="background:#fb8c00"></i><i style="background:#fdd835"></i><i style="background:#9ccc65"></i><i style="background:#2e7d32"></i>
-        <span>100%</span> · размер блока = число требований/доков · клик — провалиться</div>
+        <span>100%</span><span id="tmLegendNote"> · размер блока = число требований/доков · клик — провалиться</span></div>
     </div>
   </div>
 
   <div class="pane" id="p-matrix">
     <div class="card">
-      <div style="margin-bottom:10px">Модуль: <select id="mfilter"><option value="">Все</option></select>
+      <div style="margin-bottom:10px"><span id="matrixModLabel">Модуль:</span> <select id="mfilter"><option value="">Все</option></select>
         <span class="muted" id="mcount"></span></div>
       <div style="max-height:620px;overflow:auto"><table id="matrix"></table></div>
     </div>
@@ -89,9 +89,9 @@
 
   <div class="pane" id="p-graph">
     <div class="card">
-      <h3 style="margin-top:0">Dependency Graph</h3>
-      <div class="muted">Граф связей требование → документация → код → Confluence для расследования: почему модуль красный и чего не хватает. Открывается в полноэкранном виде с фильтрами/поиском/рисками.</div>
-      <p><button class="pri" onclick="location.href='/graph'">Открыть граф зависимостей →</button></p>
+      <h3 style="margin-top:0" id="graphPaneTitle">Dependency Graph</h3>
+      <div class="muted" id="graphPaneDesc">Граф связей требование → документация → код → Confluence для расследования: почему модуль красный и чего не хватает. Открывается в полноэкранном виде с фильтрами/поиском/рисками.</div>
+      <p><button class="pri" id="graphPaneBtn" onclick="location.href='/graph'">Открыть граф зависимостей →</button></p>
     </div>
   </div>
 
@@ -103,7 +103,7 @@
         <span class="muted" id="snapMsg"></span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-        Сравнить: <select id="snapA"></select> → <select id="snapB"></select> <button id="snapCmp">Сравнить</button>
+        <span id="snapCompareLabel">Сравнить:</span> <select id="snapA"></select> → <select id="snapB"></select> <button id="snapCmp">Сравнить</button>
       </div>
       <div id="snapDiff"></div>
     </div>
@@ -112,7 +112,72 @@
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-const ALL_LAYERS=[['subreq','SubReq'],['docs','Спека'],['tests','Tests'],['automation','Auto'],['defects','Bugs']]; // Run (execution) скрыт; «Спека» = слой docs (покрытие спецификацией)
+const QLANG=(()=>{ try{ return localStorage.getItem('searchify_lang')||'ru'; }catch(_){ return 'ru'; } })();
+const QI18N={
+  ru:{ subtitle:'единый движок · 3 представления', back:'← Поиск', graph:'Graph',
+    layersNote:'Слои покрытия (кликом отключайте с конца — 100% пересчитается):',
+    weights:'Веса (ТЗ):', runHidden:'(Run 10% скрыт — нет данных о прогонах)',
+    specLayerNote:'Слой «Спека» = доля требований, покрытых спецификацией (type: spec) с acceptance-критериями.',
+    tabTreemap:'Quality Treemap', tabMatrix:'Traceability Matrix', tabGraph:'Dependency Graph', tabSnap:'Снапшоты / Динамика',
+    coverage:'Покрытие:', tmLegend:'размер блока = число требований/доков · клик — провалиться',
+    module:'Модуль:', all:'Все', allSystem:'Вся система', clickForMatrix:'(клик блока — матрица модуля)',
+    graphTitle:'Dependency Graph', graphDesc:'Граф связей требование → документация → код → Confluence для расследования: почему модуль красный и чего не хватает. Открывается в полноэкранном виде с фильтрами/поиском/рисками.', graphBtn:'Открыть граф зависимостей →',
+    snapPh:'метка снапшота (опц.)', snapSave:'📸 Сохранить снапшот', snapCompare:'Сравнить:', snapCmp:'Сравнить',
+    countedBy:'100% считается по:', enabledNoData:'включены без данных (=0%):',
+    topRisk:'Top Risk Modules', reqOf:(n,t)=>`${n} из ${t} требований (сорт. по Score)`,
+    hReq:'Требование', hMod:'Модуль', hSpec:'Спека', hScore:'Score', hRisk:'Risk', hBefore:'Было', hAfter:'Стало',
+    snapSaving:'Сохраняю…', snapSaved:'Сохранено ✓', snapAdminOnly:'Только админ может сохранять снапшоты',
+    kOverall:'Overall Quality', kCoverage:'Coverage', kSpecCov:'Покрытие спекой', kReqCov:'Requirement Cov.', kRisk:'Risk Score', kModules:'Модулей', kReqs:'Требований', kSpecDocs:'Спек / Доков',
+    layers:{subreq:'SubReq',docs:'Спека',tests:'Tests',automation:'Auto',defects:'Bugs'} },
+  en:{ subtitle:'single engine · 3 views', back:'← Search', graph:'Graph',
+    layersNote:'Coverage layers (click from the end to disable — 100% recalculates):',
+    weights:'Weights (spec):', runHidden:'(Run 10% hidden — no execution data)',
+    specLayerNote:'«Spec» layer = share of requirements covered by a specification (type: spec) with acceptance criteria.',
+    tabTreemap:'Quality Treemap', tabMatrix:'Traceability Matrix', tabGraph:'Dependency Graph', tabSnap:'Snapshots / Trends',
+    coverage:'Coverage:', tmLegend:'block size = number of requirements/docs · click to drill down',
+    module:'Module:', all:'All', allSystem:'Whole system', clickForMatrix:'(click a block — module matrix)',
+    graphTitle:'Dependency Graph', graphDesc:'Requirement → documentation → code → Confluence dependency graph for investigation: why a module is red and what is missing. Opens fullscreen with filters/search/risks.', graphBtn:'Open dependency graph →',
+    snapPh:'snapshot label (opt.)', snapSave:'📸 Save snapshot', snapCompare:'Compare:', snapCmp:'Compare',
+    countedBy:'100% counted by:', enabledNoData:'enabled without data (=0%):',
+    topRisk:'Top Risk Modules', reqOf:(n,t)=>`${n} of ${t} requirements (sorted by Score)`,
+    hReq:'Requirement', hMod:'Module', hSpec:'Spec', hScore:'Score', hRisk:'Risk', hBefore:'Was', hAfter:'Now',
+    snapSaving:'Saving…', snapSaved:'Saved ✓', snapAdminOnly:'Only an admin can save snapshots',
+    kOverall:'Overall Quality', kCoverage:'Coverage', kSpecCov:'Spec coverage', kReqCov:'Requirement Cov.', kRisk:'Risk Score', kModules:'Modules', kReqs:'Requirements', kSpecDocs:'Specs / Docs',
+    layers:{subreq:'SubReq',docs:'Spec',tests:'Tests',automation:'Auto',defects:'Bugs'} },
+  fr:{ subtitle:'moteur unique · 3 vues', back:'← Recherche', graph:'Graphe',
+    layersNote:'Couches de couverture (cliquez depuis la fin pour désactiver — 100% recalculé) :',
+    weights:'Poids (cahier) :', runHidden:'(Run 10% masqué — pas de données d\'exécution)',
+    specLayerNote:'Couche « Spéc » = part des exigences couvertes par une spécification (type: spec) avec critères d\'acceptation.',
+    tabTreemap:'Treemap qualité', tabMatrix:'Matrice de traçabilité', tabGraph:'Graphe de dépendances', tabSnap:'Instantanés / Tendances',
+    coverage:'Couverture :', tmLegend:'taille du bloc = nombre d\'exigences/docs · cliquez pour explorer',
+    module:'Module :', all:'Tous', allSystem:'Tout le système', clickForMatrix:'(cliquez un bloc — matrice du module)',
+    graphTitle:'Graphe de dépendances', graphDesc:'Graphe exigence → documentation → code → Confluence pour l\'investigation : pourquoi un module est rouge et ce qui manque. S\'ouvre en plein écran avec filtres/recherche/risques.', graphBtn:'Ouvrir le graphe de dépendances →',
+    snapPh:'libellé d\'instantané (opt.)', snapSave:'📸 Enregistrer l\'instantané', snapCompare:'Comparer :', snapCmp:'Comparer',
+    countedBy:'100% calculé sur :', enabledNoData:'activées sans données (=0%) :',
+    topRisk:'Modules à risque', reqOf:(n,t)=>`${n} sur ${t} exigences (triées par Score)`,
+    hReq:'Exigence', hMod:'Module', hSpec:'Spéc', hScore:'Score', hRisk:'Risque', hBefore:'Avant', hAfter:'Après',
+    snapSaving:'Enregistrement…', snapSaved:'Enregistré ✓', snapAdminOnly:'Seul un admin peut enregistrer des instantanés',
+    kOverall:'Qualité globale', kCoverage:'Couverture', kSpecCov:'Couverture spéc', kReqCov:'Couv. exigences', kRisk:'Score de risque', kModules:'Modules', kReqs:'Exigences', kSpecDocs:'Spécs / Docs',
+    layers:{subreq:'SubReq',docs:'Spéc',tests:'Tests',automation:'Auto',defects:'Bugs'} }
+};
+const QL=QI18N[QLANG]||QI18N.ru;
+const ALL_LAYERS=[['subreq',QL.layers.subreq],['docs',QL.layers.docs],['tests',QL.layers.tests],['automation',QL.layers.automation],['defects',QL.layers.defects]]; // Run (execution) скрыт; «Спека» = слой docs (покрытие спецификацией)
+function localizeQualityChrome(){
+  document.querySelector('.bar .muted').textContent=QL.subtitle;
+  const links=document.querySelectorAll('.toplink'); if(links[0]) links[0].textContent=QL.back; if(links[1]) links[1].textContent=QL.graph;
+  $('layersNote').textContent=QL.layersNote;
+  $('weightsNote').innerHTML=`${QL.weights} <b>SubReq 20%</b> · <b>${QL.layers.docs} 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">${QL.runHidden}</span>`;
+  $('specLayerNote').textContent=QL.specLayerNote;
+  const tabs=document.querySelectorAll('.tab');
+  const tl={treemap:QL.tabTreemap,matrix:QL.tabMatrix,graph:QL.tabGraph,snap:QL.tabSnap};
+  tabs.forEach(t=>{ if(tl[t.dataset.p]) t.textContent=tl[t.dataset.p]; });
+  $('tmCoverage').textContent=QL.coverage; $('tmLegendNote').textContent=' · '+QL.tmLegend;
+  $('matrixModLabel').textContent=QL.module;
+  $('graphPaneTitle').textContent=QL.graphTitle; $('graphPaneDesc').textContent=QL.graphDesc; $('graphPaneBtn').textContent=QL.graphBtn;
+  $('snapLabel').placeholder=QL.snapPh; $('snapSave').textContent=QL.snapSave;
+  $('snapCompareLabel').textContent=QL.snapCompare;
+  $('snapCmp').textContent=QL.snapCmp;
+}
 let ENABLED=ALL_LAYERS.map(([k])=>k); // все включены; пользователь отключает с конца
 let DATA=null, CURRENT=null; // CURRENT = модуль для drill
 
@@ -127,6 +192,7 @@ function color(s){ // heatmap по ТЗ
 
 async function boot(){
   const me=await fetch('/api/auth/me'); if(!me.ok){location.href='/login';return;}
+  localizeQualityChrome();
   renderLayers();
   await load();
   buildTabs();
@@ -149,14 +215,14 @@ async function load(){
   renderKPI(); CURRENT=null; drawTreemap();
   const av=DATA.kpi.layersAvailable||{};
   const miss=ALL_LAYERS.filter(([k])=>ENABLED.includes(k)&&!av[k]).map(([,l])=>l);
-  $('depthNote').innerHTML=`100% считается по: <b>${ALL_LAYERS.filter(([k])=>ENABLED.includes(k)).map(([,l])=>l).join(' + ')||'—'}</b>`+(miss.length?` · <span style="color:#c5221f">включены без данных (=0%): ${miss.join(', ')}</span>`:'');
-  const mf=$('mfilter'); mf.innerHTML='<option value="">Все</option>'+DATA.modules.map(m=>`<option>${esc(m.name)}</option>`).join('');
+  $('depthNote').innerHTML=`${QL.countedBy} <b>${ALL_LAYERS.filter(([k])=>ENABLED.includes(k)).map(([,l])=>l).join(' + ')||'—'}</b>`+(miss.length?` · <span style="color:#c5221f">${QL.enabledNoData} ${miss.join(', ')}</span>`:'');
+  const mf=$('mfilter'); mf.innerHTML=`<option value="">${esc(QL.all)}</option>`+DATA.modules.map(m=>`<option>${esc(m.name)}</option>`).join('');
 }
 function renderKPI(){
   const k=DATA.kpi;
-  const cards=[['Overall Quality',k.overallQuality+'%'],['Coverage',k.coverage+'%'],['Покрытие спекой',(k.specCoverage==null?'—':k.specCoverage+'%')],['Requirement Cov.',k.requirementCoverage+'%'],['Risk Score',k.riskScore+'%'],['Модулей',k.modulesCount],['Требований',k.requirementsTotal],['Спек / Доков',(k.specsTotal==null?'—':k.specsTotal)+' / '+k.docsTotal]];
+  const cards=[[QL.kOverall,k.overallQuality+'%'],[QL.kCoverage,k.coverage+'%'],[QL.kSpecCov,(k.specCoverage==null?'—':k.specCoverage+'%')],[QL.kReqCov,k.requirementCoverage+'%'],[QL.kRisk,k.riskScore+'%'],[QL.kModules,k.modulesCount],[QL.kReqs,k.requirementsTotal],[QL.kSpecDocs,(k.specsTotal==null?'—':k.specsTotal)+' / '+k.docsTotal]];
   $('kpis').innerHTML=cards.map(([l,v])=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')
-    +`<div class="kpi" style="min-width:220px"><div class="l" style="margin:0 0 4px">Top Risk Modules</div>${(k.topRiskModules||[]).map(m=>`<div style="font-size:12px;display:flex;justify-content:space-between"><span>${esc(m.name)}</span><b style="color:${color(m.score)}">${m.score}%</b></div>`).join('')}</div>`;
+    +`<div class="kpi" style="min-width:220px"><div class="l" style="margin:0 0 4px">${QL.topRisk}</div>${(k.topRiskModules||[]).map(m=>`<div style="font-size:12px;display:flex;justify-content:space-between"><span>${esc(m.name)}</span><b style="color:${color(m.score)}">${m.score}%</b></div>`).join('')}</div>`;
 }
 
 // squarified treemap
@@ -179,9 +245,9 @@ function squarify(items,X,Y,W,H){
 function drawTreemap(){
   const svg=$('tm'); const W=svg.clientWidth||1000,H=560;
   let items, title;
-  if(!CURRENT){ items=DATA.modules.map(m=>({value:m.size,label:m.name,score:m.coverageScore,m})); title='Вся система'; }
+  if(!CURRENT){ items=DATA.modules.map(m=>({value:m.size,label:m.name,score:m.coverageScore,m})); title=QL.allSystem; }
   else { const m=CURRENT; items=(m.areas&&m.areas.length?m.areas:[{name:m.name,size:m.size,score:m.coverageScore}]).map(a=>({value:a.size,label:a.name.split('.').pop(),score:a.score,area:a})); title=m.name; }
-  $('crumb').innerHTML=`<b onclick="goRoot()">Вся система</b>`+(CURRENT?` › ${esc(CURRENT.name)} <span class="muted">(клик блока — матрица модуля)</span>`:'');
+  $('crumb').innerHTML=`<b onclick="goRoot()">${esc(QL.allSystem)}</b>`+(CURRENT?` › ${esc(CURRENT.name)} <span class="muted">${esc(QL.clickForMatrix)}</span>`:'');
   squarify(items,0,0,W,H);
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   svg.innerHTML=items.map(it=>{
@@ -204,9 +270,9 @@ window.goRoot=()=>{CURRENT=null;drawTreemap();};
 async function loadMatrix(){
   const mod=$('mfilter').value;
   const d=await fetch('/api/quality/matrix?layers='+ENABLED.join(',')+(mod?'&module='+encodeURIComponent(mod):'')).then(r=>r.json());
-  $('mcount').textContent=`${d.rows.length} из ${d.total} требований (сорт. по Score)`;
+  $('mcount').textContent=QL.reqOf(d.rows.length,d.total);
   const c=v=>v==null?'<span class="nd">—</span>':v+'%';
-  $('matrix').innerHTML=`<thead><tr><th>Требование</th><th>Модуль</th><th>SubReq</th><th>Спека</th><th>Tests</th><th>Auto</th><th>Bugs</th><th>Score</th><th>Risk</th></tr></thead><tbody>`+
+  $('matrix').innerHTML=`<thead><tr><th>${QL.hReq}</th><th>${QL.hMod}</th><th>${QL.layers.subreq}</th><th>${QL.hSpec}</th><th>${QL.layers.tests}</th><th>${QL.layers.automation}</th><th>${QL.layers.defects}</th><th>${QL.hScore}</th><th>${QL.hRisk}</th></tr></thead><tbody>`+
     d.rows.map(r=>`<tr>
       <td>${r.confluence?`<a href="https://shiptify.atlassian.net/wiki/spaces/TD/pages/${esc(r.confluence)}" target="_blank">${esc(r.requirement)}</a>`:esc(r.requirement)}<div class="muted">${esc(r.summary||'')}</div></td>
       <td>${esc(r.module)}</td>
@@ -233,9 +299,9 @@ async function loadSnaps(){
   $('snapA').innerHTML=opts; $('snapB').innerHTML=opts;
 }
 $('snapSave').addEventListener('click',async()=>{
-  $('snapMsg').textContent='Сохраняю…';
+  $('snapMsg').textContent=QL.snapSaving;
   const r=await fetch('/api/quality/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:$('snapLabel').value})});
-  $('snapMsg').textContent=r.ok?'Сохранено ✓':'Только админ может сохранять снапшоты';
+  $('snapMsg').textContent=r.ok?QL.snapSaved:QL.snapAdminOnly;
   if(r.ok){$('snapLabel').value='';loadSnaps();}
 });
 $('snapCmp').addEventListener('click',async()=>{
@@ -243,7 +309,7 @@ $('snapCmp').addEventListener('click',async()=>{
   const d=await fetch(`/api/quality/compare?a=${a}&b=${b}`).then(r=>r.json());
   if(d.error){$('snapDiff').innerHTML='<span class="muted">'+esc(d.error)+'</span>';return;}
   $('snapDiff').innerHTML=`<div class="muted" style="margin:8px 0">Overall: ${d.a.kpi.overallQuality}% → ${d.b.kpi.overallQuality}%</div>
-    <table><thead><tr><th>Модуль</th><th>Было</th><th>Стало</th><th>Δ</th></tr></thead><tbody>`+
+    <table><thead><tr><th>${QL.hMod}</th><th>${QL.hBefore}</th><th>${QL.hAfter}</th><th>Δ</th></tr></thead><tbody>`+
     d.diff.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.before==null?'—':x.before+'%'}</td><td>${x.after==null?'—':x.after+'%'}</td>
       <td style="color:${x.delta>0?'#137333':x.delta<0?'#c5221f':'#5f6368'};font-weight:700">${x.delta>0?'+':''}${x.delta}</td></tr>`).join('')+`</tbody>`;
 });

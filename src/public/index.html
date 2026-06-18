@@ -529,6 +529,14 @@ const I18N = {
     answerLinkCopied: 'Ссылка на ответ скопирована',
     sharedAnswerOpened: 'Открыт сохранённый ответ',
     answerNotFound: 'Ответ не найден или недоступен',
+    navQuality: 'Качество',
+    navIdeas: 'Идеи',
+    histBtn: 'История',
+    histTitle: 'Ваша история',
+    histLoading: 'Загрузка…',
+    histEmpty: 'Пока нет вопросов.',
+    histSrc: 'ист.',
+    histVoice: '🎙️ голос',
   },
   en: {
     appTagline: 'Ask anything about our products, processes and docs',
@@ -589,6 +597,14 @@ const I18N = {
     answerLinkCopied: 'Answer link copied',
     sharedAnswerOpened: 'Opened a saved answer',
     answerNotFound: 'Answer not found or unavailable',
+    navQuality: 'Quality',
+    navIdeas: 'Ideas',
+    histBtn: 'History',
+    histTitle: 'Your history',
+    histLoading: 'Loading…',
+    histEmpty: 'No questions yet.',
+    histSrc: 'src',
+    histVoice: '🎙️ voice',
   },
   fr: {
     appTagline: 'Pose une question sur nos produits, processus et documentations',
@@ -649,6 +665,14 @@ const I18N = {
     answerLinkCopied: 'Lien vers la réponse copié',
     sharedAnswerOpened: 'Réponse enregistrée ouverte',
     answerNotFound: 'Réponse introuvable ou indisponible',
+    navQuality: 'Qualité',
+    navIdeas: 'Idées',
+    histBtn: 'Historique',
+    histTitle: 'Votre historique',
+    histLoading: 'Chargement…',
+    histEmpty: 'Aucune question pour le moment.',
+    histSrc: 'src',
+    histVoice: '🎙️ voix',
   },
 };
 
@@ -997,7 +1021,7 @@ $('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add(
 // SEARCH
 // ===================================================================
 let pendingInputMode = 'text';
-let preferredAnswerLanguage = 'ru';
+let preferredAnswerLanguage = (() => { try { return localStorage.getItem('searchify_lang') || 'ru'; } catch(_) { return 'ru'; } })();
 let voiceCountdownTimer = null;
 let voiceWorkflowStage = 'idle';
 let voiceAutoSubmitPending = false;
@@ -1048,11 +1072,15 @@ function applyTranslations(){
   $('loginSubmit').textContent = t('signIn');
   const dropHint = $('imageDropHint'); if (dropHint) dropHint.textContent = t('dropImagesHint');
   const specLbl = $('specToggleLabel'); if (specLbl) specLbl.textContent = t('speculativeLabel');
+  $('histBtn').textContent = t('histBtn');
+  const qBtn = $('qualityBtn'); if (qBtn) qBtn.textContent = t('navQuality');
+  const iBtn = $('ideasBtn'); if (iBtn) iBtn.textContent = t('navIdeas');
   setVoiceWorkflowStage(voiceWorkflowStage);
 }
 
 function setPreferredAnswerLanguage(next){
   preferredAnswerLanguage = next;
+  try { localStorage.setItem('searchify_lang', next); } catch(_) {} // делимся выбором с /graph, /quality
   $('langRuBtn').classList.toggle('active', next === 'ru');
   $('langEnBtn').classList.toggle('active', next === 'en');
   $('langFrBtn').classList.toggle('active', next === 'fr');
@@ -1409,7 +1437,7 @@ $('voiceSendBtn').addEventListener('click', () => {
     searchVoice.stop();
   }
 });
-applyTranslations();
+setPreferredAnswerLanguage(preferredAnswerLanguage);
 setVoiceWorkflowStage('idle');
 
 // ===================================================================
@@ -1574,23 +1602,23 @@ async function openHistory(){
   mount.innerHTML = `
     <div class="drawer-bg" id="drBg"></div>
     <div class="drawer">
-      <header><h2>Your history</h2><button class="iconbtn" id="drClose">×</button></header>
-      <div class="body" id="drBody"><div class="loading"><span class="spinner"></span> Loading…</div></div>
+      <header><h2>${escapeHtml(t('histTitle'))}</h2><button class="iconbtn" id="drClose">×</button></header>
+      <div class="body" id="drBody"><div class="loading"><span class="spinner"></span> ${escapeHtml(t('histLoading'))}</div></div>
     </div>`;
   $('drClose').addEventListener('click', closeDrawer);
   $('drBg').addEventListener('click', closeDrawer);
   const data = await API.history();
   const body = $('drBody');
-  if (!data.queries || !data.queries.length){ body.innerHTML = `<div class="empty">No questions yet.</div>`; return; }
+  if (!data.queries || !data.queries.length){ body.innerHTML = `<div class="empty">${escapeHtml(t('histEmpty'))}</div>`; return; }
   body.innerHTML = data.queries.map((q, i) => `
     <div class="hist-item" data-q="${escapeHtml(q.question)}">
       <div class="hist-q">${escapeHtml(q.question)}</div>
       <div class="hist-meta">
         <span>${new Date(q.createdAt).toLocaleString()}</span>
         ${q.rating ? `<span>${['😣','🙁','😐','🙂','😄'][q.rating-1]}</span>` : ''}
-        <span>${q.sourceCount} src</span>
+        <span>${q.sourceCount} ${escapeHtml(t('histSrc'))}</span>
         ${q.answerMode ? `<span>${escapeHtml(q.answerMode)}</span>` : ''}
-        ${q.inputMode==='voice' ? '<span>🎙️ voice</span>' : ''}
+        ${q.inputMode==='voice' ? `<span>${escapeHtml(t('histVoice'))}</span>` : ''}
         ${q.llmLog ? `<span class="hist-log-toggle" data-i="${i}" style="cursor:pointer;color:var(--blue)">🧠 LLM-лог</span>` : ''}
       </div>
       ${q.llmLog ? `<pre class="hist-log" id="histLog${i}" style="display:none;white-space:pre-wrap;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:10px;font-size:11px;line-height:1.4;max-height:300px;overflow:auto;margin-top:8px">${escapeHtml(q.llmLog)}</pre>` : ''}
