@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Knowledge Graph — Searchify</title>
 <style>
-  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; color-scheme: light dark; }
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; --bg-soft:#f1f3f4; color-scheme: light dark; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --blue:#8ab4f8; }
+    :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --blue:#8ab4f8; --bg-soft:#1e1e1e; }
   }
   * { box-sizing:border-box; }
   body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
@@ -16,7 +16,7 @@
   header.bar { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   header.bar .title { font-size:17px; font-weight:600; }
   header.bar .spacer { flex:1; }
-  .ghost { border:1px solid var(--line); background:#fff; color:#3c4043; padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; }
+  .ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; }
   .ghost.active { background:var(--blue); color:#fff; border-color:var(--blue); }
   input.search { border:1px solid var(--line); border-radius:8px; padding:7px 11px; font-size:13px; width:200px; }
   select { border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:13px; }
@@ -28,22 +28,22 @@
   .edge.cross { stroke:#f439a0; stroke-opacity:.5; }
   .edge.hl { stroke:var(--blue); stroke-width:2; stroke-opacity:1; }
   .node circle { cursor:pointer; stroke:#fff; stroke-width:1.5; }
-  .node text { font-size:10px; fill:#3c4043; pointer-events:none; paint-order:stroke; stroke:#fff; stroke-width:2.5px; stroke-linejoin:round; }
+  .node text { font-size:10px; fill:var(--ink); pointer-events:none; paint-order:stroke; stroke:var(--bg); stroke-width:2.5px; stroke-linejoin:round; }
   .node.dim { opacity:.1; }
   .node.risk circle { stroke:#d93025; stroke-width:3; }
   .side { width:340px; border-left:1px solid var(--line); background:var(--panel); padding:16px; overflow-y:auto; }
   .side h2 { font-size:15px; margin:0 0 4px; }
   .muted { color:var(--muted); font-size:13px; }
   .layers { display:flex; flex-wrap:wrap; gap:6px; }
-  .chip { display:flex; align-items:center; gap:5px; font-size:12px; padding:4px 9px; border:1px solid var(--line); border-radius:20px; cursor:pointer; user-select:none; background:#fff; }
+  .chip { display:flex; align-items:center; gap:5px; font-size:12px; padding:4px 9px; border:1px solid var(--line); border-radius:20px; cursor:pointer; user-select:none; background:var(--panel); color:var(--ink); }
   .chip.off { opacity:.4; }
   .dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
   .rel { border-left:3px solid var(--blue); padding:5px 9px; margin:5px 0; background:#f3f8ff; border-radius:0 6px 6px 0; font-size:12.5px; }
   .stat { display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; border-bottom:1px dashed var(--line); }
   .empty { padding:60px 20px; text-align:center; color:var(--muted); }
-  .pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; background:#eef1f5; color:#5f6368; }
-  .hint { position:absolute; bottom:10px; left:12px; font-size:11px; color:#9aa0a6; background:rgba(255,255,255,.75); padding:3px 8px; border-radius:6px; }
-  .spin { position:absolute; top:10px; left:12px; font-size:11px; color:#5f6368; background:rgba(255,255,255,.85); padding:3px 8px; border-radius:6px; display:none; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; background:var(--bg-soft); color:var(--muted); }
+  .hint { position:absolute; bottom:10px; left:12px; font-size:11px; color:var(--muted); background:var(--panel); opacity:.85; padding:3px 8px; border-radius:6px; }
+  .spin { position:absolute; top:10px; left:12px; font-size:11px; color:var(--muted); background:var(--panel); opacity:.9; padding:3px 8px; border-radius:6px; display:none; }
 </style>
 </head>
 <body>

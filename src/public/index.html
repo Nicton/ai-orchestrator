@@ -7,6 +7,7 @@
 <style>
   :root {
     --bg: #ffffff;
+    --panel: #ffffff;
     --ink: #202124;
     --muted: #5f6368;
     --line: #dfe1e5;
@@ -25,6 +26,7 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0d0d0d;
+      --panel: #121212;
       --ink: #e8eaed;
       --muted: #9aa0a6;
       --line: #3c4043;
@@ -68,7 +70,7 @@
     background: var(--blue); color: #fff; font-weight: 600; font-size: 15px;
   }
   .menu {
-    position: absolute; right: 0; top: 44px; background: #fff; min-width: 230px;
+    position: absolute; right: 0; top: 44px; background: var(--panel); min-width: 230px;
     border: 1px solid var(--line-soft); border-radius: 12px; box-shadow: var(--shadow-lg);
     padding: 8px; z-index: 30;
   }
@@ -155,25 +157,25 @@
 
   .home-actions { margin-top: 26px; display: flex; gap: 10px; }
   .home-actions button {
-    background: var(--bg-soft); border: 1px solid var(--bg-soft); color: #3c4043;
+    background: var(--bg-soft); border: 1px solid var(--bg-soft); color: var(--ink);
     padding: 9px 16px; border-radius: 6px; font-size: 14px;
   }
   .home-actions button:hover { border-color: var(--line); box-shadow: var(--shadow); }
   .voicehint { margin-top: 14px; font-size: 13px; color: var(--muted); min-height: 18px; }
   .composer-tools { width: 100%; max-width: 620px; margin-top: 12px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; }
   .tool-btn {
-    border: 1px solid var(--line); background: #fff; color: #3c4043; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px;
     padding: 9px 14px; font-size: 13px; font-weight: 600;
   }
   .lang-switch { display:inline-flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .lang-chip {
-    border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 999px;
     padding: 8px 12px; font-size: 12px; font-weight: 700; letter-spacing: .08em;
   }
   .lang-chip.active { background: #e8f0fe; color: var(--blue-dark); border-color: #c9defc; }
   .voice-panel {
     width: 100%; max-width: 620px; margin-top: 12px; border: 1px solid var(--line-soft); border-radius: 18px;
-    background: #fff; box-shadow: var(--shadow); padding: 14px 16px;
+    background: var(--panel); box-shadow: var(--shadow); padding: 14px 16px;
   }
   .voice-panel[hidden] { display: none !important; }
   .voice-panel-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
@@ -184,18 +186,18 @@
   .voice-status-dot.ready { background: var(--green); box-shadow: none; }
   .voice-countdown {
     display:inline-flex; align-items:center; justify-content:center; min-width:34px;
-    padding: 3px 8px; border-radius: 999px; background: var(--bg-soft); color: #3c4043; font-size: 12px;
+    padding: 3px 8px; border-radius: 999px; background: var(--bg-soft); color: var(--ink); font-size: 12px;
   }
 
   /* ---------- results ---------- */
   .results-area { width: 100%; max-width: 720px; margin: 22px 0 80px; }
   .answer-meta { color: var(--muted); font-size: 13px; margin-bottom: 14px; display:flex; gap:14px; flex-wrap:wrap; align-items:center; }
-  .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:12px; background:var(--bg-soft); font-size:12px; color:#3c4043; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:12px; background:var(--bg-soft); font-size:12px; color:var(--ink); }
   .conf-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
 
   .answer {
-    font-size: 16px; line-height: 1.7; color: #1f1f1f;
-    border: 1px solid var(--line-soft); border-radius: 14px; padding: 22px 24px; background: #fff;
+    font-size: 16px; line-height: 1.7; color: var(--ink);
+    border: 1px solid var(--line-soft); border-radius: 14px; padding: 22px 24px; background: var(--panel);
     box-shadow: var(--shadow);
   }
   .answer h1,.answer h2,.answer h3,.answer h4 { font-weight:600; line-height:1.3; margin:18px 0 8px; }
@@ -214,7 +216,7 @@
   .sources h3 { font-size: 14px; color: var(--muted); font-weight: 500; margin: 0 0 12px; text-transform: uppercase; letter-spacing:.4px; }
   .source {
     border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
-    transition: box-shadow .12s; background:#fff;
+    transition: box-shadow .12s; background: var(--panel);
   }
   .source:hover { box-shadow: var(--shadow); }
   .source .s-top { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
@@ -223,10 +225,10 @@
   .badge-confluence { background:#deebff; color:#0747a6; }
   .badge-jira { background:#deebff; color:#0747a6; }
   .badge-web { background:#e6f4ea; color:#188038; }
-  .badge-local { background:#f1f3f4; color:#5f6368; }
+  .badge-local { background:var(--bg-soft); color:var(--muted); }
   .source .s-url { font-size: 13px; color: var(--green); word-break: break-all; }
   .source .s-path { font-size: 12px; color: var(--muted); }
-  .source .s-snippet { font-size: 14px; color: #3c4043; margin-top: 6px; line-height:1.5; }
+  .source .s-snippet { font-size: 14px; color: var(--ink); margin-top: 6px; line-height:1.5; }
 
   /* ---------- rating + actions ---------- */
   .feedback-row {
@@ -243,7 +245,7 @@
   .emoji.selected { filter: grayscale(0); opacity: 1; transform: scale(1.12); }
   .rate-thanks { font-size: 13px; color: var(--green); }
   .action-btn {
-    border: 1px solid var(--line); background: #fff; color: #3c4043; border-radius: 18px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 18px;
     padding: 7px 14px; font-size: 13px; display:inline-flex; align-items:center; gap:6px;
   }
   .action-btn:hover { background: var(--bg-soft); }
@@ -254,7 +256,7 @@
   /* ---------- drawer (history) ---------- */
   .drawer-bg { position: fixed; inset: 0; background: rgba(0,0,0,.32); z-index: 40; }
   .drawer {
-    position: fixed; right: 0; top: 0; bottom: 0; width: 420px; max-width: 92vw; background: #fff;
+    position: fixed; right: 0; top: 0; bottom: 0; width: 420px; max-width: 92vw; background: var(--panel);
     z-index: 41; box-shadow: -4px 0 24px rgba(0,0,0,.18); display: flex; flex-direction: column;
   }
   .drawer header { padding: 18px 20px; border-bottom: 1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between; }
@@ -270,7 +272,7 @@
 
   /* ---------- modal ---------- */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; display:flex; align-items:center; justify-content:center; padding: 20px; }
-  .modal { background: #fff; border-radius: 16px; width: 100%; max-width: 480px; box-shadow: var(--shadow-lg); }
+  .modal { background: var(--panel); border-radius: 16px; width: 100%; max-width: 480px; box-shadow: var(--shadow-lg); }
   .modal header { padding: 20px 24px 0; }
   .modal header h2 { font-size: 19px; font-weight: 500; margin: 0 0 4px; }
   .modal header p { color: var(--muted); font-size: 14px; margin: 0; }
@@ -286,12 +288,13 @@
   .btn-fill { background: var(--blue); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; }
   .btn-fill:hover { background: var(--blue-dark); }
   .modal-mic { margin-right: auto; display:flex; align-items:center; gap:10px; }
-  .mic-lg { border:1px solid var(--line); background:#fff; border-radius:50%; width:42px; height:42px; display:flex; align-items:center; justify-content:center; }
+  .mic-lg { border:1px solid var(--line); background:var(--panel); border-radius:50%; width:42px; height:42px; display:flex; align-items:center; justify-content:center; }
   .mic-lg.recording { background:#fce8e6; border-color:#fce8e6; }
   .mic-lg svg { width:22px; height:22px; color:var(--muted); }
   .mic-lg.recording svg { color: var(--red); }
   .mic-state { font-size: 12px; color: var(--muted); }
   .toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); background:#202124; color:#fff; padding:12px 20px; border-radius:8px; font-size:14px; z-index:60; box-shadow: var(--shadow-lg); }
+  #imageDrop { border:2px dashed var(--line); border-radius:12px; padding:14px 16px; text-align:center; color:var(--muted); font-size:13px; cursor:pointer; transition:.15s; background:var(--bg-soft); margin-top:10px; }
 </style>
 </head>
 <body>
@@ -373,7 +376,7 @@
       </div>
     </div>
 
-    <div id="imageDrop" tabindex="0" style="margin-top:10px;border:2px dashed #c7ccd4;border-radius:12px;padding:14px 16px;text-align:center;color:#5f6368;font-size:13px;cursor:pointer;transition:.15s;background:#fafbfc">
+    <div id="imageDrop" tabindex="0">
       <span id="imageDropHint">🖼 Перетащите сюда изображения (до 20), вставьте из буфера (Ctrl+V) или нажмите, чтобы выбрать. Картинки проанализируем вместе с вопросом.</span>
       <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
     </div>
