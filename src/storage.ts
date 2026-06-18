@@ -23,18 +23,25 @@ function client(): MinioClient {
 }
 
 export async function ensureBucket(log: (m: string) => void = () => {}): Promise<boolean> {
-  try {
-    const c = client();
-    const exists = await c.bucketExists(config.storage.bucket).catch(() => false);
-    if (!exists) await c.makeBucket(config.storage.bucket);
-    _ready = true;
-    log(`object storage ready: bucket "${config.storage.bucket}" @ ${config.storage.endpoint}:${config.storage.port}`);
-    return true;
-  } catch (e: any) {
-    _ready = false;
-    log(`object storage unavailable (${String(e?.message || e).slice(0, 120)}) — image upload disabled`);
-    return false;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let lastErr = '';
+  for (let attempt = 1; attempt <= 6; attempt++) { // ретраи: minio может стартовать чуть позже app
+    try {
+      const c = client();
+      const exists = await c.bucketExists(config.storage.bucket).catch(() => false);
+      if (!exists) await c.makeBucket(config.storage.bucket);
+      _ready = true;
+      log(`object storage ready: bucket "${config.storage.bucket}" @ ${config.storage.endpoint}:${config.storage.port}`);
+      return true;
+    } catch (e: any) {
+      lastErr = String(e?.message || e).slice(0, 120);
+      _client = null; // пересоздать клиент на следующей попытке
+      await sleep(2500);
+    }
   }
+  _ready = false;
+  log(`object storage unavailable (${lastErr}) — image upload disabled`);
+  return false;
 }
 
 export function storageReady(): boolean { return _ready; }

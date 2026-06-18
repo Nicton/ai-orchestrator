@@ -21,16 +21,13 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-searchify}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-searchify-minio-secret}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+    # Без публикации host-портов: на хосте уже есть отдельный MinIO на 9000.
+    # Приложение обращается к этому MinIO по внутренней сети compose (minio:9000).
+    expose:
+      - "9000"
+      - "9001"
     volumes:
       - orchestrator_minio:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
     restart: unless-stopped
 
   app:
@@ -63,6 +60,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_started
     ports:
       - "4321:${APP_PORT:-4321}"
     volumes:
