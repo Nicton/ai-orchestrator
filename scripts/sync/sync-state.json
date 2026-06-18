@@ -1,0 +1,18 @@
+{
+  "baseline": "2026-06-10T10:00:00Z",
+  "lastFullUpdate": null,
+  "sources": {
+    "git-code": {
+      "label": "Кодовая база (git)",
+      "kind": "auto",
+      "lastSyncAt": "2026-06-10T10:00:00Z",
+      "repos": [".", "workspaces/documentation", "workspaces/backend", "workspaces/main-app-automation"]
+    },
+    "confluence":   { "label": "Confluence (статьи)",        "kind": "mcp:atlassian", "lastSyncAt": "2026-06-10T10:00:00Z" },
+    "jira":         { "label": "Jira (задачи)",              "kind": "mcp:atlassian", "lastSyncAt": "2026-06-10T10:00:00Z" },
+    "slack":        { "label": "Slack (чаты)",               "kind": "mcp:slack",     "lastSyncAt": "2026-06-10T10:00:00Z" },
+    "presentations":{ "label": "Презентации (Google Drive)", "kind": "mcp:gdrive|manual", "lastSyncAt": "2026-06-10T10:00:00Z" },
+    "test-cases":   { "label": "Тест-кейсы (Qase)",          "kind": "manual",        "lastSyncAt": "2026-06-10T10:00:00Z" },
+    "autotests":    { "label": "Автотесты (репо/индекс)",    "kind": "auto",          "lastSyncAt": "2026-06-10T10:00:00Z" }
+  }
+}
