@@ -26,6 +26,7 @@ const GROUP_TYPE: Record<string, string> = {
   confluence: 'confluence',
   feature: 'feature',
   screen: 'screen', // overridden to 'modal' per-node when kind === 'modal'
+  api: 'api',
 };
 const GROUP_PREFIX: Record<string, string> = {
   doc: 'doc',
@@ -36,6 +37,7 @@ const GROUP_PREFIX: Record<string, string> = {
   confluence: 'confluence',
   feature: 'feature',
   screen: 'screen',
+  api: 'api',
 };
 
 function chunk<T>(arr: T[], n: number): T[][] {
@@ -81,6 +83,10 @@ function buildEntities(nodes: any): EntitySpec[] {
         if (node.domain) metadata.domain = node.domain;
       } else if (group === 'code_file') {
         summary = 'Файл кода';
+      } else if (group === 'api') {
+        name = node.id || id;
+        summary = [node.summary, node.resource ? `ресурс: ${node.resource}` : ''].filter(Boolean).join(' · ') || 'Эндпоинт публичного API';
+        Object.assign(metadata, { method: node.method, path: node.path, resource: node.resource });
       }
       out.push({ key: `${prefix}:${id}`, type, name: name.slice(0, 200), summary: summary.slice(0, 2000), metadata });
     }
