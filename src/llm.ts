@@ -58,7 +58,8 @@ export async function analyzeImages(
   const userMsg = JSON.stringify({ type: 'user', message: { role: 'user', content } });
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', ['-p', '--input-format', 'stream-json', '--output-format', 'json', '--verbose', '--model', useModel], { stdio: ['pipe', 'pipe', 'pipe'] });
+    // --input-format=stream-json требует --output-format=stream-json (+ --verbose).
+    const proc = spawn('claude', ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', useModel], { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     proc.stdout.on('data', (c: Buffer) => { stdout += c.toString(); });
