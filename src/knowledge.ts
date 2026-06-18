@@ -1240,7 +1240,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     languageHint: z.enum(['ru', 'en', 'fr']).optional(),
     inputMode: z.enum(['text', 'voice']).default('text'),
     allowSpeculative: z.boolean().optional().default(true), // режим «Додумывания» при пустом ответе
-    images: z.array(z.string().min(1).max(300)).max(4).optional(), // ключи изображений в MinIO
+    images: z.array(z.string().min(1).max(300)).max(20).optional(), // ключи изображений в MinIO (до 20)
   });
 
   // Загрузка изображения к вопросу (multipart, поле "image") → MinIO → ключ.
@@ -1270,7 +1270,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     try {
       onStage?.('🖼 Анализ приложенного изображения…');
       const loaded: Array<{ buffer: Buffer; mime: string }> = [];
-      for (const key of images.slice(0, 4)) { try { loaded.push(await getImage(key)); } catch { /* skip */ } }
+      for (const key of images.slice(0, 20)) { try { loaded.push(await getImage(key)); } catch { /* skip */ } }
       if (!loaded.length) return '';
       const r = await analyzeImages(loaded, question, config.answerModel);
       return (r.text || '').trim();
@@ -1490,6 +1490,27 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     });
 
     return reply.send({ ok: true, rating: parsed.data.rating, feedbackRequired: parsed.data.rating < 4 });
+  });
+
+  // Ссылка на ответ: любой авторизованный пользователь может открыть готовый ответ по id.
+  app.get('/api/knowledge/answer/:id', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    const q = await prisma.knowledgeQuery.findUnique({ where: { id: String(req.params.id) } });
+    if (!q) return reply.code(404).send({ error: 'Ответ не найден' });
+    return reply.send({
+      queryId: q.id,
+      question: q.question,
+      answer: q.answer,
+      answerMode: q.answerMode,
+      llmLog: q.llmLog || null,
+      intent: q.intent,
+      confidence: q.confidence,
+      latencyMs: q.latencyMs,
+      sources: (q.sources as any) || [],
+      author: q.userLabel || null,
+      createdAt: q.createdAt,
+    });
   });
 
   // Feedback (text or voice-transcribed) — typically opened when rating < 4.

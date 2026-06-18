@@ -343,7 +343,7 @@
 
     <div class="composer-tools">
       <label class="tool-btn" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="Если точного ответа в документации нет — дать обоснованное предположение с пометкой «требует проверки»">
-        <input type="checkbox" id="specToggle" checked style="margin:0"> 🔎 Додумывание
+        <input type="checkbox" id="specToggle" checked style="margin:0"> <span id="specToggleLabel">🔎 Додумывание</span>
       </label>
       <button class="tool-btn" id="voicePanelToggleBtn">Voice controls</button>
       <div class="lang-switch">
@@ -356,9 +356,10 @@
     </div>
 
     <div id="imageDrop" tabindex="0" style="margin-top:10px;border:2px dashed #c7ccd4;border-radius:12px;padding:14px 16px;text-align:center;color:#5f6368;font-size:13px;cursor:pointer;transition:.15s;background:#fafbfc">
-      <span id="imageDropHint">🖼 Перетащите сюда изображение (скриншот, фото), вставьте из буфера (Ctrl+V) или нажмите, чтобы выбрать. Картинку проанализируем вместе с вопросом.</span>
+      <span id="imageDropHint">🖼 Перетащите сюда изображения (до 20), вставьте из буфера (Ctrl+V) или нажмите, чтобы выбрать. Картинки проанализируем вместе с вопросом.</span>
       <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
     </div>
+    <div id="imageErr" style="display:none;margin-top:6px;color:#c5221f;font-size:12px;font-weight:600"></div>
     <div id="imageThumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
 
     <div class="voice-panel" id="voicePanel" hidden>
@@ -405,18 +406,22 @@ function renderThumbs(){
   </div>`).join('');
   box.querySelectorAll('[data-rmimg]').forEach(b=>b.addEventListener('click',()=>{ pendingImages.splice(+b.dataset.rmimg,1); renderThumbs(); }));
 }
+function showImageErr(msg){ const e=document.getElementById('imageErr'); if(!e) return; e.textContent='⚠️ '+msg; e.style.display='block'; toast(msg); }
+function clearImageErr(){ const e=document.getElementById('imageErr'); if(e){ e.textContent=''; e.style.display='none'; } }
 async function uploadImage(file){
-  if(!file || !/^image\//.test(file.type)) return;
-  if(file.size > 10*1024*1024){ toast('Изображение больше 10MB'); return; }
+  if(!file || !/^image\//.test(file.type)){ showImageErr(t('imageUploadFailed')); return; }
+  if(pendingImages.length >= 20){ showImageErr(t('imageLimit')); return; }
+  if(file.size > 10*1024*1024){ showImageErr(t('imageTooBig')); return; }
   const dataUrl = await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(file); });
   const fd = new FormData(); fd.append('image', file, file.name||'image.png');
   try{
     const r = await fetch('/api/knowledge/upload-image', { method:'POST', body: fd });
     if(r.status===401){ showLogin(); return; }
-    const d = await r.json();
-    if(!r.ok){ toast(d.error||'Не удалось загрузить изображение'); return; }
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){ showImageErr((d&&d.error)||t('imageUploadFailed')); return; }
+    clearImageErr();
     pendingImages.push({ key:d.key, name:file.name, dataUrl }); renderThumbs();
-  }catch(_){ toast('Ошибка загрузки изображения'); }
+  }catch(_){ showImageErr(t('imageUploadFailed')); }
 }
 function initImageDrop(){
   const dz = document.getElementById('imageDrop'); const inp = document.getElementById('imageInput'); if(!dz||!inp) return;
@@ -493,6 +498,16 @@ const I18N = {
     email: 'Email',
     password: 'Пароль',
     voiceRecorderTitle: 'Открыть диктофон',
+    dropImagesHint: '🖼 Перетащите сюда изображения (до 20), вставьте из буфера (Ctrl+V) или нажмите, чтобы выбрать. Картинки проанализируем вместе с вопросом.',
+    imageTooBig: 'Изображение больше 10 МБ — не загружено',
+    imageUploadFailed: 'Не удалось загрузить изображение',
+    imageLimit: 'Можно прикрепить не более 20 изображений',
+    speculativeLabel: '🔎 Додумывание',
+    llmLogChip: '🧠 LLM-лог',
+    copyAnswerLink: '🔗 Ссылка на ответ',
+    answerLinkCopied: 'Ссылка на ответ скопирована',
+    sharedAnswerOpened: 'Открыт сохранённый ответ',
+    answerNotFound: 'Ответ не найден или недоступен',
   },
   en: {
     appTagline: 'Ask anything about our products, processes and docs',
@@ -543,6 +558,16 @@ const I18N = {
     email: 'Email',
     password: 'Password',
     voiceRecorderTitle: 'Open voice recorder',
+    dropImagesHint: '🖼 Drag images here (up to 20), paste from clipboard (Ctrl+V) or click to pick. We will analyze them together with your question.',
+    imageTooBig: 'Image is larger than 10 MB — not uploaded',
+    imageUploadFailed: 'Failed to upload image',
+    imageLimit: 'You can attach at most 20 images',
+    speculativeLabel: '🔎 Best-guess',
+    llmLogChip: '🧠 LLM log',
+    copyAnswerLink: '🔗 Link to answer',
+    answerLinkCopied: 'Answer link copied',
+    sharedAnswerOpened: 'Opened a saved answer',
+    answerNotFound: 'Answer not found or unavailable',
   },
   fr: {
     appTagline: 'Pose une question sur nos produits, processus et documentations',
@@ -593,6 +618,16 @@ const I18N = {
     email: 'Email',
     password: 'Mot de passe',
     voiceRecorderTitle: 'Ouvrir l’enregistreur vocal',
+    dropImagesHint: '🖼 Glissez des images ici (jusqu’à 20), collez (Ctrl+V) ou cliquez pour choisir. Nous les analyserons avec votre question.',
+    imageTooBig: 'Image supérieure à 10 Mo — non téléversée',
+    imageUploadFailed: 'Échec du téléversement de l’image',
+    imageLimit: 'Vous pouvez joindre 20 images au maximum',
+    speculativeLabel: '🔎 Déduction',
+    llmLogChip: '🧠 Journal LLM',
+    copyAnswerLink: '🔗 Lien vers la réponse',
+    answerLinkCopied: 'Lien vers la réponse copié',
+    sharedAnswerOpened: 'Réponse enregistrée ouverte',
+    answerNotFound: 'Réponse introuvable ou indisponible',
   },
 };
 
@@ -867,8 +902,28 @@ function autoGrow(el){ el.style.height = 'auto'; el.style.height = Math.min(el.s
 // ===================================================================
 async function boot(){
   const res = await API.me();
-  if (res && res.user){ currentUser = res.user; showApp(); }
+  if (res && res.user){
+    currentUser = res.user; showApp();
+    const aid = new URLSearchParams(location.search).get('answer');
+    if (aid) openSharedAnswer(aid);
+  }
   else { showLogin(); }
+}
+
+// Ссылка на ответ: открыть готовый ответ по id (для авторизованных пользователей).
+async function openSharedAnswer(id){
+  try{
+    const r = await fetch(`/api/knowledge/answer/${encodeURIComponent(id)}`);
+    if (r.status === 401){ showLogin(); return; }
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok){ toast((d&&d.error) || t('answerNotFound')); return; }
+    $('q').value = d.question || '';
+    $('home').classList.remove('centered'); $('home').classList.add('results');
+    $('resultsArea').style.display = '';
+    lastQuery = { id: d.queryId, rating: null };
+    renderAnswer(d);
+    toast(t('sharedAnswerOpened'));
+  }catch(_){ toast(t('answerNotFound')); }
 }
 
 function showLogin(){
@@ -970,6 +1025,8 @@ function applyTranslations(){
   const passwordLabel = document.querySelector('label[for="loginPassword"]');
   if (passwordLabel) passwordLabel.textContent = t('password');
   $('loginSubmit').textContent = t('signIn');
+  const dropHint = $('imageDropHint'); if (dropHint) dropHint.textContent = t('dropImagesHint');
+  const specLbl = $('specToggleLabel'); if (specLbl) specLbl.textContent = t('speculativeLabel');
   setVoiceWorkflowStage(voiceWorkflowStage);
 }
 
@@ -1140,7 +1197,8 @@ function renderAnswer(data){
       ${data.intent ? `<span class="chip">${escapeHtml(data.intent)}</span>` : ''}
       <span class="chip">${data.latencyMs||0} ms</span>
       <span class="chip">${sources.length} ${escapeHtml(sources.length===1 ? t('sourceOne') : t('sourceMany'))}</span>
-      ${data.llmLog ? `<span class="chip" id="llmLogToggle" style="cursor:pointer">🧠 LLM-лог</span>` : ''}
+      ${data.llmLog ? `<span class="chip" id="llmLogToggle" style="cursor:pointer">${t('llmLogChip')}</span>` : ''}
+      ${data.queryId ? `<span class="chip" id="answerLinkBtn" style="cursor:pointer" title="${escapeHtml(t('copyAnswerLink'))}">${t('copyAnswerLink')}</span>` : ''}
     </div>
     ${suggestion}
     <div class="feedback-row">
@@ -1159,6 +1217,12 @@ function renderAnswer(data){
 
   const llmT = $('llmLogToggle'); const llmB = $('llmLogBox');
   if (llmT && llmB) llmT.addEventListener('click', () => { llmB.style.display = llmB.style.display === 'none' ? 'block' : 'none'; });
+  const alB = $('answerLinkBtn');
+  if (alB && data.queryId) alB.addEventListener('click', () => {
+    const url = `${location.origin}/?answer=${encodeURIComponent(data.queryId)}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(()=>toast(t('answerLinkCopied'))).catch(()=>window.prompt(t('copyAnswerLink'), url));
+    else window.prompt(t('copyAnswerLink'), url);
+  });
 
   area.querySelectorAll('.emoji').forEach(btn => {
     btn.addEventListener('click', () => onRate(parseInt(btn.dataset.rating,10)));

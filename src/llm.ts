@@ -47,7 +47,7 @@ export async function analyzeImages(
   model?: string,
 ): Promise<{ text: string; model: string }> {
   const useModel = model || config.answerModel;
-  const content: any[] = images.slice(0, 4).map((im) => ({
+  const content: any[] = images.slice(0, 20).map((im) => ({
     type: 'image',
     source: { type: 'base64', media_type: im.mime, data: im.buffer.toString('base64') },
   }));
