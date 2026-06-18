@@ -20,6 +20,24 @@
     --green: #188038;
     --amber: #e37400;
     --red: #d93025;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d0d0d;
+      --ink: #e8eaed;
+      --muted: #9aa0a6;
+      --line: #3c4043;
+      --line-soft: #2d2f31;
+      --blue: #8ab4f8;
+      --blue-dark: #aecbfa;
+      --bg-soft: #1a1a1a;
+      --shadow: 0 1px 6px rgba(0,0,0,.6);
+      --shadow-lg: 0 4px 24px rgba(0,0,0,.6);
+      --green: #34a853;
+      --amber: #fbbc04;
+      --red: #ea4335;
+    }
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }

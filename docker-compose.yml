@@ -53,10 +53,6 @@ services:
       COMPOSE_PROJECT: shiptify-orchestrator
       DEPLOY_HOST_PATH: /home/user/ka-prod-deploy
       APP_IMAGE: shiptify-orchestrator-app
-      # Dedicated long-lived Claude auth (from `claude setup-token`) — does NOT share
-      # the host OAuth file, so no refresh conflicts with openclaw. Used by both the
-      # answer engine (root) and the implement agent (node).
-      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -69,8 +65,11 @@ services:
       - /home/user/.openclaw/workspace/shiptify/ai-orchestrator/ai-orchestrator/secrets/openai_api_key:/run/secrets/openai_api_key:ro
       - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
       # Ideas "implement" pipeline: edit the deploy repo, push, redeploy via host docker.
-      # Claude auth comes from CLAUDE_CODE_OAUTH_TOKEN env (no shared OAuth file).
+      # Claude auth comes from a dedicated runtime credential snapshot copied from the
+      # active workspace user. This keeps Searchify off the exhausted shared setup-token.
       - /home/user/ka-prod-deploy:/workspace
+      - /home/user/ka-prod-deploy/.claude-runtime:/root/.claude
+      - /home/user/ka-prod-deploy/.claude-runtime:/home/node/.claude
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/user/.ssh:/root/.ssh:ro
       - /home/user/.ssh:/home/node/.ssh:ro
@@ -93,6 +92,8 @@ services:
         condition: service_healthy
     volumes:
       - ./data:/app/data
+      - /home/user/ka-prod-deploy/.claude-runtime:/root/.claude
+      - /home/user/ka-prod-deploy/.claude-runtime:/home/node/.claude
       - /home/user/.openclaw/workspace/shiptify/ai-orchestrator/ai-orchestrator/secrets/openai_api_key:/run/secrets/openai_api_key:ro
       - /home/user/openclaw/test-youtrack:/run/secrets/youtrack_token:ro
     command: ["sh","-lc","npm run start:worker"]

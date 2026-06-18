@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Идеи к улучшению — Searchify</title>
 <style>
-  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; }
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --blue:#8ab4f8; }
+  }
   *{box-sizing:border-box} body{margin:0;font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
   a{color:var(--blue);text-decoration:none}
   header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:16px}

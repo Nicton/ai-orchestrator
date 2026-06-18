@@ -210,8 +210,16 @@ function normalizeAnswerLanguage(language?: string) {
   return 'en';
 }
 
+function supportContact() {
+  return {
+    name: String(process.env.ADMIN_NAME || 'Support owner').trim() || 'Support owner',
+    email: String(process.env.ADMIN_EMAIL || 'support@example.com').trim() || 'support@example.com',
+  };
+}
+
 function localizedAnswerCopy(language: string) {
   const lang = normalizeAnswerLanguage(language);
+  const contact = supportContact();
   return {
     noAnswer: {
       ru: 'Не нашёл достаточно сильного ответа в проиндексированной базе знаний. Попробуй сузить область продукта или добавь недостающие материалы в knowledge-base / documentation / docs.',
@@ -224,9 +232,9 @@ function localizedAnswerCopy(language: string) {
       fr: 'J’ai trouvé des sources pertinentes, mais je n’ai pas réussi à synthétiser la réponse finale pour le moment. J’ai laissé les sources ci-dessous pour que tu puisses ouvrir directement les bons documents.',
     },
     llmUnavailable: {
-      ru: '⚠️ Адаптированный (LLM) ответ временно недоступен из-за проблем с подключением к Claude Code CLI. Обратитесь к Алеху Асмалоускому (aleh.asmalouski@shiptify.com).',
-      en: '⚠️ The adapted (LLM) answer is temporarily unavailable due to a Claude Code CLI connection issue. Please contact Aleh Asmalouski (aleh.asmalouski@shiptify.com).',
-      fr: '⚠️ La réponse adaptée (LLM) est temporairement indisponible en raison d’un problème de connexion à Claude Code CLI. Veuillez contacter Aleh Asmalouski (aleh.asmalouski@shiptify.com).',
+      ru: `⚠️ Адаптированный (LLM) ответ временно недоступен из-за проблем с подключением к Claude Code CLI. Обратитесь к ${contact.name} (${contact.email}).`,
+      en: `⚠️ The adapted (LLM) answer is temporarily unavailable due to a Claude Code CLI connection issue. Please contact ${contact.name} (${contact.email}).`,
+      fr: `⚠️ La réponse adaptée (LLM) est temporairement indisponible en raison d’un problème de connexion à Claude Code CLI. Veuillez contacter ${contact.name} (${contact.email}).`,
     },
     speculativeNotice: {
       ru: '⚠️ **Режим «Додумывания».** Точного ответа в документации нет — ниже обоснованное предположение на основе общей логики приложения и смежных материалов. **Требует проверки**, не используйте как подтверждённый факт.',

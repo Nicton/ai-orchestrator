@@ -9,6 +9,14 @@
     --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea;
     --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025;
     --shadow:0 1px 4px rgba(32,33,36,.12);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043;
+      --blue:#8ab4f8; --blue-dark:#aecbfa; --green:#34a853; --amber:#fbbc04; --red:#ea4335;
+      --shadow:0 1px 4px rgba(0,0,0,.6);
+    }
   }
   * { box-sizing:border-box; }
   body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
