@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from './db.js';
-import { runRolePrompt, transcribeAudioFile } from './llm.js';
+import { runRolePrompt, transcribeAudioFile, analyzeImages } from './llm.js';
+import { putImage, getImage, storageReady } from './storage.js';
 import { config } from './config.js';
 import { requireAuth, requireAdmin } from './auth.js';
 import { safeJsonParse } from './json.js';
@@ -1239,7 +1240,42 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     languageHint: z.enum(['ru', 'en', 'fr']).optional(),
     inputMode: z.enum(['text', 'voice']).default('text'),
     allowSpeculative: z.boolean().optional().default(true), // режим «Додумывания» при пустом ответе
+    images: z.array(z.string().min(1).max(300)).max(4).optional(), // ключи изображений в MinIO
   });
+
+  // Загрузка изображения к вопросу (multipart, поле "image") → MinIO → ключ.
+  app.post('/api/knowledge/upload-image', async (req: any, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    if (!storageReady()) return reply.code(503).send({ error: 'Хранилище изображений недоступно' });
+    if (!req.isMultipart()) return reply.code(415).send({ error: 'Ожидается multipart/form-data' });
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === 'file' && part.fieldname === 'image') {
+          const buf = await part.toBuffer();
+          if (buf.length > 10 * 1024 * 1024) return reply.code(413).send({ error: 'Изображение больше 10MB' });
+          const saved = await putImage(buf, part.mimetype, user.id);
+          return reply.code(201).send({ key: saved.key, mime: saved.mime });
+        }
+      }
+      return reply.code(400).send({ error: 'Файл не найден (поле: image)' });
+    } catch (e: any) {
+      return reply.code(400).send({ error: String(e?.message || e).slice(0, 200) });
+    }
+  });
+
+  // Vision-контекст: тянет изображения из MinIO и прогоняет через Claude vision.
+  async function imageContext(images: string[] | undefined, question: string, onStage?: (m: string) => void): Promise<string> {
+    if (!images || !images.length || !storageReady()) return '';
+    try {
+      onStage?.('🖼 Анализ приложенного изображения…');
+      const loaded: Array<{ buffer: Buffer; mime: string }> = [];
+      for (const key of images.slice(0, 4)) { try { loaded.push(await getImage(key)); } catch { /* skip */ } }
+      if (!loaded.length) return '';
+      const r = await analyzeImages(loaded, question, config.answerModel);
+      return (r.text || '').trim();
+    } catch { return ''; }
+  }
 
   app.get('/api/knowledge/status', async () => {
     const cache = await loadKnowledgeDocs();
@@ -1276,10 +1312,12 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
     const started = Date.now();
+    const imgCtx = await imageContext(parsed.data.images, parsed.data.question);
+    const qForEngine = imgCtx ? `${parsed.data.question}\n\n[Контекст из приложенного изображения]:\n${imgCtx}` : parsed.data.question;
     const language = normalizeAnswerLanguage(parsed.data.languageHint || detectQuestionLanguage(parsed.data.question));
-    const { hits, terms, suggestion, plan, profile } = await searchKnowledge(parsed.data.question, parsed.data.languageHint);
+    const { hits, terms, suggestion, plan, profile } = await searchKnowledge(qForEngine, parsed.data.languageHint);
     const intent = plan.intent || inferIntent(parsed.data.question);
-    const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile, undefined, parsed.data.allowSpeculative);
+    const composed = await composeAnswer(qForEngine, hits, language, plan, profile, undefined, parsed.data.allowSpeculative);
     const latencyMs = Date.now() - started;
     let confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
     // Ответ, построенный по графу знаний, — структурно достоверен: не занижаем уверенность.
@@ -1360,8 +1398,10 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
     try {
       send('stage', { msg: '🔎 Поиск по документам и графу…' });
       const started = Date.now();
+      const imgCtx = await imageContext(parsed.data.images, parsed.data.question, (m) => send('stage', { msg: m }));
+      const qForEngine = imgCtx ? `${parsed.data.question}\n\n[Контекст из приложенного изображения]:\n${imgCtx}` : parsed.data.question;
       const language = normalizeAnswerLanguage(parsed.data.languageHint || detectQuestionLanguage(parsed.data.question));
-      const { hits, terms, suggestion, plan, profile } = await searchKnowledge(parsed.data.question, parsed.data.languageHint);
+      const { hits, terms, suggestion, plan, profile } = await searchKnowledge(qForEngine, parsed.data.languageHint);
       const intent = plan.intent || inferIntent(parsed.data.question);
       send('stage', { msg: `📚 Источников найдено: ${hits.length}` });
 
@@ -1369,7 +1409,7 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         stage: (msg: string) => send('stage', { msg }),
         delta: (text: string) => send('delta', { text }),
       };
-      const composed = await composeAnswer(parsed.data.question, hits, language, plan, profile, progress, parsed.data.allowSpeculative);
+      const composed = await composeAnswer(qForEngine, hits, language, plan, profile, progress, parsed.data.allowSpeculative);
       const latencyMs = Date.now() - started;
       let confidence = confidenceFromHits(hits, terms.length, profile, composed.mode, composed.fallbackKind);
       if (composed.usedGraph && composed.mode === 'llm') confidence = Math.max(confidence, 0.8);

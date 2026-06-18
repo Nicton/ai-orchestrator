@@ -18,6 +18,16 @@ export const config = {
   workerPollMs: Number(process.env.WORKER_POLL_MS || 2000),
   callbackTimeoutMs: Number(process.env.CALLBACK_TIMEOUT_MS || 10000),
 
+  // Object storage (MinIO/S3) for uploaded question images.
+  storage: {
+    endpoint: process.env.MINIO_ENDPOINT || 'minio',
+    port: Number(process.env.MINIO_PORT || 9000),
+    useSSL: ['1', 'true', 'yes', 'on'].includes(String(process.env.MINIO_USE_SSL || '').toLowerCase()),
+    accessKey: process.env.MINIO_ROOT_USER || 'searchify',
+    secretKey: process.env.MINIO_ROOT_PASSWORD || 'searchify-minio-secret',
+    bucket: process.env.MINIO_BUCKET || 'searchify-uploads',
+  },
+
   // Speech-to-text (Whisper).
   stt: {
     openaiApiKey: (process.env.OPENAI_API_KEY || '').trim() || readFileTrim(process.env.OPENAI_API_KEY_FILE),

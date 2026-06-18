@@ -39,6 +39,53 @@ export async function runRolePrompt(
   return { text: '', model: model || config.model, engine: 'none', diag };
 }
 
+// Vision-анализ изображений через Claude CLI (headless, stream-json вход).
+// Возвращает текстовое описание/извлечённый текст — далее используется как контекст вопроса.
+export async function analyzeImages(
+  images: Array<{ buffer: Buffer; mime: string }>,
+  question: string,
+  model?: string,
+): Promise<{ text: string; model: string }> {
+  const useModel = model || config.answerModel;
+  const content: any[] = images.slice(0, 4).map((im) => ({
+    type: 'image',
+    source: { type: 'base64', media_type: im.mime, data: im.buffer.toString('base64') },
+  }));
+  content.push({
+    type: 'text',
+    text: `Это изображение(я), приложенное пользователем к вопросу поддержки Shiptify. Кратко и по делу опиши, что на нём: извлеки ВЕСЬ видимый текст (тексты ошибок, статусы, названия полей/экранов/кнопок, значения, ID, коды), состояние UI и любые детали, релевантные для ответа. Не выдумывай. Вопрос пользователя: «${question}».`,
+  });
+  const userMsg = JSON.stringify({ type: 'user', message: { role: 'user', content } });
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn('claude', ['-p', '--input-format', 'stream-json', '--output-format', 'json', '--verbose', '--model', useModel], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (c: Buffer) => { stdout += c.toString(); });
+    proc.stderr.on('data', (c: Buffer) => { stderr += c.toString(); });
+    proc.on('close', (code: number | null) => {
+      if (code !== 0) { reject(new Error(`claude vision exited ${code}: ${stderr.trim().slice(0, 200)}`)); return; }
+      // stream-json вывод: ищем строку result
+      try {
+        const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+        for (const l of lines) {
+          const o = JSON.parse(l);
+          if (o.type === 'result') {
+            if (o.is_error) { reject(new Error(`claude vision error: ${o.result || stderr}`)); return; }
+            resolve({ text: String(o.result || '').trim(), model: useModel }); return;
+          }
+        }
+        // одиночный json
+        const p = JSON.parse(stdout);
+        resolve({ text: String(p.result || '').trim(), model: useModel });
+      } catch { resolve({ text: stdout.trim(), model: useModel }); }
+    });
+    proc.on('error', (e: Error) => reject(new Error(`spawn claude (vision) failed: ${e.message}`)));
+    proc.stdin.write(userMsg + '\n');
+    proc.stdin.end();
+  });
+}
+
 function runClaudeCli(role: string, prompt: string, model?: string, onDelta?: (text: string) => void): Promise<LlmResult> {
   const useModel = model || config.model;
   const streaming = typeof onDelta === 'function';

@@ -355,6 +355,12 @@
       </div>
     </div>
 
+    <div id="imageDrop" tabindex="0" style="margin-top:10px;border:2px dashed #c7ccd4;border-radius:12px;padding:14px 16px;text-align:center;color:#5f6368;font-size:13px;cursor:pointer;transition:.15s;background:#fafbfc">
+      <span id="imageDropHint">🖼 Перетащите сюда изображение (скриншот, фото), вставьте из буфера (Ctrl+V) или нажмите, чтобы выбрать. Картинку проанализируем вместе с вопросом.</span>
+      <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+    </div>
+    <div id="imageThumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+
     <div class="voice-panel" id="voicePanel" hidden>
       <div class="voice-panel-row">
         <button class="tool-btn" id="voiceStartBtn" type="button">Start recording</button>
@@ -388,12 +394,46 @@
 
 <script>
 const allowSpeculative = () => { const c = document.getElementById('specToggle'); return c ? c.checked : true; };
+// Загруженные к вопросу изображения: [{key, name, dataUrl}]
+let pendingImages = [];
+const imageKeys = () => pendingImages.map(i => i.key);
+function renderThumbs(){
+  const box = document.getElementById('imageThumbs'); if(!box) return;
+  box.innerHTML = pendingImages.map((im,i)=>`<div style="position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0">
+    <img src="${im.dataUrl}" style="width:100%;height:100%;object-fit:cover" title="${escapeHtml(im.name||'')}">
+    <button data-rmimg="${i}" title="Удалить" style="position:absolute;top:1px;right:1px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:18px;height:18px;line-height:16px;cursor:pointer;font-size:12px">×</button>
+  </div>`).join('');
+  box.querySelectorAll('[data-rmimg]').forEach(b=>b.addEventListener('click',()=>{ pendingImages.splice(+b.dataset.rmimg,1); renderThumbs(); }));
+}
+async function uploadImage(file){
+  if(!file || !/^image\//.test(file.type)) return;
+  if(file.size > 10*1024*1024){ toast('Изображение больше 10MB'); return; }
+  const dataUrl = await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(file); });
+  const fd = new FormData(); fd.append('image', file, file.name||'image.png');
+  try{
+    const r = await fetch('/api/knowledge/upload-image', { method:'POST', body: fd });
+    if(r.status===401){ showLogin(); return; }
+    const d = await r.json();
+    if(!r.ok){ toast(d.error||'Не удалось загрузить изображение'); return; }
+    pendingImages.push({ key:d.key, name:file.name, dataUrl }); renderThumbs();
+  }catch(_){ toast('Ошибка загрузки изображения'); }
+}
+function initImageDrop(){
+  const dz = document.getElementById('imageDrop'); const inp = document.getElementById('imageInput'); if(!dz||!inp) return;
+  dz.addEventListener('click',()=>inp.click());
+  inp.addEventListener('change',()=>{ [...inp.files].forEach(uploadImage); inp.value=''; });
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.style.borderColor='#1a73e8'; dz.style.background='#eef4ff'; }));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.style.borderColor='#c7ccd4'; dz.style.background='#fafbfc'; }));
+  dz.addEventListener('drop',e=>{ [...(e.dataTransfer?.files||[])].forEach(uploadImage); });
+  // Вставка из буфера (Ctrl+V) когда фокус в поле вопроса или на зоне
+  document.addEventListener('paste',e=>{ const items=[...(e.clipboardData?.items||[])]; const imgs=items.filter(it=>it.type.startsWith('image/')); if(imgs.length){ imgs.forEach(it=>{ const f=it.getAsFile(); if(f) uploadImage(f); }); } });
+}
 const API = {
   me: () => fetch('/api/auth/me').then(r => r.ok ? r.json() : null),
   login: (email, password) => fetch('/api/auth/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email, password}) }),
   logout: () => fetch('/api/auth/logout', { method:'POST' }),
   changePw: (currentPassword, newPassword) => fetch('/api/auth/change-password', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({currentPassword, newPassword}) }),
-  ask: (question, inputMode, languageHint) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode, languageHint, allowSpeculative: allowSpeculative()}) }),
+  ask: (question, inputMode, languageHint) => fetch('/api/knowledge/ask', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({question, inputMode, languageHint, allowSpeculative: allowSpeculative(), images: imageKeys()}) }),
   rate: (id, rating) => fetch(`/api/knowledge/queries/${id}/rating`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({rating}) }),
   feedback: (id, kind, text, rating) => fetch(`/api/knowledge/queries/${id}/feedback`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({kind, text, rating}) }),
   correction: (id, payload) => fetch(`/api/knowledge/queries/${id}/correction`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) }),
@@ -984,6 +1024,7 @@ async function runSearch(){
   } catch(_){ area.innerHTML = `<div class="empty">${escapeHtml(t('networkErrorRetry'))}</div>`; }
   finally {
     voiceAutoSubmitPending = false;
+    pendingImages = []; renderThumbs(); // изображения уже ушли с вопросом
   }
 }
 
@@ -1004,7 +1045,7 @@ async function runSearchStream(q, inputMode, area){
   try {
     resp = await fetch('/api/knowledge/ask/stream', {
       method:'POST', headers:{'content-type':'application/json'},
-      body: JSON.stringify({question:q, inputMode, languageHint: currentLanguageHint(), allowSpeculative: allowSpeculative()}),
+      body: JSON.stringify({question:q, inputMode, languageHint: currentLanguageHint(), allowSpeculative: allowSpeculative(), images: imageKeys()}),
     });
   } catch(_) { return false; }
   if (resp.status === 401) return 'auth';
@@ -1479,6 +1520,7 @@ async function openHistory(){
 function closeDrawer(){ $('drawerMount').innerHTML = ''; }
 
 // go
+initImageDrop();
 boot();
 </script>
 </body>

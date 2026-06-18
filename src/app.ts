@@ -17,6 +17,7 @@ import { registerKnowledgeApi, seedKnowledgeGraph } from './knowledge.js';
 import { registerIdeasApi } from './ideas.js';
 import { registerQualityApi } from './quality.js';
 import { loadGraphIntoDb } from './graphLoader.js';
+import { ensureBucket } from './storage.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
 import { TaskStatus, WfJobType, WfTaskStatus } from './prismaEnums.js';
 
@@ -841,6 +842,7 @@ async function start() {
   await loadGraphIntoDb((m) => app.log.info(m))
     .then((res) => { if (res.missing) return seedKnowledgeGraph(); })
     .catch((e) => app.log.error(e, 'graph load failed'));
+  await ensureBucket((m) => app.log.info(m)).catch((e) => app.log.error(e, 'storage init failed'));
   await app.listen({ host: '0.0.0.0', port: config.port });
   app.log.info(`app listening on :${config.port}`);
 }

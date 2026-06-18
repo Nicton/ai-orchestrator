@@ -15,12 +15,37 @@ services:
       timeout: 3s
       retries: 30
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-searchify}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-searchify-minio-secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - orchestrator_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
   app:
     build:
       context: .
     env_file: .env
     environment:
       APP_PORT: ${APP_PORT:-4321}
+      # Object storage (MinIO) for uploaded question images.
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-searchify}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-searchify-minio-secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-searchify-uploads}
       YOUTRACK_BASE_URL: ${YOUTRACK_BASE_URL:-}
       YOUTRACK_TOKEN_FILE: /run/secrets/youtrack_token
       YOUTRACK_WEBHOOK_SECRET: ${YOUTRACK_WEBHOOK_SECRET:-}
@@ -76,3 +101,4 @@ services:
 
 volumes:
   orchestrator_mvp_pg:
+  orchestrator_minio:
