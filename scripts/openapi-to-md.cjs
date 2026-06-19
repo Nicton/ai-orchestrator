@@ -192,7 +192,7 @@ for (const resource of resources) {
   totalEndpoints += eps.length;
   let md = `---\nsource_type: spec\n---\n# Public API — ${resource}\n\n`;
   md += `> Авто-сгенерировано из OpenAPI 3.0.2 (\`public-api-docs/swagger/api.json\`). Контракт публичного API Shiptify.\n`;
-  md += `> Хостинг Swagger (по окружениям): BLU — https://api-docs.blu.shiptify.com/ · Flint — https://api-docs.flint.shiptify.com/ · прод — https://api-docs.shiptify.com/\n`;
+  md += `> Хостинг Swagger (по окружениям): прод — https://api-docs.shiptify.com/ · BLU (тест-стенд) — https://api-docs.blu.shiptify.com/ · Flint — https://api-docs.flint.shiptify.com/\n`;
   md += `> ${securityNote}\n\n`;
   md += `Эндпоинтов в ресурсе: **${eps.length}**.\n`;
 
@@ -221,10 +221,10 @@ let idx = `---\nsource_type: spec\n---\n# Public API — Справочник э
 idx += `> Полный машинно-сгенерированный справочник публичного API Shiptify из OpenAPI 3.0.2.\n`;
 idx += `> Источник контракта: \`public-api-docs/swagger/api.json\` (+ \`paths/\`, \`schemas/\`).\n\n`;
 idx += `## Hosted Swagger UI\n\n`;
-idx += `| Окружение | URL |\n|---|---|\n`;
-idx += `| **BLU** (клиенты) | https://api-docs.blu.shiptify.com/ |\n`;
-idx += `| Flint | https://api-docs.flint.shiptify.com/ |\n`;
-idx += `| Прод | https://api-docs.shiptify.com/ |\n\n`;
+idx += `| Окружение | Swagger UI | Назначение |\n|---|---|---|\n`;
+idx += `| **Прод** | https://api-docs.shiptify.com/ | продакшн |\n`;
+idx += `| **BLU** | https://api-docs.blu.shiptify.com/ | тест-стенд |\n`;
+idx += `| Flint | https://api-docs.flint.shiptify.com/ | отдельное окружение |\n\n`;
 idx += `${securityNote}\n\n`;
 idx += `## Ресурсы (${resources.length}) — всего эндпоинтов: ${totalEndpoints}\n\n`;
 idx += `| Ресурс | Эндпоинтов |\n|---|---|\n`;
