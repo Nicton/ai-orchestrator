@@ -156,7 +156,7 @@ export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Pr
 
 export async function seedDefaultAdmin() {
   // Domain is irrelevant — only the "asmalouski" substring matters for admin rights.
-  const email = (process.env.ADMIN_EMAIL || 'a.asmalouski@sociala.com').toLowerCase().trim();
+  const email = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase().trim();
   const name = process.env.ADMIN_NAME || 'Aleh Asmalouski';
   const configuredPassword = String(process.env.ADMIN_PASSWORD || '').trim();
   const insecureDefaults = new Set(['', 'shiptify-admin', 'admin12345', 'change-me']);
