@@ -106,6 +106,22 @@
   }
   .btn-primary:hover { background: var(--blue-dark); }
   .btn-primary:disabled { opacity: .6; cursor: default; }
+  .btn-google {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px; font-size: 15px; font-weight: 500; cursor: pointer; text-decoration: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05); transition: background .15s, box-shadow .15s;
+  }
+  .btn-google:hover { background: var(--bg-soft); box-shadow: var(--shadow); }
+  .btn-google svg { flex: 0 0 auto; }
+  .btn-emailtoggle {
+    width: 100%; background: none; border: none; color: var(--muted); font-size: 13px;
+    cursor: pointer; margin-top: 14px; padding: 6px;
+  }
+  .btn-emailtoggle:hover { color: var(--blue); }
+  .login-divider { display: flex; align-items: center; text-align: center; color: var(--muted); font-size: 12px; margin: 8px 0 4px; }
+  .login-divider::before, .login-divider::after { content: ""; flex: 1; border-top: 1px solid var(--line-soft); }
+  .login-divider span { padding: 0 12px; }
   .err { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 16px; }
   .login-hint { margin-top: 20px; font-size: 12px; color: var(--muted); line-height: 1.5; }
 
@@ -327,20 +343,32 @@
     <div class="login-card">
       <div class="logo glogo" style="font-size:34px"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span><sup class="beta-badge">BETA</sup></div>
       <h1>Searchify</h1>
-      <p class="sub">Sign in with your work email</p>
-      <form id="loginForm">
+      <p class="sub" id="loginSub">Sign in with your work Google account</p>
+
+      <!-- Primary: Google -->
+      <a class="btn-google" id="googleBtn" href="/auth/google">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.7H.96v2.34A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.98 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.02-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.94l3.02 2.34C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+        <span id="googleBtnText">Continue with Google</span>
+      </a>
+
+      <!-- Secondary: reveal email/password -->
+      <button class="btn-emailtoggle" id="emailToggle" type="button">Sign in with email instead</button>
+
+      <div class="login-divider" id="loginDivider" hidden><span>or</span></div>
+
+      <form id="loginForm" hidden>
         <div class="field">
           <label for="loginEmail">Email</label>
-          <input id="loginEmail" type="email" autocomplete="username" placeholder="you@company.com" required />
+          <input id="loginEmail" type="email" autocomplete="username" placeholder="you@company.com" />
         </div>
         <div class="field">
           <label for="loginPassword">Password</label>
-          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" />
         </div>
         <button class="btn-primary" id="loginSubmit" type="submit">Sign in</button>
-        <div class="err" id="loginErr"></div>
       </form>
-      <div class="login-hint">Accounts are created by an administrator. Ask your admin to send you access.</div>
+      <div class="err" id="loginErr"></div>
+      <div class="login-hint" id="loginHint">Use your work Google account, or ask an administrator for email access.</div>
     </div>
   </div>
 </div>
@@ -515,7 +543,15 @@ const I18N = {
     signingIn: 'Вход…',
     signInFailed: 'Не удалось войти',
     networkError: 'Сетевая ошибка',
-    loginHint: 'Аккаунты создаёт администратор. Попроси админа выдать доступ.',
+    loginHint: 'Войдите рабочим Google-аккаунтом или попросите у администратора доступ по email.',
+    loginSub: 'Войдите рабочим Google-аккаунтом',
+    continueWithGoogle: 'Войти через Google',
+    signInWithEmail: 'Войти по email',
+    orDivider: 'или',
+    oauthNotInvited: 'Этот Google-аккаунт не приглашён. Обратитесь к администратору.',
+    oauthDisabled: 'Аккаунт отключён. Обратитесь к администратору.',
+    oauthDenied: 'Вход через Google отменён.',
+    oauthUnconfigured: 'Вход через Google не настроен.',
     email: 'Email',
     password: 'Пароль',
     voiceRecorderTitle: 'Открыть диктофон',
@@ -583,7 +619,15 @@ const I18N = {
     signingIn: 'Signing in…',
     signInFailed: 'Sign in failed',
     networkError: 'Network error',
-    loginHint: 'Accounts are created by an administrator. Ask your admin to send you access.',
+    loginHint: 'Use your work Google account, or ask an administrator for email access.',
+    loginSub: 'Sign in with your work Google account',
+    continueWithGoogle: 'Continue with Google',
+    signInWithEmail: 'Sign in with email',
+    orDivider: 'or',
+    oauthNotInvited: 'This Google account is not invited. Ask an administrator for access.',
+    oauthDisabled: 'Account is disabled. Contact an administrator.',
+    oauthDenied: 'Google sign-in was cancelled.',
+    oauthUnconfigured: 'Google sign-in is not configured.',
     email: 'Email',
     password: 'Password',
     voiceRecorderTitle: 'Open voice recorder',
@@ -651,7 +695,15 @@ const I18N = {
     signingIn: 'Connexion…',
     signInFailed: 'Échec de la connexion',
     networkError: 'Erreur réseau',
-    loginHint: 'Les comptes sont créés par un administrateur. Demande à ton admin de t’envoyer un accès.',
+    loginHint: 'Connectez-vous avec votre compte Google professionnel, ou demandez un accès email à un administrateur.',
+    loginSub: 'Connectez-vous avec votre compte Google professionnel',
+    continueWithGoogle: 'Continuer avec Google',
+    signInWithEmail: 'Se connecter par email',
+    orDivider: 'ou',
+    oauthNotInvited: 'Ce compte Google n’est pas invité. Demandez l’accès à un administrateur.',
+    oauthDisabled: 'Compte désactivé. Contactez un administrateur.',
+    oauthDenied: 'Connexion Google annulée.',
+    oauthUnconfigured: 'La connexion Google n’est pas configurée.',
     email: 'Email',
     password: 'Mot de passe',
     voiceRecorderTitle: 'Ouvrir l’enregistreur vocal',
@@ -971,14 +1023,40 @@ async function openSharedAnswer(id){
   }catch(_){ toast(t('answerNotFound')); }
 }
 
-function showLogin(){
+function revealEmailLogin(){
+  $('loginForm').hidden = false;
+  $('loginDivider').hidden = false;
+  $('emailToggle').hidden = true;
+  $('loginEmail').focus();
+}
+async function showLogin(){
   $('view-login').style.display = '';
   $('view-home').style.display = 'none';
   $('topbar').style.display = 'none';
-  $('loginEmail').focus();
-  // Pre-fill email from ?email= (access link)
   const params = new URLSearchParams(location.search);
-  if (params.get('email')) $('loginEmail').value = params.get('email');
+
+  // Surface OAuth errors passed back via ?error=
+  const errMap = {
+    not_invited: 'oauthNotInvited', account_disabled: 'oauthDisabled',
+    google_denied: 'oauthDenied', google_unconfigured: 'oauthUnconfigured',
+  };
+  const e = params.get('error');
+  $('loginErr').textContent = e ? t(errMap[e] || 'signInFailed') : '';
+
+  // Decide layout: Google primary if configured, otherwise email form directly.
+  let googleEnabled = true;
+  try { googleEnabled = (await fetch('/api/auth/config').then(r => r.json())).googleEnabled !== false; } catch(_) {}
+  $('googleBtn').style.display = googleEnabled ? '' : 'none';
+  $('emailToggle').hidden = !googleEnabled;
+  if (googleEnabled) {
+    $('loginForm').hidden = true;
+    $('loginDivider').hidden = true;
+  } else {
+    revealEmailLogin();
+    $('emailToggle').hidden = true;
+  }
+  // Pre-fill email from ?email= (access link) and jump straight to the email form.
+  if (params.get('email')) { revealEmailLogin(); $('loginEmail').value = params.get('email'); }
 }
 
 function showApp(){
@@ -1005,6 +1083,8 @@ $('loginForm').addEventListener('submit', async (e) => {
   } catch(_){ err.textContent = t('networkError'); }
   finally { btn.disabled = false; btn.textContent = t('signIn'); }
 });
+
+$('emailToggle').addEventListener('click', () => { $('loginErr').textContent = ''; revealEmailLogin(); });
 
 // ---------- user menu ----------
 $('avatarBtn').addEventListener('click', (e) => { e.stopPropagation(); $('userMenu').classList.toggle('hidden'); });
@@ -1065,6 +1145,10 @@ function applyTranslations(){
   $('micBtn').setAttribute('aria-label', t('voiceRecorderTitle'));
   const loginHint = document.querySelector('.login-hint');
   if (loginHint) loginHint.textContent = t('loginHint');
+  const loginSub = $('loginSub'); if (loginSub) loginSub.textContent = t('loginSub');
+  const gBtnText = $('googleBtnText'); if (gBtnText) gBtnText.textContent = t('continueWithGoogle');
+  const eToggle = $('emailToggle'); if (eToggle) eToggle.textContent = t('signInWithEmail');
+  const divSpan = document.querySelector('#loginDivider span'); if (divSpan) divSpan.textContent = t('orDivider');
   const emailLabel = document.querySelector('label[for="loginEmail"]');
   if (emailLabel) emailLabel.textContent = t('email');
   const passwordLabel = document.querySelector('label[for="loginPassword"]');

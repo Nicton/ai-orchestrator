@@ -42,6 +42,23 @@ export function isAdminEmail(email: string): boolean {
   return String(email || '').toLowerCase().includes(match);
 }
 
+// ---------------------------------------------------------------------------
+// Google OAuth (Sign in with Google) — primary login path.
+// Config from env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
+// (must exactly match the URI registered in Google Cloud), and optional
+// GOOGLE_ALLOWED_DOMAIN (auto-provision users from this email domain; existing
+// users are always allowed). No external deps — uses global fetch (Node ≥18).
+// ---------------------------------------------------------------------------
+function googleConfig() {
+  const clientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+  const clientSecret = String(process.env.GOOGLE_CLIENT_SECRET || '').trim();
+  const redirectUri = String(process.env.GOOGLE_REDIRECT_URI || '').trim();
+  const allowedDomain = String(process.env.GOOGLE_ALLOWED_DOMAIN ?? 'shiptify.com').toLowerCase().trim();
+  return { clientId, clientSecret, redirectUri, allowedDomain, enabled: !!(clientId && clientSecret && redirectUri) };
+}
+
+const OAUTH_STATE_COOKIE = 'ka_oauth_state';
+
 const SESSION_COOKIE = 'ka_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 
@@ -225,6 +242,112 @@ export async function registerAuthApi(app: FastifyInstance) {
     const user = await resolveUser(req);
     if (!user) return reply.code(401).send({ error: 'Not authenticated' });
     return reply.send({ user });
+  });
+
+  // --- Login options (lets the UI show Google as the primary option) ---
+  app.get('/api/auth/config', async (_req, reply) => {
+    return reply.send({ googleEnabled: googleConfig().enabled });
+  });
+
+  // --- Google OAuth: Sign in with Google (primary login path) ---
+  async function startSession(reply: FastifyReply, req: FastifyRequest, user: { id: string }) {
+    const token = randomToken();
+    await prisma.appSession.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+        userAgent: String(req.headers['user-agent'] || '').slice(0, 250) || undefined,
+      },
+    });
+    await prisma.appUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    setSessionCookie(reply, token);
+  }
+
+  // Step 1 — redirect the browser to Google's consent screen.
+  app.get('/auth/google', async (req, reply) => {
+    const cfg = googleConfig();
+    if (!cfg.enabled) return reply.code(503).send({ error: 'Google sign-in is not configured' });
+    const state = randomToken(16);
+    // Short-lived, HttpOnly state cookie to defend against CSRF on the callback.
+    reply.header('set-cookie', `${OAUTH_STATE_COOKIE}=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`);
+    const params = new URLSearchParams({
+      client_id: cfg.clientId,
+      redirect_uri: cfg.redirectUri,
+      response_type: 'code',
+      scope: 'openid email profile',
+      access_type: 'online',
+      prompt: 'select_account',
+      state,
+    });
+    return reply.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  });
+
+  // Step 2 — Google redirects back with ?code; exchange it, resolve the user, start a session.
+  app.get('/auth/google/callback', async (req: any, reply) => {
+    const cfg = googleConfig();
+    if (!cfg.enabled) return reply.redirect('/login?error=google_unconfigured');
+    const { code, state, error: oauthError } = (req.query || {}) as Record<string, string>;
+    if (oauthError) return reply.redirect('/login?error=google_denied');
+
+    const cookies = parseCookies(req.headers.cookie);
+    if (!code || !state || state !== cookies[OAUTH_STATE_COOKIE]) {
+      return reply.redirect('/login?error=google_state');
+    }
+    // consume the state cookie
+    reply.header('set-cookie', `${OAUTH_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+
+    try {
+      // Exchange the authorization code for tokens.
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: cfg.clientId,
+          client_secret: cfg.clientSecret,
+          redirect_uri: cfg.redirectUri,
+          grant_type: 'authorization_code',
+        }).toString(),
+      });
+      if (!tokenRes.ok) return reply.redirect('/login?error=google_token');
+      const tokens = (await tokenRes.json()) as { access_token?: string };
+      if (!tokens.access_token) return reply.redirect('/login?error=google_token');
+
+      // Fetch the verified profile.
+      const profRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      if (!profRes.ok) return reply.redirect('/login?error=google_profile');
+      const profile = (await profRes.json()) as { email?: string; verified_email?: boolean; name?: string };
+      const email = String(profile.email || '').toLowerCase().trim();
+      if (!email || profile.verified_email === false) return reply.redirect('/login?error=google_email');
+
+      // Resolve or provision the user.
+      let user = await prisma.appUser.findUnique({ where: { email } });
+      if (user) {
+        if (!user.isActive) return reply.redirect('/login?error=account_disabled');
+      } else {
+        // Auto-provision only for the allowed work domain (or admin emails). Others must be invited.
+        const domainOk = cfg.allowedDomain && email.endsWith(`@${cfg.allowedDomain}`);
+        if (!domainOk && !isAdminEmail(email)) return reply.redirect('/login?error=not_invited');
+        const { hash, salt } = hashPassword(randomPassword());
+        user = await prisma.appUser.create({
+          data: {
+            email,
+            name: profile.name || email.split('@')[0],
+            role: isAdminEmail(email) ? 'admin' : 'user',
+            passwordHash: hash,
+            passwordSalt: salt,
+          },
+        });
+      }
+
+      await startSession(reply, req, user);
+      return reply.redirect('/');
+    } catch {
+      return reply.redirect('/login?error=google_failed');
+    }
   });
 
   // --- Admin: user management ---
