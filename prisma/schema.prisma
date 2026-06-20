@@ -568,6 +568,10 @@ model KnowledgeQuery {
   ratedAt            DateTime?
   inputMode          String?  // text|voice
   sources            Json?
+  promptTokens       Int?     // токены запроса к LLM (вход)
+  completionTokens   Int?     // токены ответа LLM (выход)
+  totalTokens        Int?     // суммарно — для usage-аналитики/лимитов
+  llmModel           String?  // модель, ответившая на запрос
 
   userId String?
   user   AppUser? @relation(fields: [userId], references: [id], onDelete: SetNull)

@@ -1018,7 +1018,7 @@ async function composeAnswer(
   profile?: QueryProfile,
   progress?: { stage: (msg: string) => void; delta: (text: string) => void },
   allowSpeculative = true,
-): Promise<{ mode: 'llm' | 'fallback' | 'speculative'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean; llmLog?: string }> {
+): Promise<{ mode: 'llm' | 'fallback' | 'speculative'; answer: string; fallbackKind?: 'definition' | 'generic'; usedGraph?: boolean; llmLog?: string; promptTokens?: number; completionTokens?: number; totalTokens?: number; model?: string }> {
   const lang = normalizeAnswerLanguage(language);
   const copy = localizedAnswerCopy(lang);
   const graphCtx = await graphContext(question, plan);
@@ -1116,10 +1116,20 @@ ${evidence}`;
     llmAnswer ? `--- LLM answer (${llmAnswer.length} chars, first 2000) ---\n${llmAnswer.slice(0, 2000)}` : '',
   ].filter(Boolean).join('\n');
 
+  // Агрегатор токенов по сделанным LLM-вызовам (для usage-аналитики/лимитов в админке).
+  const tokOf = (...rs: Array<Awaited<ReturnType<typeof runRolePrompt>> | undefined>) => {
+    const arr = rs.filter(Boolean) as Array<Awaited<ReturnType<typeof runRolePrompt>>>;
+    const pt = arr.reduce((s, r) => s + (r.promptTokens || 0), 0);
+    const ct = arr.reduce((s, r) => s + (r.completionTokens || 0), 0);
+    const total = pt + ct;
+    const model = arr.find((r) => r.model)?.model || config.answerModel;
+    return { promptTokens: pt || undefined, completionTokens: ct || undefined, totalTokens: total || undefined, model };
+  };
+
   // Грунтованный ответ от LLM (по документации) — основной путь. Граф добавляем дополнением.
   if (llmAnswer && !looksInsufficient(llmAnswer)) {
     const answer = graphCtx ? `${llmAnswer}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : llmAnswer;
-    return { mode: 'llm', answer, usedGraph, llmLog: mkLog('LLM answer used' + (graphCtx ? ' + graph appended' : '')) };
+    return { mode: 'llm', answer, usedGraph, llmLog: mkLog('LLM answer used' + (graphCtx ? ' + graph appended' : '')), ...tokOf(result) };
   }
 
   // РЕЖИМ «ДОДУМЫВАНИЯ»: точного ответа в документации нет, но Claude доступен →
@@ -1155,7 +1165,7 @@ ${deepEvidence}`;
     } catch { /* ignore */ }
     if (deep) {
       const answer = `${copy.speculativeNotice[lang]}\n\n${deep}${graphCtx ? `\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : ''}`;
-      return { mode: 'speculative', answer, usedGraph, llmLog: mkLog(`deep/speculative mode (${deep.length} chars)`) };
+      return { mode: 'speculative', answer, usedGraph, llmLog: mkLog(`deep/speculative mode (${deep.length} chars)`), ...tokOf(result, r2) };
     }
   }
 
@@ -1168,9 +1178,10 @@ ${deepEvidence}`;
       fallbackKind: 'generic',
       usedGraph: true,
       llmLog: mkLog('Claude CLI unavailable → notice + graph data'),
+      ...tokOf(result),
     };
   }
-  return { mode: 'fallback', answer: notice, fallbackKind: 'generic', usedGraph, llmLog: mkLog('Claude CLI unavailable → notice (no graph)') };
+  return { mode: 'fallback', answer: notice, fallbackKind: 'generic', usedGraph, llmLog: mkLog('Claude CLI unavailable → notice (no graph)'), ...tokOf(result) };
 }
 
 // Превращает структурный блок графа в чистый markdown-ответ (без LLM).
@@ -1346,6 +1357,10 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         confidence,
         latencyMs,
         sourceCount: hits.length,
+        promptTokens: composed.promptTokens ?? null,
+        completionTokens: composed.completionTokens ?? null,
+        totalTokens: composed.totalTokens ?? null,
+        llmModel: composed.model ?? null,
         sources: hits.map((hit) => ({
           path: hit.path,
           title: hit.title,
@@ -1437,6 +1452,10 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
           confidence,
           latencyMs,
           sourceCount: hits.length,
+          promptTokens: composed.promptTokens ?? null,
+          completionTokens: composed.completionTokens ?? null,
+          totalTokens: composed.totalTokens ?? null,
+          llmModel: composed.model ?? null,
           sources: hits.map((hit) => ({
             path: hit.path,
             title: hit.title,
@@ -1700,6 +1719,11 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         ratedAt: row.ratedAt,
         inputMode: row.inputMode,
         sourceCount: row.sourceCount,
+        latencyMs: row.latencyMs,
+        promptTokens: row.promptTokens,
+        completionTokens: row.completionTokens,
+        totalTokens: row.totalTokens,
+        llmModel: row.llmModel,
         sources: Array.isArray(row.sources) ? row.sources : [],
         user: row.user
           ? { id: row.user.id, name: row.user.name, email: row.user.email, role: row.user.role }
@@ -1722,6 +1746,45 @@ export async function registerKnowledgeApi(app: FastifyInstance) {
         })),
       })),
     });
+  });
+
+  // Usage по токенам — агрегаты по окнам + разбивка по модели (для оценки лимитов).
+  app.get('/api/admin/knowledge/usage', async (req: any, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const now = Date.now();
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const windowAgg = async (from: Date | null) => {
+      const r = await prisma.knowledgeQuery.aggregate({
+        where: from ? { createdAt: { gte: from } } : {},
+        _sum: { totalTokens: true, promptTokens: true, completionTokens: true },
+        _count: { _all: true },
+        _avg: { totalTokens: true },
+      });
+      return {
+        queries: r._count._all,
+        totalTokens: r._sum.totalTokens || 0,
+        promptTokens: r._sum.promptTokens || 0,
+        completionTokens: r._sum.completionTokens || 0,
+        avgTokens: Math.round(r._avg.totalTokens || 0),
+      };
+    };
+    const [today, last7d, last30d, allTime] = await Promise.all([
+      windowAgg(startOfToday),
+      windowAgg(new Date(now - 7 * 864e5)),
+      windowAgg(new Date(now - 30 * 864e5)),
+      windowAgg(null),
+    ]);
+    const byModelRaw = await prisma.knowledgeQuery.groupBy({
+      by: ['llmModel'],
+      _sum: { totalTokens: true },
+      _count: { _all: true },
+      where: { totalTokens: { not: null } },
+    });
+    const byModel = byModelRaw
+      .map((m: any) => ({ model: m.llmModel || '—', totalTokens: m._sum.totalTokens || 0, queries: m._count._all }))
+      .sort((a: any, b: any) => b.totalTokens - a.totalTokens);
+    return reply.send({ today, last7d, last30d, allTime, byModel });
   });
 
   app.get('/api/admin/knowledge/analytics', async (req: any, reply) => {

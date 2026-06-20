@@ -48,8 +48,11 @@
   <span class="title">📊 Quality Coverage Analytics</span>
   <span class="muted">единый движок · 3 представления</span>
   <span class="spacer"></span>
-  <span class="toplink" onclick="location.href='/'">← Поиск</span>
-  <span class="toplink" onclick="location.href='/graph'">Graph</span>
+  <span class="toplink" onclick="location.href='/'">🔎 Поиск</span>
+  <span class="toplink" onclick="location.href='/graph'">🕸 Граф</span>
+  <span class="toplink" style="color:var(--blue)" onclick="location.href='/quality'">📊 Качество</span>
+  <span class="toplink" onclick="location.href='/ideas'">💡 Идеи</span>
+  <span class="toplink" onclick="location.href='/bugs'">🐞 БАГи</span>
 </header>
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
@@ -164,7 +167,7 @@ const QL=QI18N[QLANG]||QI18N.ru;
 const ALL_LAYERS=[['subreq',QL.layers.subreq],['docs',QL.layers.docs],['tests',QL.layers.tests],['automation',QL.layers.automation],['defects',QL.layers.defects]]; // Run (execution) скрыт; «Спека» = слой docs (покрытие спецификацией)
 function localizeQualityChrome(){
   document.querySelector('.bar .muted').textContent=QL.subtitle;
-  const links=document.querySelectorAll('.toplink'); if(links[0]) links[0].textContent=QL.back; if(links[1]) links[1].textContent=QL.graph;
+  // навигация — единое меню (метки RU, не локализуем)
   $('layersNote').textContent=QL.layersNote;
   $('weightsNote').innerHTML=`${QL.weights} <b>SubReq 20%</b> · <b>${QL.layers.docs} 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">${QL.runHidden}</span>`;
   $('specLayerNote').textContent=QL.specLayerNote;

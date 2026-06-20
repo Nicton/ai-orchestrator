@@ -99,9 +99,12 @@
   <span class="title">Searchify <small>Admin console</small></span>
   <span class="spacer"></span>
   <span class="who" id="who"></span>
-  <a class="ghost" href="/graph">Graph</a>
-  <a class="ghost" href="/">← Back to search</a>
-  <button class="ghost" id="logout">Sign out</button>
+  <a class="ghost" href="/">🔎 Поиск</a>
+  <a class="ghost" href="/graph">🕸 Граф</a>
+  <a class="ghost" href="/quality">📊 Качество</a>
+  <a class="ghost" href="/ideas">💡 Идеи</a>
+  <a class="ghost" href="/bugs">🐞 БАГи</a>
+  <button class="ghost" id="logout">Выйти</button>
 </header>
 
 <div id="root" class="wrap">
@@ -136,6 +139,7 @@ function renderShell(){
   $('root').innerHTML = `
     <div class="tabs">
       <button class="tab" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="usage">Usage / tokens</button>
       <button class="tab" data-tab="history">Query history</button>
       <button class="tab" data-tab="corrections">Corrections</button>
       <button class="tab" data-tab="users">Users</button>
@@ -148,6 +152,7 @@ function loadTab(tab){
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   if (tab==='overview') renderOverview();
+  if (tab==='usage') renderUsage();
   if (tab==='history') renderHistory();
   if (tab==='corrections') renderCorrections();
   if (tab==='users') renderUsers();
@@ -240,6 +245,34 @@ async function renderOverview(){
     </div>`;
 }
 
+// ---------------- USAGE / TOKENS ----------------
+function fmtN(n){ return Number(n||0).toLocaleString('en-US'); }
+async function renderUsage(){
+  const body = $('tabBody');
+  body.innerHTML = `<div class="muted" style="padding:20px">Loading usage…</div>`;
+  const u = await fetch('/api/admin/knowledge/usage').then(r=>r.json());
+  const win = (title, w) => `
+    <div class="card">
+      <div class="k">${title}</div>
+      <div class="v">${fmtN(w.totalTokens)}<span style="font-size:13px;color:var(--muted)"> tok</span></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">${fmtN(w.queries)} queries · avg ${fmtN(w.avgTokens)}/q<br>in ${fmtN(w.promptTokens)} · out ${fmtN(w.completionTokens)}</div>
+    </div>`;
+  body.innerHTML = `
+    <div class="panel"><div class="pad muted" style="border:none">Потребление токенов LLM по окнам. Лимиты аккаунта Anthropic недоступны через CLI — используйте эти цифры для оценки расхода и планирования лимитов.</div></div>
+    <div class="cards">
+      ${win('Today', u.today)}
+      ${win('Last 7 days', u.last7d)}
+      ${win('Last 30 days', u.last30d)}
+      ${win('All time', u.allTime)}
+    </div>
+    <div class="panel">
+      <h3>By model (all time)</h3>
+      <div class="pad">${(u.byModel||[]).length
+        ? `<table><thead><tr><th>Model</th><th style="width:140px">Total tokens</th><th style="width:100px">Queries</th><th style="width:120px">Avg/query</th></tr></thead><tbody>${u.byModel.map(m=>`<tr><td>${escapeHtml(m.model)}</td><td>${fmtN(m.totalTokens)}</td><td>${fmtN(m.queries)}</td><td>${fmtN(Math.round(m.totalTokens/Math.max(1,m.queries)))}</td></tr>`).join('')}</tbody></table>`
+        : '<span class="muted">No token data yet (older queries may predate token tracking).</span>'}</div>
+    </div>`;
+}
+
 // ---------------- HISTORY ----------------
 async function renderHistory(){
   const body = $('tabBody');
@@ -252,7 +285,7 @@ async function renderHistory(){
       <h3>Full query history (${cache.queries.length})</h3>
       <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>When</th><th>User</th><th>Question</th><th>Rating</th><th>Conf.</th><th>Input</th><th>FB</th><th>Corr.</th></tr></thead>
+        <thead><tr><th>When</th><th>User</th><th>Question</th><th>Rating</th><th>Conf.</th><th>Tokens</th><th>Input</th><th>FB</th><th>Corr.</th></tr></thead>
         <tbody id="qtbody">
           ${cache.queries.map((q,i)=>`
             <tr class="qrow" data-i="${i}">
@@ -261,6 +294,7 @@ async function renderHistory(){
               <td class="truncate">${escapeHtml(q.question)}</td>
               <td class="rating-emoji">${q.rating ? EMOJI[q.rating-1] : '<span class="muted">—</span>'}</td>
               <td>${q.confidence!=null?Math.round(q.confidence*100)+'%':'—'}</td>
+              <td>${q.totalTokens!=null?fmtN(q.totalTokens):'<span class="muted">—</span>'}</td>
               <td>${q.inputMode==='voice'?'🎙️':'⌨️'}</td>
               <td>${q.feedbacks.length||'<span class="muted">0</span>'}</td>
               <td>${q.corrections.length||'<span class="muted">0</span>'}</td>
@@ -286,7 +320,11 @@ function toggleDetail(row){
   const cors = q.corrections.length ? q.corrections.map(c=>`<div class="cor">${escapeHtml(c.text)}<br><span class="muted" style="font-size:11px">${new Date(c.createdAt).toLocaleString()} · ${escapeHtml(c.status)}</span></div>`).join('') : '<span class="muted">No corrections</span>';
   const tr = document.createElement('tr');
   tr.className = 'detail-row';
-  tr.innerHTML = `<td colspan="8">
+  const tokLine = q.totalTokens!=null
+    ? `<div class="kv"><div class="lbl">Tokens</div><div>total <b>${fmtN(q.totalTokens)}</b> · in ${fmtN(q.promptTokens)} · out ${fmtN(q.completionTokens)}${q.llmModel?` · <span class="muted">${escapeHtml(q.llmModel)}</span>`:''}${q.latencyMs!=null?` · ${fmtN(q.latencyMs)} ms`:''}</div></div>`
+    : '';
+  tr.innerHTML = `<td colspan="9">
+    ${tokLine}
     <div class="kv"><div class="lbl">Answer</div><div class="answer-box">${escapeHtml(q.answer)}</div></div>
     <div class="kv"><div class="lbl">Sources</div><div>${sources}</div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — БАГи</title>
+<style>
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --line-soft:#ecedef; --bg-soft:#f1f3f4; --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025; --shadow:0 1px 4px rgba(32,33,36,.12); color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --line-soft:#2d2f31; --bg-soft:#1e1e1e; --blue:#8ab4f8; --blue-dark:#aecbfa; --green:#34a853; --amber:#fbbc04; --red:#ea4335; --shadow:0 1px 4px rgba(0,0,0,.6); } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button,input,select,textarea { font-family:inherit; }
+  /* shared nav */
+  header.nav { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 22px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; position:sticky; top:0; z-index:10; }
+  header.nav .brand { font-size:17px; font-weight:600; margin-right:10px; }
+  header.nav .navlink { color:var(--muted); padding:7px 12px; border-radius:8px; font-size:14px; cursor:pointer; }
+  header.nav .navlink:hover { background:var(--bg-soft); color:var(--ink); }
+  header.nav .navlink.active { background:#e8f0fe; color:var(--blue-dark); font-weight:600; }
+  header.nav .spacer { flex:1; }
+  header.nav .who { color:var(--muted); font-size:13px; }
+  .wrap { max-width:1080px; margin:22px auto; padding:0 18px 80px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .panel h3 { margin:0; padding:13px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; }
+  .pad { padding:16px 18px; }
+  label.fld { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:0 0 5px; }
+  textarea, input[type=text], select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:var(--panel); color:var(--ink); }
+  textarea { resize:vertical; line-height:1.5; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .row > div { flex:1; min-width:160px; }
+  button.pri { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; }
+  button.pri:hover { background:var(--blue-dark); }
+  button.pri:disabled { opacity:.55; cursor:default; }
+  button.ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:10px 14px; font-size:14px; cursor:pointer; }
+  button.ghost:hover { background:var(--bg-soft); }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--red); font-size:13px; margin-top:10px; min-height:16px; }
+  .rec-on { background:var(--red) !important; color:#fff !important; border-color:var(--red) !important; }
+  .dupbox { border-left:4px solid var(--amber); background:#fffaf2; border-radius:0 8px 8px 0; padding:12px 14px; margin-bottom:14px; }
+  .dupbox.known { border-color:var(--red); background:#fdecea; }
+  .dupbox.new { border-color:var(--green); background:#e9f6ec; }
+  .match { border:1px solid var(--line); border-radius:8px; padding:8px 11px; margin:7px 0; font-size:13px; background:var(--panel); }
+  .pill { display:inline-block; padding:1px 8px; border-radius:9px; font-size:11px; font-weight:600; }
+  .pill.high{background:#fdecea;color:var(--red)} .pill.medium{background:#fff4e5;color:var(--amber)} .pill.low{background:#e9f6ec;color:var(--green)}
+  .imgrow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .thumb { width:54px; height:54px; object-fit:cover; border-radius:6px; border:1px solid var(--line); }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .created { border:1px solid #ceead6; background:#e6f4ea; border-radius:10px; padding:14px 16px; font-size:14px; }
+  .drop { border:2px dashed var(--line); border-radius:10px; padding:10px 14px; text-align:center; color:var(--muted); font-size:13px; cursor:pointer; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header class="nav" id="nav"></header>
+
+<div class="wrap">
+  <h1>🐞 БАГи</h1>
+  <p class="sub" id="sub">Опишите дефект (текстом или голосом) — Searchify проверит по существующим багам в Jira, соберёт структурированное описание на английском и поможет завести дефект.</p>
+
+  <div class="panel" id="configWarn" style="display:none">
+    <div class="pad muted">⚠️ Jira не настроена на сервере (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Анализ и создание дефектов недоступны.</div>
+  </div>
+
+  <!-- INPUT -->
+  <div class="panel">
+    <h3>1. Опишите дефект</h3>
+    <div class="pad">
+      <div class="row" style="margin-bottom:12px">
+        <div style="flex:0 0 220px">
+          <label class="fld">Проект Jira</label>
+          <select id="project"></select>
+        </div>
+        <div style="flex:0 0 auto">
+          <label class="fld">Голос (любой язык → баг на EN)</label>
+          <button class="ghost" id="recBtn">🎙️ Записать голос</button>
+        </div>
+      </div>
+      <label class="fld">Описание дефекта</label>
+      <textarea id="desc" rows="6" placeholder="Что сломалось, на каком экране, что ожидали, что получили, шаги… Можно на русском — баг соберём на английском."></textarea>
+      <div class="drop" id="imgDrop" style="margin-top:10px">🖼 Прикрепить скриншоты (клик или вставка Ctrl+V) — приложатся к дефекту в Jira</div>
+      <input type="file" id="imgInput" accept="image/*" multiple class="hidden" />
+      <div class="imgrow" id="thumbs"></div>
+      <div style="margin-top:14px"><button class="pri" id="analyzeBtn">🔍 Проанализировать</button> <span class="muted" id="analyzeStatus"></span></div>
+      <div class="err" id="inErr"></div>
+    </div>
+  </div>
+
+  <!-- PREVIEW -->
+  <div class="panel hidden" id="previewPanel">
+    <h3>2. Анализ и превью дефекта <span class="muted" id="tokInfo" style="font-weight:400;font-size:12px"></span></h3>
+    <div class="pad">
+      <div id="dupArea"></div>
+      <div class="row" style="margin-bottom:12px">
+        <div><label class="fld">Summary</label><input type="text" id="pSummary" /></div>
+      </div>
+      <div class="row" style="margin-bottom:12px">
+        <div style="flex:0 0 150px"><label class="fld">Priority</label><select id="pPriority"><option>Highest</option><option>High</option><option selected>Medium</option><option>Low</option><option>Lowest</option></select></div>
+        <div style="flex:0 0 150px"><label class="fld">Severity</label><input type="text" id="pSeverity" /></div>
+        <div><label class="fld">Area</label><input type="text" id="pArea" /></div>
+      </div>
+      <div style="margin-bottom:12px"><label class="fld">Labels (через запятую)</label><input type="text" id="pLabels" /></div>
+      <label class="fld">Описание (Jira wiki — суть сверху, вода снизу). Можно править перед заведением.</label>
+      <textarea id="pDesc" rows="16" style="font-family:ui-monospace,Consolas,monospace;font-size:13px"></textarea>
+      <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="pri" id="createBtn">✅ Завести дефект</button>
+        <button class="ghost" id="copyBtn">📋 Скопировать описание</button>
+        <span class="muted" id="createStatus"></span>
+      </div>
+      <div class="err" id="prErr"></div>
+      <div id="createdOut" style="margin-top:14px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let me=null, images=[], mediaRec=null, recChunks=[];
+
+// ---------- shared nav (feature 4: full menu everywhere) ----------
+function renderNav(){
+  const items = [
+    ['/', '🔎 Поиск'], ['/graph','🕸 Граф'], ['/quality','📊 Качество'], ['/ideas','💡 Идеи'], ['/bugs','🐞 БАГи'],
+  ];
+  const here = location.pathname.replace(/\/$/,'') || '/';
+  const links = items.map(([href,label]) => `<span class="navlink${(here===href||(href!=='/'&&here.startsWith(href)))?' active':''}" onclick="location.href='${href}'">${label}</span>`).join('');
+  const admin = me && me.role==='admin' ? `<span class="navlink" onclick="location.href='/admin'">⚙️ Админ</span>` : '';
+  $('nav').innerHTML = `<span class="brand">Searchify</span>${links}${admin}<span class="spacer"></span><span class="who">${esc(me?me.name:'')}</span><span class="navlink" id="navLogout">Выйти</span>`;
+  const lo=$('navLogout'); if(lo) lo.addEventListener('click', async()=>{ await fetch('/api/auth/logout',{method:'POST'}); location.href='/'; });
+}
+
+async function boot(){
+  const r = await fetch('/api/auth/me');
+  if (!r.ok){ location.href='/login'; return; }
+  me = (await r.json()).user;
+  renderNav();
+  const cfg = await fetch('/api/bugs/config').then(r=>r.json()).catch(()=>({enabled:false,projects:[]}));
+  if (!cfg.enabled){ $('configWarn').style.display=''; $('analyzeBtn').disabled=true; }
+  const sel = $('project');
+  const projects = cfg.projects && cfg.projects.length ? cfg.projects : [{key:cfg.defaultProject||'TMS',name:cfg.defaultProject||'TMS'}];
+  sel.innerHTML = projects.map(p=>`<option value="${esc(p.key)}"${p.key===cfg.defaultProject?' selected':''}>${esc(p.key)} — ${esc(p.name)}</option>`).join('');
+}
+
+// ---------- screenshots ----------
+$('imgDrop').addEventListener('click', ()=>$('imgInput').click());
+$('imgInput').addEventListener('change', e=>{ for(const f of e.target.files) uploadImage(f); e.target.value=''; });
+window.addEventListener('paste', e=>{ for(const it of (e.clipboardData?.items||[])) if(it.type.startsWith('image/')){ const f=it.getAsFile(); if(f) uploadImage(f); } });
+async function uploadImage(file){
+  if (file.size > 10*1024*1024){ $('inErr').textContent='Изображение больше 10 МБ'; return; }
+  const fd = new FormData(); fd.append('image', file);
+  try {
+    const r = await fetch('/api/knowledge/upload-image',{method:'POST',body:fd});
+    const d = await r.json();
+    if (!r.ok){ $('inErr').textContent = d.error||'Не удалось загрузить'; return; }
+    images.push(d.key);
+    const url = URL.createObjectURL(file);
+    $('thumbs').insertAdjacentHTML('beforeend', `<img class="thumb" src="${url}" title="${esc(file.name)}" />`);
+  } catch(_){ $('inErr').textContent='Сеть недоступна'; }
+}
+
+// ---------- voice ----------
+$('recBtn').addEventListener('click', async ()=>{
+  if (mediaRec && mediaRec.state==='recording'){ mediaRec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRec = new MediaRecorder(stream); recChunks=[];
+    mediaRec.ondataavailable = e=>{ if(e.data.size) recChunks.push(e.data); };
+    mediaRec.onstop = async ()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      $('recBtn').classList.remove('rec-on'); $('recBtn').textContent='🎙️ Записать голос';
+      $('analyzeStatus').textContent='Распознаю речь…';
+      const blob = new Blob(recChunks,{type:'audio/webm'});
+      const fd = new FormData(); fd.append('audio', blob, 'voice.webm');
+      try {
+        const r = await fetch('/api/bugs/transcribe',{method:'POST',body:fd});
+        const d = await r.json();
+        $('analyzeStatus').textContent='';
+        if (!r.ok){ $('inErr').textContent=d.error||'Не удалось распознать'; return; }
+        $('desc').value = ($('desc').value ? $('desc').value+'\n' : '') + (d.text||'');
+      } catch(_){ $('analyzeStatus').textContent=''; $('inErr').textContent='Сеть недоступна'; }
+    };
+    mediaRec.start();
+    $('recBtn').classList.add('rec-on'); $('recBtn').textContent='⏹ Остановить';
+  } catch(_){ $('inErr').textContent='Нет доступа к микрофону'; }
+});
+
+// ---------- analyze ----------
+$('analyzeBtn').addEventListener('click', async ()=>{
+  $('inErr').textContent='';
+  const description = $('desc').value.trim();
+  if (description.length < 5){ $('inErr').textContent='Опишите дефект подробнее'; return; }
+  const btn=$('analyzeBtn'); btn.disabled=true; $('analyzeStatus').textContent='Анализирую по багам Jira…';
+  try {
+    const r = await fetch('/api/bugs/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({description, project:$('project').value})});
+    const d = await r.json();
+    if (!r.ok){ $('inErr').textContent = (typeof d.error==='string'?d.error:'Ошибка анализа'); return; }
+    fillPreview(d);
+  } catch(_){ $('inErr').textContent='Сеть недоступна'; }
+  finally { btn.disabled=false; $('analyzeStatus').textContent=''; }
+});
+
+function fillPreview(d){
+  $('previewPanel').classList.remove('hidden');
+  const p = d.preview||{};
+  $('pSummary').value = p.summary||'';
+  $('pPriority').value = p.priority||'Medium';
+  $('pSeverity').value = p.severity||'';
+  $('pArea').value = p.area||'';
+  $('pLabels').value = (p.labels||[]).join(', ');
+  $('pDesc').value = p.descriptionWiki||'';
+  $('tokInfo').textContent = d.tokens ? `· ${d.tokens} токенов · ${esc(d.model||'')}` : '';
+  // dedup verdict
+  const dup = d.duplicate||{};
+  const cls = dup.isKnown ? 'known' : (dup.matches&&dup.matches.length ? '' : 'new');
+  const matches = (dup.matches||[]).map(m=>`<div class="match"><a href="${esc(m.url)}" target="_blank">${esc(m.key)}</a> <span class="pill ${esc(m.similarity||'low')}">${esc(m.similarity||'')}</span><br>${esc(m.summary||'')}<br><span class="muted">${esc(m.reason||'')}</span></div>`).join('');
+  $('dupArea').innerHTML = `<div class="dupbox ${cls}">
+    <b>${dup.isKnown ? '⚠️ Похоже на известный дефект' : (dup.matches&&dup.matches.length ? '🔎 Найдены похожие баги' : '🆕 Похоже на новый дефект')}</b>
+    ${dup.recommendation?`<div class="muted" style="margin-top:4px">${esc(dup.recommendation)}</div>`:''}
+    ${matches}
+  </div>`;
+  $('createdOut').innerHTML=''; $('prErr').textContent='';
+  $('previewPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ---------- create ----------
+$('copyBtn').addEventListener('click', ()=>{ navigator.clipboard?.writeText($('pDesc').value); $('createStatus').textContent='Скопировано'; setTimeout(()=>$('createStatus').textContent='',1500); });
+
+$('createBtn').addEventListener('click', async ()=>{
+  $('prErr').textContent='';
+  const body = {
+    project: $('project').value,
+    summary: $('pSummary').value.trim(),
+    descriptionWiki: $('pDesc').value,
+    priority: $('pPriority').value,
+    labels: $('pLabels').value.split(',').map(s=>s.trim()).filter(Boolean),
+    images,
+  };
+  if (body.summary.length<3){ $('prErr').textContent='Заполните summary'; return; }
+  const btn=$('createBtn'); btn.disabled=true; $('createStatus').textContent='Создаю в Jira…';
+  try {
+    const r = await fetch('/api/bugs/create',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    const d = await r.json();
+    if (!r.ok){ $('prErr').textContent = (typeof d.error==='string'?d.error:'Не удалось создать'); return; }
+    $('createdOut').innerHTML = `<div class="created">✅ Дефект создан: <a href="${esc(d.url)}" target="_blank"><b>${esc(d.key)}</b></a>${d.attached?` · приложено скринов: ${d.attached}`:''}</div>`;
+  } catch(_){ $('prErr').textContent='Сеть недоступна'; }
+  finally { btn.disabled=false; $('createStatus').textContent=''; }
+});
+
+boot();
+</script>
+</body>
+</html>

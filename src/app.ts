@@ -16,6 +16,7 @@ import { registerIntakeApi } from './intake.js';
 import { registerKnowledgeApi, seedKnowledgeGraph } from './knowledge.js';
 import { registerIdeasApi } from './ideas.js';
 import { registerQualityApi } from './quality.js';
+import { registerBugsApi } from './bugs.js';
 import { loadGraphIntoDb } from './graphLoader.js';
 import { ensureBucket } from './storage.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
@@ -43,6 +44,7 @@ await registerIntakeApi(app);
 await registerKnowledgeApi(app);
 await registerIdeasApi(app);
 await registerQualityApi(app);
+await registerBugsApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -828,6 +830,11 @@ app.get('/ideas', async (_, reply) => {
 // Quality Coverage Analytics (Treemap / Matrix / Dependency graph).
 app.get('/quality', async (_, reply) => {
   return reply.sendFile('quality.html');
+});
+
+// Bugs — LLM-assisted defect intake → Jira.
+app.get('/bugs', async (_, reply) => {
+  return reply.sendFile('bugs.html');
 });
 
 // Legacy internal orchestrator dashboard (engineering use).

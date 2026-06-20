@@ -321,6 +321,7 @@
   <span class="toplink" id="graphBtn">Graph</span>
   <span class="toplink" id="qualityBtn">Качество</span>
   <span class="toplink" id="ideasBtn">Идеи</span>
+  <span class="toplink" id="bugsBtn">БАГи</span>
   <span class="toplink" id="histBtn">History</span>
   <span class="toplink" id="adminBtn" style="display:none">Admin</span>
   <div class="usermenu">
@@ -567,6 +568,7 @@ const I18N = {
     answerNotFound: 'Ответ не найден или недоступен',
     navQuality: 'Качество',
     navIdeas: 'Идеи',
+    navBugs: 'БАГи',
     histBtn: 'История',
     histTitle: 'Ваша история',
     histLoading: 'Загрузка…',
@@ -643,6 +645,7 @@ const I18N = {
     answerNotFound: 'Answer not found or unavailable',
     navQuality: 'Quality',
     navIdeas: 'Ideas',
+    navBugs: 'Bugs',
     histBtn: 'History',
     histTitle: 'Your history',
     histLoading: 'Loading…',
@@ -719,6 +722,7 @@ const I18N = {
     answerNotFound: 'Réponse introuvable ou indisponible',
     navQuality: 'Qualité',
     navIdeas: 'Idées',
+    navBugs: 'Bugs',
     histBtn: 'Historique',
     histTitle: 'Votre historique',
     histLoading: 'Chargement…',
@@ -1095,6 +1099,7 @@ $('adminBtn').addEventListener('click', () => location.href = '/admin');
 $('graphBtn').addEventListener('click', () => location.href = '/graph');
 $('qualityBtn').addEventListener('click', () => location.href = '/quality');
 $('ideasBtn').addEventListener('click', () => location.href = '/ideas');
+$('bugsBtn').addEventListener('click', () => location.href = '/bugs');
 $('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add('hidden'); openChangePassword(); });
 
 // ===================================================================
@@ -1159,6 +1164,7 @@ function applyTranslations(){
   $('histBtn').textContent = t('histBtn');
   const qBtn = $('qualityBtn'); if (qBtn) qBtn.textContent = t('navQuality');
   const iBtn = $('ideasBtn'); if (iBtn) iBtn.textContent = t('navIdeas');
+  const bBtn = $('bugsBtn'); if (bBtn) bBtn.textContent = t('navBugs');
   setVoiceWorkflowStage(voiceWorkflowStage);
 }
 
