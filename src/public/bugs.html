@@ -122,7 +122,7 @@ let me=null, images=[], mediaRec=null, recChunks=[];
 // ---------- shared nav (feature 4: full menu everywhere) ----------
 function renderNav(){
   const items = [
-    ['/', '🔎 Поиск'], ['/graph','🕸 Граф'], ['/quality','📊 Качество'], ['/ideas','💡 Идеи'], ['/bugs','🐞 БАГи'],
+    ['/', '🔎 Поиск'], ['/graph','🕸 Граф'], ['/quality','📊 Качество'], ['/ideas','💡 Идеи'], ['/bugs','🐞 БАГи'], ['/pre-planning','🧭 Pre-planning'],
   ];
   const here = location.pathname.replace(/\/$/,'') || '/';
   const links = items.map(([href,label]) => `<span class="navlink${(here===href||(href!=='/'&&here.startsWith(href)))?' active':''}" onclick="location.href='${href}'">${label}</span>`).join('');

@@ -322,6 +322,7 @@
   <span class="toplink" id="qualityBtn">Качество</span>
   <span class="toplink" id="ideasBtn">Идеи</span>
   <span class="toplink" id="bugsBtn">БАГи</span>
+  <span class="toplink" id="preBtn">Pre-planning</span>
   <span class="toplink" id="histBtn">History</span>
   <span class="toplink" id="adminBtn" style="display:none">Admin</span>
   <div class="usermenu">
@@ -569,6 +570,7 @@ const I18N = {
     navQuality: 'Качество',
     navIdeas: 'Идеи',
     navBugs: 'БАГи',
+    navPreplan: 'Pre-planning',
     histBtn: 'История',
     histTitle: 'Ваша история',
     histLoading: 'Загрузка…',
@@ -646,6 +648,7 @@ const I18N = {
     navQuality: 'Quality',
     navIdeas: 'Ideas',
     navBugs: 'Bugs',
+    navPreplan: 'Pre-planning',
     histBtn: 'History',
     histTitle: 'Your history',
     histLoading: 'Loading…',
@@ -723,6 +726,7 @@ const I18N = {
     navQuality: 'Qualité',
     navIdeas: 'Idées',
     navBugs: 'Bugs',
+    navPreplan: 'Pre-planning',
     histBtn: 'Historique',
     histTitle: 'Votre historique',
     histLoading: 'Chargement…',
@@ -1100,6 +1104,7 @@ $('graphBtn').addEventListener('click', () => location.href = '/graph');
 $('qualityBtn').addEventListener('click', () => location.href = '/quality');
 $('ideasBtn').addEventListener('click', () => location.href = '/ideas');
 $('bugsBtn').addEventListener('click', () => location.href = '/bugs');
+$('preBtn').addEventListener('click', () => location.href = '/pre-planning');
 $('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add('hidden'); openChangePassword(); });
 
 // ===================================================================
@@ -1165,6 +1170,7 @@ function applyTranslations(){
   const qBtn = $('qualityBtn'); if (qBtn) qBtn.textContent = t('navQuality');
   const iBtn = $('ideasBtn'); if (iBtn) iBtn.textContent = t('navIdeas');
   const bBtn = $('bugsBtn'); if (bBtn) bBtn.textContent = t('navBugs');
+  const pBtn = $('preBtn'); if (pBtn) pBtn.textContent = t('navPreplan');
   setVoiceWorkflowStage(voiceWorkflowStage);
 }
 

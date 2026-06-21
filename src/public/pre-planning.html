@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — AI Pre-planning</title>
+<style>
+  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --line-soft:#ecedef; --bg-soft:#f1f3f4; --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025; --purple:#8e24aa; --shadow:0 1px 4px rgba(32,33,36,.12); color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --line-soft:#2d2f31; --bg-soft:#1e1e1e; --blue:#8ab4f8; --blue-dark:#aecbfa; --green:#34a853; --amber:#fbbc04; --red:#ea4335; --purple:#ce93d8; --shadow:0 1px 4px rgba(0,0,0,.6); } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button,input,select,textarea { font-family:inherit; }
+  header.nav { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 22px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; position:sticky; top:0; z-index:10; }
+  header.nav .brand { font-size:17px; font-weight:600; margin-right:10px; }
+  header.nav .navlink { color:var(--muted); padding:7px 12px; border-radius:8px; font-size:14px; cursor:pointer; }
+  header.nav .navlink:hover { background:var(--bg-soft); color:var(--ink); }
+  header.nav .navlink.active { background:#e8f0fe; color:var(--blue-dark); font-weight:600; }
+  header.nav .spacer { flex:1; }
+  header.nav .who { color:var(--muted); font-size:13px; }
+  .wrap { max-width:1080px; margin:22px auto; padding:0 18px 80px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 18px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:16px; }
+  .panel h3 { margin:0; padding:13px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; }
+  .pad { padding:16px 18px; }
+  label.fld { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:0 0 5px; }
+  textarea, input[type=text], select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:var(--panel); color:var(--ink); }
+  textarea { resize:vertical; line-height:1.5; }
+  button.pri { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; }
+  button.pri:hover { background:var(--blue-dark); } button.pri:disabled { opacity:.55; cursor:default; }
+  button.ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer; }
+  button.ghost:hover { background:var(--bg-soft); }
+  button.ok { background:var(--green); color:#fff; border:none; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:500; cursor:pointer; }
+  .muted { color:var(--muted); font-size:13px; } .err { color:var(--red); font-size:13px; margin-top:8px; }
+  .tk { border:1px solid var(--line); border-radius:12px; margin-bottom:16px; overflow:hidden; box-shadow:var(--shadow); background:var(--panel); }
+  .tk-head { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .tk-head a { font-weight:600; } .tk-head .est { margin-left:auto; font-weight:600; }
+  .tk-body { padding:14px 16px; }
+  .smart { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:13.5px; margin-bottom:10px; }
+  .smart b { color:var(--blue); }
+  .sec { margin:12px 0; } .sec .t { font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin-bottom:5px; }
+  .badge { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:5px; margin-right:5px; }
+  .b-red{background:#fdecea;color:var(--red)} .b-orange{background:#fff4e5;color:var(--amber)} .b-blue{background:#e8f0fe;color:var(--blue-dark)} .b-purple{background:#f3e5f5;color:var(--purple)} .b-gray{background:var(--bg-soft);color:var(--muted)}
+  .chip { display:inline-block; background:var(--bg-soft); border:1px solid var(--line); border-radius:12px; padding:2px 9px; font-size:12px; margin:0 4px 4px 0; }
+  ul.tight { margin:4px 0; padding-left:18px; font-size:13.5px; } ul.tight li { margin-bottom:3px; }
+  details.edit { margin-top:10px; border:1px solid var(--line); border-radius:8px; }
+  details.edit summary { cursor:pointer; padding:8px 12px; font-size:13px; color:var(--muted); }
+  details.edit .pad2 { padding:0 12px 12px; }
+  details.edit textarea { font-family:ui-monospace,Consolas,monospace; font-size:12.5px; margin-bottom:8px; }
+  .warn { background:#fff4e5; border:1px solid var(--amber); color:#7a4f00; border-radius:8px; padding:8px 12px; font-size:13px; margin-bottom:10px; }
+  .done { background:#e6f4ea; border:1px solid #ceead6; border-radius:8px; padding:8px 12px; font-size:13.5px; margin-top:10px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header class="nav" id="nav"></header>
+<div class="wrap">
+  <h1>🧭 AI Pre-planning</h1>
+  <p class="sub">Вставьте список Jira-тикетов — система соберёт SMART-анализ, pre-planning шаги, риски, чек-лист, happy path и QA-оценку (заземлённо на граф знаний + спеки + Jira). Запись в Jira — только после вашего подтверждения.</p>
+
+  <div class="panel" id="cfgWarn" style="display:none"><div class="pad muted">⚠️ Jira не настроена на сервере — анализ/запись недоступны.</div></div>
+
+  <div class="panel">
+    <h3>Тикеты на pre-planning</h3>
+    <div class="pad">
+      <label class="fld">По одному в строке: <code>TMS-2712 - Vlad</code></label>
+      <textarea id="tickets" rows="5" placeholder="TMS-2712 - Vlad&#10;TMS-3815 - Vlad&#10;DOCK-3771 - Yulia"></textarea>
+      <div style="margin-top:12px"><button class="pri" id="analyzeBtn">🔍 Проанализировать</button> <span class="muted" id="status"></span></div>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+
+  <div id="summary"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let me=null;
+
+function renderNav(){
+  const items=[['/','🔎 Поиск'],['/graph','🕸 Граф'],['/quality','📊 Качество'],['/ideas','💡 Идеи'],['/bugs','🐞 БАГи'],['/pre-planning','🧭 Pre-planning']];
+  const here=location.pathname.replace(/\/$/,'')||'/';
+  const links=items.map(([h,l])=>`<span class="navlink${here===h?' active':''}" onclick="location.href='${h}'">${l}</span>`).join('');
+  const admin=me&&me.role==='admin'?`<span class="navlink" onclick="location.href='/admin'">⚙️ Админ</span>`:'';
+  $('nav').innerHTML=`<span class="brand">Searchify</span>${links}${admin}<span class="spacer"></span><span class="who">${esc(me?me.name:'')}</span><span class="navlink" id="lo">Выйти</span>`;
+  const lo=$('lo'); if(lo) lo.addEventListener('click',async()=>{await fetch('/api/auth/logout',{method:'POST'});location.href='/';});
+}
+
+async function boot(){
+  const r=await fetch('/api/auth/me'); if(!r.ok){location.href='/login';return;}
+  me=(await r.json()).user; renderNav();
+  const cfg=await fetch('/api/preplanning/config').then(r=>r.json()).catch(()=>({jiraEnabled:false}));
+  if(!cfg.jiraEnabled){ $('cfgWarn').style.display=''; $('analyzeBtn').disabled=true; }
+}
+
+$('analyzeBtn').addEventListener('click', async ()=>{
+  $('err').textContent=''; $('results').innerHTML=''; $('summary').innerHTML='';
+  const tickets=$('tickets').value.trim();
+  if(!tickets){ $('err').textContent='Вставьте хотя бы один тикет'; return; }
+  const btn=$('analyzeBtn'); btn.disabled=true; $('status').textContent='Анализ (Jira + граф + спеки + LLM)… это может занять минуту';
+  try{
+    const r=await fetch('/api/preplanning/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({tickets})});
+    const d=await r.json();
+    if(!r.ok){ $('err').textContent=(typeof d.error==='string'?d.error:'Ошибка анализа'); return; }
+    renderSummary(d);
+    (d.tickets||[]).forEach(renderTicket);
+  }catch(_){ $('err').textContent='Сеть недоступна'; }
+  finally{ btn.disabled=false; $('status').textContent=''; }
+});
+
+function renderSummary(d){
+  let h=`<div class="panel"><div class="pad"><b>Итог:</b> тикетов ${ (d.tickets||[]).length } · суммарная QA-оценка ≈ ${d.totalQaHours||0} ч (${((d.totalQaHours||0)/8).toFixed(1)} д)`;
+  if(d.sprintWarning) h+=`<div class="warn" style="margin-top:8px">⚠️ ${esc(d.sprintWarning)}</div>`;
+  h+=`</div></div>`; $('summary').innerHTML=h;
+}
+
+const RISKCLS={'DB Migration':'b-red','API Breaking Change':'b-orange','Webhook Compatibility':'b-orange','Regression Risk':'b-blue','Scope Unclear':'b-purple','Cross-domain Impact':'b-red','Performance':'b-gray','Blocked':'b-red'};
+function renderTicket(t){
+  const wrap=document.createElement('div'); wrap.className='tk';
+  if(t.error){ wrap.innerHTML=`<div class="tk-head"><b>${esc(t.key)}</b> <span class="err">${esc(t.error)}</span></div>`; $('results').appendChild(wrap); return; }
+  const a=t.analysis||{}, s=a.smart||{}, j=t.jira||{};
+  const list=arr=>(arr||[]).map(x=>`<li>${esc(typeof x==='string'?x:(x.q||''))}</li>`).join('');
+  const steps=a.preplanningSteps||{};
+  const stepBlock=(name,arr)=>arr&&arr.length?`<div><b>${name}:</b><ul class="tight">${list(arr)}</ul></div>`:'';
+  wrap.innerHTML=`
+    <div class="tk-head">
+      <a href="${esc(t.jiraUrl||('https://shiptify.atlassian.net/browse/'+t.key))}" target="_blank">${esc(t.key)}</a>
+      <span>${esc(t.summary)}</span>
+      <span class="chip">${esc(t.status||'')}</span>
+      ${(t.domains||[]).map(d=>`<span class="chip">${esc(d)}</span>`).join('')}
+      <span class="est">⏱ ${esc(j.originalEstimate||a.qaEstimate||'?')}${a.size?` (${esc(a.size)})`:''}</span>
+    </div>
+    <div class="tk-body">
+      ${t.statusWarning?`<div class="warn">⚠️ ${esc(t.statusWarning)}</div>`:''}
+      <div class="smart">
+        <b>S</b><div>${esc(s.s||'')}</div>
+        <b>M</b><div><ul class="tight">${(s.m||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>
+        <b>A</b><div>${esc(s.a||'')}</div>
+        <b>R</b><div>${esc(s.r||'')}</div>
+        <b>T</b><div>${esc(s.t||'')}</div>
+      </div>
+      <div class="sec"><div class="t">Pre-planning steps</div>${stepBlock('Analysis',steps.analysis)}${stepBlock('Backend',steps.backend)}${stepBlock('Frontend',steps.frontend)}${stepBlock('API',steps.api)}${stepBlock('QA',steps.qa)}</div>
+      <div class="sec"><div class="t">Risks</div>${(a.risks||[]).map(r=>`<div style="margin-bottom:4px"><span class="badge ${RISKCLS[r.label]||'b-gray'}">${esc(r.label)}</span>${esc(r.detail||'')} <i class="muted">→ ${esc(r.mitigation||'')}</i></div>`).join('')||'<span class="muted">—</span>'}</div>
+      <div class="sec"><div class="t">Open questions</div><ul class="tight">${(a.openQuestions||[]).map(q=>`<li>${esc(q.q)} <i class="muted">(owner: ${esc(q.owner||'TBD')})</i></li>`).join('')||'<li class="muted">—</li>'}</ul></div>
+      <div class="sec"><div class="t">Acceptance checklist</div><ul class="tight">${list(a.acceptanceChecklist)}</ul></div>
+      <div class="sec"><div class="t">Happy path</div><ul class="tight">${list(a.happyPath)}</ul></div>
+      ${a.decompose&&(a.subtasks||[]).length?`<div class="sec"><div class="t">Proposed sub-tasks (XL — not auto-created)</div><ul class="tight">${a.subtasks.map(st=>`<li>${esc(st.name)} — ${esc(st.assignee||'')} · ${esc(st.estimate||'')} · ${esc(st.sprint||'')}</li>`).join('')}</ul></div>`:''}
+      ${(a.sources||[]).length?`<div class="sec"><div class="t">Sources</div>${a.sources.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:''}
+
+      <details class="edit">
+        <summary>✏️ Что будет записано в Jira (правьте перед подтверждением)</summary>
+        <div class="pad2">
+          <label class="fld">Description (overwrite)</label><textarea rows="10" data-f="description">${esc(j.description||'')}</textarea>
+          <label class="fld">Comment 1 — context</label><textarea rows="4" data-f="comment1">${esc(j.comment1||'')}</textarea>
+          <label class="fld">Comment 2 — acceptance checklist</label><textarea rows="5" data-f="comment2">${esc(j.comment2||'')}</textarea>
+          <label class="fld">Comment 3 — happy path</label><textarea rows="5" data-f="comment3">${esc(j.comment3||'')}</textarea>
+          <label class="fld">Original Estimate</label><input type="text" data-f="originalEstimate" value="${esc(j.originalEstimate||'')}" style="max-width:120px" />
+        </div>
+      </details>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="ok" data-act="apply">✅ Подтвердить и записать в Jira</button>
+        <button class="ghost" data-act="skip">Пропустить</button>
+        <span class="muted" data-role="st"></span>
+      </div>
+      <div data-role="out"></div>
+    </div>`;
+  $('results').appendChild(wrap);
+  const val=f=>{ const el=wrap.querySelector(`[data-f="${f}"]`); return el?el.value:''; };
+  wrap.querySelector('[data-act="skip"]').addEventListener('click',()=>{ wrap.style.opacity=.5; wrap.querySelector('[data-role="st"]').textContent='пропущено'; });
+  wrap.querySelector('[data-act="apply"]').addEventListener('click',async(e)=>{
+    const btn=e.target; btn.disabled=true; wrap.querySelector('[data-role="st"]').textContent='Записываю в Jira…';
+    try{
+      const r=await fetch('/api/preplanning/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+        ticketKey:t.key, description:val('description'), comment1:val('comment1'), comment2:val('comment2'), comment3:val('comment3'), originalEstimate:val('originalEstimate')
+      })});
+      const d=await r.json();
+      if(!r.ok){ wrap.querySelector('[data-role="out"]').innerHTML=`<div class="err">${esc(typeof d.error==='string'?d.error:'Ошибка записи')}</div>`; btn.disabled=false; }
+      else { wrap.querySelector('[data-role="out"]').innerHTML=`<div class="done">✅ Записано в <a href="${esc(d.url)}" target="_blank"><b>${esc(d.key)}</b></a> · ${esc((d.written||[]).join(', '))}</div>`; }
+    }catch(_){ wrap.querySelector('[data-role="out"]').innerHTML=`<div class="err">Сеть недоступна</div>`; btn.disabled=false; }
+    finally{ wrap.querySelector('[data-role="st"]').textContent=''; }
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
