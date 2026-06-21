@@ -232,10 +232,19 @@ function assemble(a: any, t: any) {
   return { description, comment1, comment2, comment3, originalEstimate: a.qaEstimate || '' };
 }
 
-async function analyzeOne(ticketKey: string, assignee: string) {
+async function analyzeOne(
+  ticketKey: string,
+  assignee: string,
+  onStage?: (m: string) => void,
+  onDelta?: (text: string) => void,
+) {
+  onStage?.('📥 fetching from Jira…');
   const t = await fetchTicket(ticketKey);
+  onStage?.('🧭 classifying domain…');
   const domains = classifyDomains(`${t.summary} ${t.description} ${t.labels.join(' ')}`);
+  onStage?.(`🕸 querying knowledge graph (domains: ${domains.join(', ')})…`);
   const gc = graphContextFor(`${t.summary} ${t.description} ${t.labels.join(' ')}`, domains);
+  onStage?.('📚 loading spec evidence…');
   const spec = specEvidence(`${t.summary} ${t.description}`);
 
   const prompt = `You are a senior QA engineer doing sprint pre-planning for Shiptify (TMS/logistics SaaS). Produce a grounded pre-planning analysis for ONE Jira ticket, IN ENGLISH. Ground EVERY claim in the provided graph nodes / spec excerpts / ticket — never invent endpoints, tables, or flows not present. Cite sources by graph id or spec path.
@@ -279,8 +288,10 @@ ${gc.summary}
 === SPEC LAYER — relevant excerpts (cite these) ===
 ${spec.slice(0, 4500)}`;
 
-  const r = await runRolePrompt('qa.preplanning', prompt, config.answerModel);
+  onStage?.(`🤖 running LLM analysis (${config.answerModel})…`);
+  const r = await runRolePrompt('qa.preplanning', prompt, config.answerModel, onDelta);
   if (!r.text || !r.text.trim()) throw new Error('LLM returned no analysis');
+  onStage?.(`✅ analysis ready (${r.totalTokens || '?'} tokens)`);
   let parsed: any;
   let s = r.text.trim();
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i); if (fence) s = fence[1].trim();
@@ -332,6 +343,58 @@ export async function registerPreplanningApi(app: FastifyInstance) {
       ? `Sprint QA load ≈ ${(totalHours / 8).toFixed(1)}d exceeds 10d capacity — consider deferring lower-priority tickets.`
       : null;
     return reply.send({ tickets: results, totalQaHours: Math.round(totalHours * 10) / 10, sprintWarning });
+  });
+
+  // Streaming analyze (SSE): per-ticket stage progress + live LLM log, then per-ticket
+  // results as they finish, then a final summary. Lets the UI show a loader + log.
+  app.post('/api/preplanning/analyze/stream', async (req, reply) => {
+    const user = await requireAuth(req, reply); if (!user) return;
+    if (!jiraConfig().enabled) return reply.code(503).send({ error: 'Jira is not configured' });
+    const parsed = analyzeSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const items = parsed.data.tickets.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+      const m = l.match(/([A-Z][A-Z0-9]+-\d+)\s*[-–:]?\s*(.*)$/);
+      return m ? { key: m[1], assignee: (m[2] || '').trim() } : null;
+    }).filter(Boolean).slice(0, 15) as Array<{ key: string; assignee: string }>;
+    if (!items.length) return reply.code(400).send({ error: 'No valid ticket IDs found (expected lines like "TMS-2712 - Vlad")' });
+
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    const send = (event: string, data: any) => { try { raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* client gone */ } };
+    const ping = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* noop */ } }, 15000);
+
+    try {
+      send('stage', { msg: `Тикетов к анализу: ${items.length}` });
+      const results: any[] = [];
+      // sequential per ticket → readable progress + live LLM log
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        send('stage', { msg: `▶ [${i + 1}/${items.length}] ${it.key}` });
+        try {
+          const r = await analyzeOne(
+            it.key, it.assignee,
+            (m) => send('stage', { msg: `   ${it.key}: ${m}` }),
+            (txt) => send('delta', { key: it.key, text: txt }),
+          );
+          results.push(r);
+          send('ticket', r);
+        } catch (e: any) {
+          const er = { key: it.key, error: String(e?.message || e).slice(0, 200) };
+          results.push(er);
+          send('ticket', er);
+          send('stage', { msg: `   ${it.key}: ⚠️ ${er.error}` });
+        }
+      }
+      const totalHours = results.reduce((s: number, r: any) => s + (r.analysis?.qaEstimateHours || hoursOf(r.jira?.originalEstimate || '') || 0), 0);
+      const sprintWarning = totalHours > 80 ? `Sprint QA load ≈ ${(totalHours / 8).toFixed(1)}d exceeds 10d capacity — consider deferring lower-priority tickets.` : null;
+      send('done', { totalQaHours: Math.round(totalHours * 10) / 10, sprintWarning });
+    } catch (e: any) {
+      send('error', { message: String(e?.message || e).slice(0, 250) });
+    } finally {
+      clearInterval(ping);
+      try { raw.end(); } catch { /* noop */ }
+    }
   });
 
   const applySchema = z.object({
