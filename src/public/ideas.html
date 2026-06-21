@@ -4,15 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Идеи к улучшению — Searchify</title>
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
-  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; color-scheme: light dark; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --blue:#8ab4f8; }
-  }
   *{box-sizing:border-box} body{margin:0;font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
   a{color:var(--blue);text-decoration:none}
-  header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:16px}
-  header.bar .title{font-size:18px;font-weight:600}.spacer{flex:1}
   .toplink{color:var(--muted);cursor:pointer;font-size:14px}.toplink:hover{color:var(--blue)}
   .wrap{max-width:960px;margin:24px auto;padding:0 20px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 1px 3px rgba(32,33,36,.06)}
@@ -37,18 +33,10 @@
 </style>
 </head>
 <body>
-<header class="bar">
-  <span class="title">💡 Идеи к улучшению</span>
-  <span class="spacer"></span>
-  <span class="toplink" onclick="location.href='/'">🔎 Поиск</span>
-  <span class="toplink" onclick="location.href='/graph'">🕸 Граф</span>
-  <span class="toplink" onclick="location.href='/quality'">📊 Качество</span>
-  <span class="toplink" style="color:var(--blue)" onclick="location.href='/ideas'">💡 Идеи</span>
-  <span class="toplink" onclick="location.href='/bugs'">🐞 БАГи</span>
-  <span class="toplink" onclick="location.href='/pre-planning'">🧭 Pre-planning</span>
-  <span class="toplink" id="adminTab" style="display:none" onclick="showAdmin()">Admin: все идеи</span>
-</header>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
 <div class="wrap">
+  <div style="text-align:right;margin-bottom:10px"><span class="toplink" id="adminTab" style="display:none" onclick="showAdmin()">Admin: все идеи →</span></div>
   <div class="card">
     <h2>Предложить улучшение</h2>
     <div class="muted" style="margin-bottom:10px">Опишите, что хочется улучшить или добавить. Идею рассмотрит администратор; одобренную можно реализовать автоматически.</div>

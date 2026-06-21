@@ -1,0 +1,76 @@
+/* ============================================================================
+   Searchify — single source of truth for the colour palette + theme switching
+   + the one shared app header (.app-nav). Linked by every page; the per-page
+   :root / prefers-color-scheme blocks were removed in favour of this file.
+
+   Theme resolution:
+   - no [data-theme]            → follow the OS (prefers-color-scheme)
+   - html[data-theme="light"]   → force light (beats :root via specificity)
+   - html[data-theme="dark"]    → force dark
+   nav.js persists the choice in localStorage('searchify_theme').
+   ============================================================================ */
+
+:root {
+  --bg:#f6f8fc; --panel:#ffffff; --ink:#202124; --muted:#5f6368;
+  --line:#e3e6ea; --line-soft:#ecedef; --bg-soft:#f1f3f4;
+  --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025; --purple:#8e24aa;
+  --shadow:0 1px 4px rgba(32,33,36,.12); --shadow-lg:0 4px 24px rgba(32,33,36,.18);
+  --radius:12px;
+  color-scheme: light;
+}
+
+/* dark palette (shared by auto-dark + explicit dark) */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6;
+    --line:#3c4043; --line-soft:#2d2f31; --bg-soft:#1e1e1e;
+    --blue:#8ab4f8; --blue-dark:#aecbfa; --green:#34a853; --amber:#fbbc04; --red:#ea4335; --purple:#ce93d8;
+    --shadow:0 1px 4px rgba(0,0,0,.6); --shadow-lg:0 4px 24px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+html[data-theme="dark"] {
+  --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6;
+  --line:#3c4043; --line-soft:#2d2f31; --bg-soft:#1e1e1e;
+  --blue:#8ab4f8; --blue-dark:#aecbfa; --green:#34a853; --amber:#fbbc04; --red:#ea4335; --purple:#ce93d8;
+  --shadow:0 1px 4px rgba(0,0,0,.6); --shadow-lg:0 4px 24px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+html[data-theme="light"] {
+  --bg:#f6f8fc; --panel:#ffffff; --ink:#202124; --muted:#5f6368;
+  --line:#e3e6ea; --line-soft:#ecedef; --bg-soft:#f1f3f4;
+  --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025; --purple:#8e24aa;
+  --shadow:0 1px 4px rgba(32,33,36,.12); --shadow-lg:0 4px 24px rgba(32,33,36,.18);
+  color-scheme: light;
+}
+
+/* ---------------- one shared header for every page ---------------- */
+.app-nav {
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: 10px 22px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 50; box-shadow: var(--shadow);
+  font-family: 'Segoe UI', Roboto, Arial, system-ui, sans-serif;
+}
+.app-nav .brand {
+  font-size: 17px; font-weight: 600; color: var(--ink); margin-right: 8px;
+  display: flex; align-items: center; gap: 6px; cursor: pointer; text-decoration: none;
+}
+.app-nav .navlink {
+  color: var(--muted); padding: 7px 11px; border-radius: 8px; font-size: 14px;
+  cursor: pointer; text-decoration: none; white-space: nowrap; border: none; background: none;
+}
+.app-nav .navlink:hover { background: var(--bg-soft); color: var(--ink); }
+.app-nav .navlink.active { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue-dark); font-weight: 600; }
+.app-nav .spacer { flex: 1; }
+.app-nav .who { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.app-nav .theme-toggle {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 16px;
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+}
+.app-nav .theme-toggle:hover { background: var(--bg-soft); }
+@media (max-width: 720px) {
+  .app-nav { padding: 8px 12px; gap: 2px; }
+  .app-nav .who { display: none; }
+  .app-nav .navlink { padding: 6px 8px; font-size: 13px; }
+}

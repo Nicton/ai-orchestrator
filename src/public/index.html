@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Knowledge Assistant</title>
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
   :root {
     --bg: #ffffff;
@@ -23,24 +25,7 @@
     --red: #d93025;
     color-scheme: light dark;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0d0d0d;
-      --panel: #121212;
-      --ink: #e8eaed;
-      --muted: #9aa0a6;
-      --line: #3c4043;
-      --line-soft: #2d2f31;
-      --blue: #8ab4f8;
-      --blue-dark: #aecbfa;
-      --bg-soft: #1a1a1a;
-      --shadow: 0 1px 6px rgba(0,0,0,.6);
-      --shadow-lg: 0 4px 24px rgba(0,0,0,.6);
-      --green: #34a853;
-      --amber: #fbbc04;
-      --red: #ea4335;
-    }
-  }
+  /* dark/auto palette + the one shared header come from /theme.css */
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
@@ -315,29 +300,9 @@
 </head>
 <body>
 
-<!-- ============ TOP BAR ============ -->
-<div class="topbar" id="topbar" style="display:none">
-  <span class="spacer"></span>
-  <span class="toplink" id="graphBtn">Graph</span>
-  <span class="toplink" id="qualityBtn">Качество</span>
-  <span class="toplink" id="ideasBtn">Идеи</span>
-  <span class="toplink" id="bugsBtn">БАГи</span>
-  <span class="toplink" id="preBtn">Pre-planning</span>
-  <span class="toplink" id="histBtn">History</span>
-  <span class="toplink" id="adminBtn" style="display:none">Admin</span>
-  <div class="usermenu">
-    <button class="avatar" id="avatarBtn">U</button>
-    <div class="menu hidden" id="userMenu">
-      <div class="who">
-        <div class="nm" id="menuName">—</div>
-        <div class="em" id="menuEmail">—</div>
-        <span class="role-pill" id="menuRole">user</span>
-      </div>
-      <button id="menuChangePw">Change password</button>
-      <button id="menuLogout">Sign out</button>
-    </div>
-  </div>
-</div>
+<!-- ============ ONE SHARED HEADER (see /nav.js + /theme.css) ============ -->
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
 
 <!-- ============ LOGIN ============ -->
 <div id="view-login">
@@ -377,6 +342,10 @@
 
 <!-- ============ SEARCH / HOME ============ -->
 <div id="view-home" style="display:none">
+  <div style="max-width:1100px;margin:8px auto 0;padding:0 18px;display:flex;justify-content:flex-end;gap:14px">
+    <span class="toplink" id="histBtn" style="cursor:pointer;color:var(--muted);font-size:14px">History</span>
+    <span class="toplink" id="menuChangePw" style="cursor:pointer;color:var(--muted);font-size:14px">Change password</span>
+  </div>
   <div class="home centered" id="home">
     <div class="home-logo">
       <div class="glogo"><span class="c1">S</span><span class="c2">e</span><span class="c3">a</span><span class="c4">r</span><span class="c5">c</span><span class="c6">h</span><span class="c1">i</span><span class="c2">f</span><span class="c3">y</span><sup class="beta-badge">BETA</sup></div>
@@ -1040,7 +1009,6 @@ function revealEmailLogin(){
 async function showLogin(){
   $('view-login').style.display = '';
   $('view-home').style.display = 'none';
-  $('topbar').style.display = 'none';
   const params = new URLSearchParams(location.search);
 
   // Surface OAuth errors passed back via ?error=
@@ -1070,12 +1038,6 @@ async function showLogin(){
 function showApp(){
   $('view-login').style.display = 'none';
   $('view-home').style.display = '';
-  $('topbar').style.display = 'flex';
-  $('avatarBtn').textContent = initials(currentUser.name);
-  $('menuName').textContent = currentUser.name;
-  $('menuEmail').textContent = currentUser.email;
-  $('menuRole').textContent = currentUser.role;
-  $('adminBtn').style.display = currentUser.role === 'admin' ? '' : 'none';
   $('q').focus();
 }
 
@@ -1094,18 +1056,8 @@ $('loginForm').addEventListener('submit', async (e) => {
 
 $('emailToggle').addEventListener('click', () => { $('loginErr').textContent = ''; revealEmailLogin(); });
 
-// ---------- user menu ----------
-$('avatarBtn').addEventListener('click', (e) => { e.stopPropagation(); $('userMenu').classList.toggle('hidden'); });
-document.addEventListener('click', () => $('userMenu').classList.add('hidden'));
-$('userMenu').addEventListener('click', (e) => e.stopPropagation());
-$('menuLogout').addEventListener('click', async () => { await API.logout(); currentUser = null; location.href = '/'; });
-$('adminBtn').addEventListener('click', () => location.href = '/admin');
-$('graphBtn').addEventListener('click', () => location.href = '/graph');
-$('qualityBtn').addEventListener('click', () => location.href = '/quality');
-$('ideasBtn').addEventListener('click', () => location.href = '/ideas');
-$('bugsBtn').addEventListener('click', () => location.href = '/bugs');
-$('preBtn').addEventListener('click', () => location.href = '/pre-planning');
-$('menuChangePw').addEventListener('click', () => { $('userMenu').classList.add('hidden'); openChangePassword(); });
+// nav + logout are rendered by the shared header (/nav.js). Index-only controls:
+$('menuChangePw').addEventListener('click', () => openChangePassword());
 
 // ===================================================================
 // SEARCH

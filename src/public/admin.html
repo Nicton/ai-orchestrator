@@ -4,36 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Searchify — Admin</title>
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
-  :root {
-    --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea;
-    --bg-soft:#f1f3f4;
-    --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025;
-    --shadow:0 1px 4px rgba(32,33,36,.12);
-    color-scheme: light dark;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043;
-      --bg-soft:#1e1e1e;
-      --blue:#8ab4f8; --blue-dark:#aecbfa; --green:#34a853; --amber:#fbbc04; --red:#ea4335;
-      --shadow:0 1px 4px rgba(0,0,0,.6);
-    }
-  }
   * { box-sizing:border-box; }
   body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
   a { color:var(--blue); text-decoration:none; }
   button { font-family:inherit; cursor:pointer; }
   .hidden { display:none !important; }
-
-  header.bar {
-    background:var(--panel); border-bottom:1px solid var(--line); padding:14px 26px;
-    display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:10;
-  }
-  header.bar .title { font-size:18px; font-weight:600; }
-  header.bar .title small { color:var(--muted); font-weight:400; font-size:13px; margin-left:8px; }
-  header.bar .spacer { flex:1; }
-  header.bar .who { color:var(--muted); font-size:14px; }
   .ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:8px 14px; border-radius:8px; font-size:14px; }
   .ghost:hover { background:var(--bg-soft); }
 
@@ -95,18 +73,8 @@
 </style>
 </head>
 <body>
-<header class="bar">
-  <span class="title">Searchify <small>Admin console</small></span>
-  <span class="spacer"></span>
-  <span class="who" id="who"></span>
-  <a class="ghost" href="/">🔎 Поиск</a>
-  <a class="ghost" href="/graph">🕸 Граф</a>
-  <a class="ghost" href="/quality">📊 Качество</a>
-  <a class="ghost" href="/ideas">💡 Идеи</a>
-  <a class="ghost" href="/bugs">🐞 БАГи</a>
-  <a class="ghost" href="/pre-planning">🧭 Pre-planning</a>
-  <button class="ghost" id="logout">Выйти</button>
-</header>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
 
 <div id="root" class="wrap">
   <div class="deny" id="loadingMsg">Loading…</div>
@@ -125,7 +93,6 @@ async function boot(){
   const r = await fetch('/api/auth/me');
   if (!r.ok){ location.href = '/login'; return; }
   me = (await r.json()).user;
-  $('who').textContent = `${me.name} · ${me.email}`;
   if (me.role !== 'admin'){
     $('root').innerHTML = `<div class="deny">You need administrator access to view this page.<br><br><a href="/">Go to search</a></div>`;
     return;
@@ -133,8 +100,6 @@ async function boot(){
   renderShell();
   loadTab('overview');
 }
-
-$('logout').addEventListener('click', async () => { await fetch('/api/auth/logout',{method:'POST'}); location.href='/'; });
 
 function renderShell(){
   $('root').innerHTML = `

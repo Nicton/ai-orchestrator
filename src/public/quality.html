@@ -4,16 +4,12 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Quality Coverage Analytics — Searchify</title>
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
-  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; color-scheme: light dark; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --blue:#8ab4f8; }
-  }
   *{box-sizing:border-box} body{margin:0;font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
   a{color:var(--blue);text-decoration:none}
-  header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  .title{font-size:17px;font-weight:600}.spacer{flex:1}
-  .toplink{color:var(--muted);cursor:pointer;font-size:14px}.toplink:hover{color:var(--blue)}
+  .spacer{flex:1}
   .wrap{max-width:1280px;margin:18px auto;padding:0 18px}
   .kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:140px;flex:1}
@@ -44,17 +40,8 @@
 </style>
 </head>
 <body>
-<header class="bar">
-  <span class="title">📊 Quality Coverage Analytics</span>
-  <span class="muted">единый движок · 3 представления</span>
-  <span class="spacer"></span>
-  <span class="toplink" onclick="location.href='/'">🔎 Поиск</span>
-  <span class="toplink" onclick="location.href='/graph'">🕸 Граф</span>
-  <span class="toplink" style="color:var(--blue)" onclick="location.href='/quality'">📊 Качество</span>
-  <span class="toplink" onclick="location.href='/ideas'">💡 Идеи</span>
-  <span class="toplink" onclick="location.href='/bugs'">🐞 БАГи</span>
-  <span class="toplink" onclick="location.href='/pre-planning'">🧭 Pre-planning</span>
-</header>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
 
@@ -167,8 +154,7 @@ const QI18N={
 const QL=QI18N[QLANG]||QI18N.ru;
 const ALL_LAYERS=[['subreq',QL.layers.subreq],['docs',QL.layers.docs],['tests',QL.layers.tests],['automation',QL.layers.automation],['defects',QL.layers.defects]]; // Run (execution) скрыт; «Спека» = слой docs (покрытие спецификацией)
 function localizeQualityChrome(){
-  document.querySelector('.bar .muted').textContent=QL.subtitle;
-  // навигация — единое меню (метки RU, не локализуем)
+  // шапка теперь общая (nav.js); локализуем только контент страницы
   $('layersNote').textContent=QL.layersNote;
   $('weightsNote').innerHTML=`${QL.weights} <b>SubReq 20%</b> · <b>${QL.layers.docs} 15%</b> · <b>Tests 25%</b> · <b>Auto 20%</b> · <b>Bugs 10%</b> <span style="opacity:.5">${QL.runHidden}</span>`;
   $('specLayerNote').textContent=QL.specLayerNote;

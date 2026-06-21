@@ -4,11 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Knowledge Graph — Searchify</title>
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
-  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --blue:#1a73e8; --bg-soft:#f1f3f4; color-scheme: light dark; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --blue:#8ab4f8; --bg-soft:#1e1e1e; }
-  }
   * { box-sizing:border-box; }
   body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
   a { color:var(--blue); text-decoration:none; }
@@ -47,8 +45,9 @@
 </style>
 </head>
 <body>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
 <header class="bar">
-  <span class="title">Searchify Graph</span>
   <input class="search" id="search" placeholder="Найти узел…" autocomplete="off" />
   <select id="domain"><option value="" id="domainAll">Все домены</option></select>
   <span class="layers" id="layers"></span>
@@ -56,11 +55,6 @@
   <button class="ghost" id="relayoutBtn">↻ Раскладка</button>
   <span class="spacer"></span>
   <span class="muted" id="counts"></span>
-  <a class="ghost" id="backLink" href="/">🔎 Поиск</a>
-  <a class="ghost" href="/quality">📊 Качество</a>
-  <a class="ghost" href="/ideas">💡 Идеи</a>
-  <a class="ghost" href="/bugs">🐞 БАГи</a>
-  <a class="ghost" href="/pre-planning">🧭 Pre-planning</a>
 </header>
 <div class="wrap">
   <div class="canvas" id="canvas">

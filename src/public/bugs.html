@@ -4,21 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Searchify — БАГи</title>
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
-  :root { --bg:#f6f8fc; --panel:#fff; --ink:#202124; --muted:#5f6368; --line:#e3e6ea; --line-soft:#ecedef; --bg-soft:#f1f3f4; --blue:#1a73e8; --blue-dark:#1557b0; --green:#188038; --amber:#e37400; --red:#d93025; --shadow:0 1px 4px rgba(32,33,36,.12); color-scheme: light dark; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0d0d0d; --panel:#121212; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --line-soft:#2d2f31; --bg-soft:#1e1e1e; --blue:#8ab4f8; --blue-dark:#aecbfa; --green:#34a853; --amber:#fbbc04; --red:#ea4335; --shadow:0 1px 4px rgba(0,0,0,.6); } }
   * { box-sizing:border-box; }
   body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
   a { color:var(--blue); text-decoration:none; }
   button,input,select,textarea { font-family:inherit; }
-  /* shared nav */
-  header.nav { background:var(--panel); border-bottom:1px solid var(--line); padding:10px 22px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; position:sticky; top:0; z-index:10; }
-  header.nav .brand { font-size:17px; font-weight:600; margin-right:10px; }
-  header.nav .navlink { color:var(--muted); padding:7px 12px; border-radius:8px; font-size:14px; cursor:pointer; }
-  header.nav .navlink:hover { background:var(--bg-soft); color:var(--ink); }
-  header.nav .navlink.active { background:#e8f0fe; color:var(--blue-dark); font-weight:600; }
-  header.nav .spacer { flex:1; }
-  header.nav .who { color:var(--muted); font-size:13px; }
   .wrap { max-width:1080px; margin:22px auto; padding:0 18px 80px; }
   h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
   .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
@@ -53,7 +45,8 @@
 </style>
 </head>
 <body>
-<header class="nav" id="nav"></header>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
 
 <div class="wrap">
   <h1>🐞 БАГи</h1>
@@ -119,23 +112,10 @@ function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 let me=null, images=[], mediaRec=null, recChunks=[];
 
-// ---------- shared nav (feature 4: full menu everywhere) ----------
-function renderNav(){
-  const items = [
-    ['/', '🔎 Поиск'], ['/graph','🕸 Граф'], ['/quality','📊 Качество'], ['/ideas','💡 Идеи'], ['/bugs','🐞 БАГи'], ['/pre-planning','🧭 Pre-planning'],
-  ];
-  const here = location.pathname.replace(/\/$/,'') || '/';
-  const links = items.map(([href,label]) => `<span class="navlink${(here===href||(href!=='/'&&here.startsWith(href)))?' active':''}" onclick="location.href='${href}'">${label}</span>`).join('');
-  const admin = me && me.role==='admin' ? `<span class="navlink" onclick="location.href='/admin'">⚙️ Админ</span>` : '';
-  $('nav').innerHTML = `<span class="brand">Searchify</span>${links}${admin}<span class="spacer"></span><span class="who">${esc(me?me.name:'')}</span><span class="navlink" id="navLogout">Выйти</span>`;
-  const lo=$('navLogout'); if(lo) lo.addEventListener('click', async()=>{ await fetch('/api/auth/logout',{method:'POST'}); location.href='/'; });
-}
-
 async function boot(){
   const r = await fetch('/api/auth/me');
   if (!r.ok){ location.href='/login'; return; }
   me = (await r.json()).user;
-  renderNav();
   const cfg = await fetch('/api/bugs/config').then(r=>r.json()).catch(()=>({enabled:false,projects:[]}));
   if (!cfg.enabled){ $('configWarn').style.display=''; $('analyzeBtn').disabled=true; }
   const sel = $('project');
