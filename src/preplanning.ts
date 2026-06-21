@@ -351,13 +351,22 @@ export async function registerPreplanningApi(app: FastifyInstance) {
     const d = parsed.data;
     const { baseUrl } = jiraConfig();
     const done: string[] = [];
+    // Attribution — who generated/approved this AI pre-planning (carried into Jira).
+    const by = `${user.name}${user.email ? ` (${user.email})` : ''}`;
+    const stamp = `🤖 AI Pre-planning (Searchify) — сгенерировано и подтверждено: ${by} · ${new Date().toISOString().slice(0, 10)}`;
     try {
       const fields: any = {};
-      if (d.description) fields.description = d.description;
+      // append the attribution footer to the description so it always reaches Jira
+      if (d.description) fields.description = `${d.description}\n\n----\n_${stamp}_`;
       if (d.originalEstimate) fields.timetracking = { originalEstimate: d.originalEstimate };
       if (Object.keys(fields).length) { await jiraFetch('PUT', `/rest/api/2/issue/${encodeURIComponent(d.ticketKey)}`, { fields }); done.push('description/estimate'); }
-      for (const c of [d.comment1, d.comment2, d.comment3]) {
-        if (c && c.trim()) { await jiraFetch('POST', `/rest/api/2/issue/${encodeURIComponent(d.ticketKey)}/comment`, { body: c }); done.push('comment'); }
+      const comments = [d.comment1, d.comment2, d.comment3].filter((c) => c && c.trim()) as string[];
+      // stamp the first comment too, so attribution survives even if no description was written
+      comments.forEach((c, i) => { if (i === 0 && !d.description) c = `${c}\n\n_${stamp}_`; });
+      const toPost = comments.length ? comments : (d.description ? [] : [`_${stamp}_`]);
+      for (const c of toPost) {
+        await jiraFetch('POST', `/rest/api/2/issue/${encodeURIComponent(d.ticketKey)}/comment`, { body: c });
+        done.push('comment');
       }
     } catch (e: any) {
       return reply.code(502).send({ error: `Jira write failed after [${done.join(', ')}]: ${String(e?.message || e).slice(0, 250)}` });

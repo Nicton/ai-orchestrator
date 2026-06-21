@@ -150,6 +150,7 @@ function renderTicket(t){
         <button class="ghost" data-act="skip">Пропустить</button>
         <span class="muted" data-role="st"></span>
       </div>
+      <div class="muted" style="margin-top:6px;font-size:12px">🤖 При записи в описание добавится пометка: «сгенерировано и подтверждено: ${esc(me?(me.name+(me.email?' ('+me.email+')':'')):'вы')}».</div>
       <div data-role="out"></div>
     </div>`;
   $('results').appendChild(wrap);
