@@ -28,6 +28,11 @@
 
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:20px; overflow:hidden; }
   .panel h3 { margin:0; padding:14px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; }
+  .panel > h3 { cursor:pointer; user-select:none; display:flex; align-items:center; gap:8px; }
+  .panel > h3::before { content:'▾'; color:var(--muted); font-size:11px; flex:0 0 auto; }
+  .panel.collapsed > h3 { border-bottom:none; }
+  .panel.collapsed > h3::before { content:'▸'; }
+  .panel.collapsed > *:not(h3) { display:none !important; }
   .panel .pad { padding:16px 18px; }
 
   table { width:100%; border-collapse:collapse; font-size:13.5px; }
@@ -114,6 +119,12 @@ function renderShell(){
     <div id="tabBody"></div>`;
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => loadTab(t.dataset.tab)));
 }
+
+// Collapsible panels: click a panel header to fold/unfold its content (delegated, set up once).
+document.addEventListener('click', (e) => {
+  const h3 = e.target.closest('h3');
+  if (h3 && h3.parentElement && h3.parentElement.classList.contains('panel')) h3.parentElement.classList.toggle('collapsed');
+});
 
 function loadTab(tab){
   activeTab = tab;
@@ -237,6 +248,52 @@ async function renderUsage(){
       <div class="pad">${(u.byModel||[]).length
         ? `<table><thead><tr><th>Model</th><th style="width:140px">Total tokens</th><th style="width:100px">Queries</th><th style="width:120px">Avg/query</th></tr></thead><tbody>${u.byModel.map(m=>`<tr><td>${escapeHtml(m.model)}</td><td>${fmtN(m.totalTokens)}</td><td>${fmtN(m.queries)}</td><td>${fmtN(Math.round(m.totalTokens/Math.max(1,m.queries)))}</td></tr>`).join('')}</tbody></table>`
         : '<span class="muted">No token data yet (older queries may predate token tracking).</span>'}</div>
+    </div>
+    <div id="featUsage"><div class="muted" style="padding:8px 2px">Loading feature usage…</div></div>`;
+  renderFeatureUsage();
+}
+
+const FEAT_LABEL = { bugs:'🐞 БАГи', tasks:'🆕 Новые задачи', testing:'🧪 Тестирование задач', preplanning:'🧭 Pre-planning' };
+async function renderFeatureUsage(){
+  const fu = await fetch('/api/admin/feature-usage').then(r=>r.json()).catch(()=>null);
+  const mount = $('featUsage'); if (!mount) return;
+  if (!fu){ mount.innerHTML = `<div class="panel"><div class="pad muted">Feature usage unavailable.</div></div>`; return; }
+  const fwin = (title, w) => `
+    <div class="card">
+      <div class="k">${title}</div>
+      <div class="v">${fmtN(w.totalTokens)}<span style="font-size:13px;color:var(--muted)"> tok</span></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">${fmtN(w.requests)} requests · avg ${fmtN(w.avgTokens)}<br>in ${fmtN(w.promptTokens)} · out ${fmtN(w.completionTokens)}</div>
+    </div>`;
+  const lbl = (f) => FEAT_LABEL[f] || f;
+  mount.innerHTML = `
+    <div class="panel"><h3>Feature requests &amp; tokens</h3><div class="pad muted" style="border:none">Запросы на анализ задач, тестирование и дефекты (Bugs / Tasks / Testing / Pre-planning) с расходом токенов LLM.</div></div>
+    <div class="cards">
+      ${fwin('Today', fu.today)}
+      ${fwin('Last 7 days', fu.last7d)}
+      ${fwin('Last 30 days', fu.last30d)}
+      ${fwin('All time', fu.allTime)}
+    </div>
+    <div class="panel">
+      <h3>By feature (all time)</h3>
+      <div class="pad">${(fu.byFeature||[]).length
+        ? `<table><thead><tr><th>Feature</th><th style="width:110px">Requests</th><th style="width:140px">Total tokens</th><th style="width:110px">Avg</th><th style="width:160px">In / Out</th></tr></thead><tbody>${fu.byFeature.map(f=>`<tr><td>${escapeHtml(lbl(f.feature))}</td><td>${fmtN(f.requests)}</td><td>${fmtN(f.totalTokens)}</td><td>${fmtN(f.avgTokens)}</td><td class="muted">${fmtN(f.promptTokens)} / ${fmtN(f.completionTokens)}</td></tr>`).join('')}</tbody></table>`
+        : '<span class="muted">No feature requests logged yet.</span>'}</div>
+    </div>
+    <div class="panel">
+      <h3>Recent feature requests (${(fu.recent||[]).length})</h3>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>When</th><th>User</th><th>Feature</th><th>Action</th><th>Ref</th><th>Model</th><th style="width:90px">Tokens</th><th>St.</th></tr></thead>
+        <tbody>${(fu.recent||[]).map(r=>`<tr>
+          <td class="muted" style="white-space:nowrap">${new Date(r.createdAt).toLocaleString()}</td>
+          <td>${escapeHtml(r.userLabel||'—')}</td>
+          <td>${escapeHtml(lbl(r.feature))}</td>
+          <td class="muted">${escapeHtml(r.action||'—')}</td>
+          <td class="truncate">${escapeHtml(r.ref||'—')}</td>
+          <td class="muted" style="font-size:12px">${escapeHtml(r.model||'—')}</td>
+          <td>${r.totalTokens!=null?fmtN(r.totalTokens):'<span class="muted">—</span>'}</td>
+          <td>${r.status==='error'?'⚠️':'✓'}</td>
+        </tr>`).join('')||`<tr><td colspan="8" class="muted">No requests yet.</td></tr>`}</tbody>
+      </table></div>
     </div>`;
 }
 

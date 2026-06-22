@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { config } from './config.js';
 import { runRolePrompt } from './llm.js';
 import { requireAuth } from './auth.js';
+import { logFeatureUsage } from './usage.js';
 
 // ---------------------------------------------------------------------------
 // "Тестирование задач" (Task Testing). Given ONE Jira key, gather everything
@@ -333,6 +334,11 @@ export async function registerTestingApi(app: FastifyInstance) {
       stage(`🧪 статическое тестирование (роль QA, ${config.answerModel})…`);
       const prompt = buildPrompt(issue, branches, lang);
       const r = await runRolePrompt('qa.static_tester', prompt, config.answerModel, (t) => send('delta', { text: t }));
+      await logFeatureUsage({
+        userId: user.id, userLabel: user.name, feature: 'testing', action: 'report', ref: `${key} — ${issue.summary}`,
+        model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, totalTokens: r.totalTokens,
+        status: r.text && r.text.trim() ? 'ok' : 'error',
+      });
       if (!r.text || !r.text.trim()) throw new Error('LLM returned no report');
 
       send('result', {

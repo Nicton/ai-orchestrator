@@ -8,6 +8,7 @@ import { runRolePrompt, transcribeAudioFile, analyzeImages } from './llm.js';
 import { requireAuth } from './auth.js';
 import { getImage, getFile, putFile, storageReady } from './storage.js';
 import { prisma } from './db.js';
+import { logFeatureUsage } from './usage.js';
 
 // ---------------------------------------------------------------------------
 // "Новые задачи" — turn a free-form brief (typed / voice / images / files)
@@ -174,6 +175,8 @@ ${transcript}`;
     spec,
     descriptionWiki,
     tokens: r.totalTokens || null,
+    promptTokens: r.promptTokens || null,
+    completionTokens: r.completionTokens || null,
     model: r.model,
   };
 }
@@ -303,6 +306,10 @@ export async function registerTasksApi(app: FastifyInstance) {
         (m) => send('stage', { msg: m }),
         (t) => send('delta', { text: t }),
       );
+      await logFeatureUsage({
+        userId: user.id, userLabel: user.name, feature: 'tasks', action: 'chat', ref: out.summary,
+        model: out.model, promptTokens: out.promptTokens, completionTokens: out.completionTokens, totalTokens: out.tokens,
+      });
       send('result', { ...out, visionText });
       send('done', {});
     } catch (e: any) {

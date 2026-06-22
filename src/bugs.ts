@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { runRolePrompt, transcribeAudioFile } from './llm.js';
 import { requireAuth } from './auth.js';
 import { getImage, storageReady } from './storage.js';
+import { logFeatureUsage } from './usage.js';
 
 // ---------------------------------------------------------------------------
 // Bugs section: turn a free-form (typed or voice) defect description into a
@@ -134,7 +135,7 @@ ${rawText}`;
   const r = await runRolePrompt('qa.bug_writer', prompt, config.answerModel);
   if (!r.text || !r.text.trim()) throw new Error('LLM returned no analysis');
   const parsed = parseJsonLoose(r.text);
-  return { parsed, tokens: r.totalTokens || null, model: r.model };
+  return { parsed, tokens: r.totalTokens || null, promptTokens: r.promptTokens || null, completionTokens: r.completionTokens || null, model: r.model };
 }
 
 // Attach screenshots (already uploaded to MinIO) to a created Jira issue.
@@ -221,6 +222,10 @@ export async function registerBugsApi(app: FastifyInstance) {
       return reply.code(502).send({ error: `Analysis failed: ${String(e?.message || e).slice(0, 200)}` });
     }
     const p = analysis.parsed || {};
+    await logFeatureUsage({
+      userId: user.id, userLabel: user.name, feature: 'bugs', action: 'analyze', ref: p.summary || parsed.data.description.slice(0, 120),
+      model: analysis.model, promptTokens: analysis.promptTokens, completionTokens: analysis.completionTokens, totalTokens: analysis.tokens,
+    });
     // enrich duplicate matches with URLs from the candidate set
     const byKey = new Map(candidates.map((c) => [c.key, c]));
     const matches = (p.duplicate?.matches || []).map((m: any) => ({

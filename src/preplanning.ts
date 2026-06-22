@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { config } from './config.js';
 import { runRolePrompt } from './llm.js';
 import { requireAuth } from './auth.js';
+import { logFeatureUsage } from './usage.js';
 
 // ---------------------------------------------------------------------------
 // AI Pre-planning (Pre-planning Automation), per spec v1.0.
@@ -310,6 +311,9 @@ ${spec.slice(0, 4500)}`;
     analysis: parsed,
     jira: assembled,
     tokens: r.totalTokens || null,
+    promptTokens: r.promptTokens || null,
+    completionTokens: r.completionTokens || null,
+    model: r.model,
     statusWarning: /to.?do|backlog|open/i.test(t.status) ? null : `Ticket status is "${t.status}" (spec: process only "To Do" tickets)`,
   };
 }
@@ -337,6 +341,13 @@ export async function registerPreplanningApi(app: FastifyInstance) {
       try { return await analyzeOne(it.key, it.assignee); }
       catch (e: any) { return { key: it.key, error: String(e?.message || e).slice(0, 200) }; }
     }));
+    for (const r of results as any[]) {
+      await logFeatureUsage({
+        userId: user.id, userLabel: user.name, feature: 'preplanning', action: 'analyze', ref: `${r.key}${r.summary ? ` — ${r.summary}` : ''}`,
+        model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, totalTokens: r.tokens,
+        status: r.error ? 'error' : 'ok',
+      });
+    }
 
     const totalHours = results.reduce((s: number, r: any) => s + (r.analysis?.qaEstimateHours || hoursOf(r.jira?.originalEstimate || '') || 0), 0);
     const sprintWarning = totalHours > 80
@@ -378,6 +389,10 @@ export async function registerPreplanningApi(app: FastifyInstance) {
             (txt) => send('delta', { key: it.key, text: txt }),
           );
           results.push(r);
+          await logFeatureUsage({
+            userId: user.id, userLabel: user.name, feature: 'preplanning', action: 'analyze', ref: `${r.key}${r.summary ? ` — ${r.summary}` : ''}`,
+            model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, totalTokens: r.tokens,
+          });
           send('ticket', r);
         } catch (e: any) {
           const er = { key: it.key, error: String(e?.message || e).slice(0, 200) };

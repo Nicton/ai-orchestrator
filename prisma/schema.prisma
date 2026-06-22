@@ -656,6 +656,26 @@ model TaskDraft {
   @@index([userId, updatedAt])
 }
 
+// Лог LLM-операций фич (Bugs/Tasks/Testing/Pre-planning) с расходом токенов —
+// чтобы фиксировать запросы и токены в админке (помимо KnowledgeQuery).
+model FeatureUsage {
+  id               String   @id @default(cuid())
+  userId           String?
+  userLabel        String?
+  feature          String   // bugs | tasks | testing | preplanning
+  action           String?  // analyze | chat | report | create | …
+  ref              String?  // jira key / summary / краткое описание
+  model            String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  status           String   @default("ok") // ok | error
+  createdAt        DateTime @default(now())
+
+  @@index([feature, createdAt])
+  @@index([createdAt])
+}
+
 // Снапшот состояния качества (Quality Coverage Analytics) — для анализа динамики.
 model QualitySnapshot {
   id        String   @id @default(cuid())

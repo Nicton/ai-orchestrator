@@ -20,6 +20,7 @@ import { registerBugsApi } from './bugs.js';
 import { registerPreplanningApi } from './preplanning.js';
 import { registerTasksApi } from './tasks.js';
 import { registerTestingApi } from './testing.js';
+import { registerUsageApi } from './usage.js';
 import { loadGraphIntoDb } from './graphLoader.js';
 import { ensureBucket } from './storage.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
@@ -51,6 +52,7 @@ await registerBugsApi(app);
 await registerPreplanningApi(app);
 await registerTasksApi(app);
 await registerTestingApi(app);
+await registerUsageApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
