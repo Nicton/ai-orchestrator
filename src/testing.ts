@@ -149,6 +149,69 @@ async function branchDiff(repo: string, branch: string, onStage?: (m: string) =>
   };
 }
 
+// --- GitLab REST API path (prod-friendly: no clones/.git needed, just a token).
+// Set GITLAB_TOKEN (a read_api PAT) in env. Project paths are stable. ---
+function gitlabCfg() {
+  const token = String(process.env.GITLAB_TOKEN || '').trim();
+  const api = String(process.env.GITLAB_API || 'https://gitlab.com/api/v4').replace(/\/$/, '');
+  return { token, api, enabled: !!token };
+}
+const GITLAB_PROJECTS: Record<string, string> = {
+  'admin-app': 'shiptify/admin-app', 'ai-shared': 'shiptify/ai-shared', 'back-office': 'shiptify/apps/back-office',
+  'backend': 'shiptify/apps/main-app/backend', 'brinks': 'shiptify/apps/integrations/brinks', 'chat': 'shiptify/apps/chat',
+  'core-libs': 'shiptify/packages/core-libs', 'emailing': 'shiptify/emailing', 'frontend-mono': 'shiptify/apps/frontend-mono',
+  'frontend': 'shiptify/apps/main-app/frontend', 'generate': 'shiptify/apps/attachments/generate', 'identity': 'shiptify/apps/identity',
+  'integrations': 'shiptify/apps/integrations/integrations', 'main-app-automation': 'shiptify/tests/main-app-automation',
+  'maintain': 'shiptify/apps/db/maintain', 'microservices': 'shiptify/apps/microservices', 'migrations-bi': 'shiptify/apps/db/migrations-bi',
+  'migrations': 'shiptify/apps/db/migrations', 'mini-apps': 'shiptify/mini-apps', 'notifications': 'shiptify/apps/notifications',
+  'package-translations': 'shiptify/packages/package-translations', 'public-api-docs': 'shiptify/public-api-docs',
+  'public-api': 'shiptify/apps/public-api', 'run-local': 'shiptify/apps/run-local', 'stream-topics': 'shiptify/packages/stream-topics',
+  'testing-tools': 'shiptify/apps/integrations/testing-tools', 'translations': 'shiptify/packages/translations', 'ups': 'shiptify/apps/integrations/ups',
+};
+async function glFetch(apiPath: string): Promise<any> {
+  const { api, token } = gitlabCfg();
+  const res = await fetch(`${api}${apiPath}`, { headers: { 'PRIVATE-TOKEN': token } });
+  if (!res.ok) throw new Error(`GitLab ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+const enc = (p: string) => encodeURIComponent(p);
+
+// Find branches containing the key across all known GitLab projects (API search).
+async function discoverBranchesApi(key: string, onStage?: (m: string) => void): Promise<Array<{ repo: string; proj: string; branch: string }>> {
+  const found: Array<{ repo: string; proj: string; branch: string }> = [];
+  await Promise.all(Object.entries(GITLAB_PROJECTS).map(async ([repo, proj]) => {
+    try {
+      const branches = await glFetch(`/projects/${enc(proj)}/repository/branches?search=${encodeURIComponent(key)}&per_page=20`);
+      for (const b of branches || []) found.push({ repo, proj, branch: b.name });
+    } catch { /* project not accessible / no match */ }
+  }));
+  if (found.length) onStage?.(`🔀 найдены ветки: ${found.map((f) => `${f.repo}:${f.branch}`).join(', ')}`);
+  return found.slice(0, 6);
+}
+
+// Diff of a branch vs the project default branch via GitLab compare (merge-base based).
+async function branchDiffApi(repo: string, proj: string, branch: string, onStage?: (m: string) => void) {
+  onStage?.(`⬇️ diff ${repo}:${branch}…`);
+  let base = 'develop';
+  try { const pj = await glFetch(`/projects/${enc(proj)}`); base = pj.default_branch || 'develop'; } catch { /* keep default */ }
+  const cmp = await glFetch(`/projects/${enc(proj)}/repository/compare?from=${encodeURIComponent(base)}&to=${encodeURIComponent(branch)}&straight=false`);
+  const diffs = cmp?.diffs || [];
+  const DIFF_CAP = 16000;
+  let diffText = '';
+  let truncated = false;
+  for (const d of diffs) {
+    diffText += `diff --git a/${d.old_path} b/${d.new_path}\n${d.diff || ''}`;
+    if (diffText.length > DIFF_CAP) { diffText = diffText.slice(0, DIFF_CAP); truncated = true; break; }
+  }
+  return {
+    repo, branch, base,
+    commits: (cmp?.commits || []).map((c: any) => `${c.short_id || ''} ${c.title || ''}`.trim()).slice(0, 20),
+    stat: diffs.map((d: any) => ` ${d.new_path}`).join('\n'),
+    files: diffs.length,
+    diff: diffText, truncated,
+  };
+}
+
 const LANG_NAME: Record<string, string> = { fr: 'French', en: 'English', ru: 'Russian' };
 
 function buildPrompt(issue: any, branches: any[], lang: string) {
@@ -217,7 +280,10 @@ ${code}`;
 export async function registerTestingApi(app: FastifyInstance) {
   app.get('/api/testing/config', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
-    return reply.send({ jiraEnabled: jiraConfig().enabled, repos: codeRepos().length });
+    const gl = gitlabCfg();
+    // code source: GitLab API (prod-friendly) wins; else local git clones; else none
+    const codeSource = gl.enabled ? 'gitlab-api' : (codeRepos().length ? 'local-git' : 'none');
+    return reply.send({ jiraEnabled: jiraConfig().enabled, repos: codeRepos().length, gitlab: gl.enabled, codeSource });
   });
 
   const schema = z.object({ key: z.string().min(3).max(300), lang: z.enum(['fr', 'en', 'ru']).optional() });
@@ -245,14 +311,24 @@ export async function registerTestingApi(app: FastifyInstance) {
       const issue = await fetchIssue(key);
       stage(`🧩 связей: ${issue.links.length + issue.subtasks.length + (issue.parent ? 1 : 0)} · комментариев: ${issue.comments.length}`);
 
-      stage('🔎 поиск связанных веток в GitLab…');
-      const candidates = await discoverBranches(key, stage);
+      const useApi = gitlabCfg().enabled;
+      stage(`🔎 поиск связанных веток в GitLab (${useApi ? 'API' : 'локальный git'})…`);
       const branches: any[] = [];
-      for (const c of candidates) {
-        try { branches.push(await branchDiff(c.repo, c.branch, stage)); }
-        catch (e: any) { stage(`⚠️ ${c.repo}:${c.branch} — ${String(e?.message || e).slice(0, 120)}`); }
+      if (useApi) {
+        const candidates = await discoverBranchesApi(key, stage);
+        for (const c of candidates) {
+          try { branches.push(await branchDiffApi(c.repo, c.proj, c.branch, stage)); }
+          catch (e: any) { stage(`⚠️ ${c.repo}:${c.branch} — ${String(e?.message || e).slice(0, 120)}`); }
+        }
+        if (!candidates.length) stage('ℹ️ ветки по ключу не найдены в GitLab — отчёт по Jira');
+      } else {
+        const candidates = await discoverBranches(key, stage);
+        for (const c of candidates) {
+          try { branches.push(await branchDiff(c.repo, c.branch, stage)); }
+          catch (e: any) { stage(`⚠️ ${c.repo}:${c.branch} — ${String(e?.message || e).slice(0, 120)}`); }
+        }
+        if (!candidates.length) stage('ℹ️ ветки по ключу не найдены (нет локальных git-репозиториев/доступа) — отчёт по Jira');
       }
-      if (!candidates.length) stage('ℹ️ ветки по ключу не найдены (или git/доступ недоступен в этой среде) — отчёт по Jira');
 
       stage(`🧪 статическое тестирование (роль QA, ${config.answerModel})…`);
       const prompt = buildPrompt(issue, branches, lang);
