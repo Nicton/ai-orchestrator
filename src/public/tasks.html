@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="fr">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Searchify — Новые задачи</title>
+<title>Searchify — Tasks</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="stylesheet" href="/theme.css" />
 <script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -36,7 +36,6 @@
   .filechip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; font-size:13px; background:var(--bg-soft); }
   .hidden { display:none !important; }
 
-  /* two-pane work screen */
   .split { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
   @media (max-width:900px){ .split { grid-template-columns:1fr; } }
   .col { display:flex; flex-direction:column; }
@@ -74,39 +73,39 @@
 <script src="/nav.js"></script>
 
 <div class="wrap">
-  <h1>🆕 Новые задачи</h1>
-  <p class="sub">Опишите идею (текстом, голосом, со скриншотами и файлами). Searchify проведёт анализ, задаст уточняющие вопросы и соберёт описание задачи по шаблону — затем одной кнопкой заведёт задачу в Jira.</p>
+  <h1 data-i18n="h1">🆕 New tasks</h1>
+  <p class="sub" data-i18n="sub"></p>
 
   <div class="panel" id="configWarn" style="display:none">
-    <div class="pad muted">⚠️ Jira не настроена на сервере (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Создание задач недоступно.</div>
+    <div class="pad muted" data-i18n="configWarn"></div>
   </div>
 
   <!-- ============ SCREEN 1: INPUT ============ -->
   <div id="inputScreen">
     <div class="panel">
-      <h3>1. Что за задача?</h3>
+      <h3 data-i18n="step1"></h3>
       <div class="pad">
         <div class="row" style="margin-bottom:12px">
           <div style="flex:0 0 240px">
-            <label class="fld">Проект Jira</label>
+            <label class="fld" data-i18n="projectLbl"></label>
             <select id="project"></select>
           </div>
           <div style="flex:0 0 auto">
-            <label class="fld">Голос (любой язык)</label>
-            <button class="ghost" id="recBtn">🎙️ Записать голос</button>
+            <label class="fld" data-i18n="voiceLbl"></label>
+            <button class="ghost" id="recBtn"></button>
           </div>
         </div>
-        <label class="fld">Описание идеи / задачи</label>
-        <textarea id="desc" rows="6" placeholder="Что нужно сделать и зачем? Контекст, проблема, желаемый результат… Можно кратко — недостающее уточним в чате."></textarea>
+        <label class="fld" data-i18n="descLbl"></label>
+        <textarea id="desc" rows="6"></textarea>
         <div class="row" style="margin-top:10px">
-          <div class="drop" id="imgDrop" style="flex:1">🖼 Скриншоты (клик или Ctrl+V)</div>
-          <div class="drop" id="fileDrop" style="flex:1">📎 Файлы (pdf, docx, xlsx, логи…)</div>
+          <div class="drop" id="imgDrop" style="flex:1" data-i18n="imgDrop"></div>
+          <div class="drop" id="fileDrop" style="flex:1" data-i18n="fileDrop"></div>
         </div>
         <input type="file" id="imgInput" accept="image/*" multiple class="hidden" />
         <input type="file" id="fileInput" multiple class="hidden" />
         <div class="imgrow" id="thumbs"></div>
         <div class="imgrow" id="filechips"></div>
-        <div style="margin-top:16px"><button class="pri" id="analyzeBtn">🔍 Проанализировать</button> <span class="muted" id="analyzeStatus"></span></div>
+        <div style="margin-top:16px"><button class="pri" id="analyzeBtn"></button> <span class="muted" id="analyzeStatus"></span></div>
         <div class="err" id="inErr"></div>
       </div>
     </div>
@@ -114,37 +113,35 @@
 
   <!-- ============ SCREEN 2: WORK (chat | spec) ============ -->
   <div id="workScreen" class="hidden">
-    <div style="margin-bottom:12px"><button class="ghost" id="backBtn">← Изменить ввод</button></div>
+    <div style="margin-bottom:12px"><button class="ghost" id="backBtn"></button></div>
     <div class="split">
-      <!-- LEFT: chat -->
       <div class="panel col">
-        <h3>💬 Уточняющие вопросы</h3>
+        <h3 data-i18n="chatTitle"></h3>
         <div class="chat">
           <div class="msgs" id="msgs"></div>
           <div class="stagelog" id="stageLog"></div>
           <pre class="llmlog hidden" id="llmLog"></pre>
           <div class="composer">
-            <button class="ghost" id="chatRecBtn" title="Голосом" style="padding:9px 11px">🎙️</button>
-            <textarea id="answer" rows="1" placeholder="Ответьте на вопросы или уточните…"></textarea>
-            <button class="pri" id="sendBtn">Отправить</button>
+            <button class="ghost" id="chatRecBtn" title="Voice" style="padding:9px 11px">🎙️</button>
+            <textarea id="answer" rows="1"></textarea>
+            <button class="pri" id="sendBtn"></button>
           </div>
         </div>
       </div>
-      <!-- RIGHT: spec -->
       <div class="panel col">
-        <h3>📋 Описание задачи для Jira <span id="readyBadge"></span></h3>
+        <h3><span data-i18n="specTitle"></span> <span id="readyBadge"></span></h3>
         <div class="specbox">
-          <div style="margin-bottom:10px"><label class="fld">Заголовок (Summary)</label><input type="text" id="summary" /></div>
-          <div class="spec" id="specRender"><p class="muted">Спека формируется по мере диалога…</p></div>
+          <div style="margin-bottom:10px"><label class="fld" data-i18n="summaryLbl"></label><input type="text" id="summary" /></div>
+          <div class="spec" id="specRender"><p class="muted" data-i18n="specPlaceholder"></p></div>
           <details class="editwiki">
-            <summary>✏️ Редактировать итоговое описание (Jira wiki)</summary>
+            <summary data-i18n="editWiki"></summary>
             <textarea id="descWiki" rows="14" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px;margin-top:6px"></textarea>
           </details>
-          <div style="margin-top:10px"><label class="fld">Labels (через запятую, опц.)</label><input type="text" id="labels" /></div>
+          <div style="margin-top:10px"><label class="fld" data-i18n="labelsLbl"></label><input type="text" id="labels" /></div>
         </div>
         <div class="pad" style="border-top:1px solid var(--line)">
           <div class="pillrow">
-            <button class="pri go" id="createBtn">✅ Отправить задачу в Jira</button>
+            <button class="pri go" id="createBtn"></button>
             <span class="muted" id="createStatus"></span>
           </div>
           <div class="muted" style="margin-top:8px" id="authorNote"></div>
@@ -160,17 +157,105 @@
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// ---------- i18n (chat UI in chosen language; final spec stays English) ----------
+const L = (window.SearchifyI18N && window.SearchifyI18N.getLang()) || 'fr';
+document.documentElement.lang = L;
+const I18N = {
+  fr: {
+    title:'Searchify — Nouvelles tâches', h1:'🆕 Nouvelles tâches',
+    sub:"Décrivez votre idée (texte, voix, captures et fichiers). Searchify analyse, pose des questions de clarification et rédige la tâche selon le modèle — puis crée la tâche dans Jira en un clic. Les exigences finales sont rédigées en anglais.",
+    configWarn:'⚠️ Jira n’est pas configuré sur le serveur (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). La création de tâches est indisponible.',
+    step1:'1. De quoi s’agit-il ?', projectLbl:'Projet Jira', voiceLbl:'Voix (toute langue)',
+    recStart:'🎙️ Enregistrer', recStop:'⏹ Arrêter', descLbl:'Description de l’idée / tâche',
+    descPh:'Que faut-il faire et pourquoi ? Contexte, problème, résultat attendu… Vous pouvez rester bref — on précisera dans le chat.',
+    imgDrop:'🖼 Captures (clic ou Ctrl+V)', fileDrop:'📎 Fichiers (pdf, docx, xlsx, logs…)',
+    analyze:'🔍 Analyser', back:'← Modifier la saisie', chatTitle:'💬 Questions de clarification',
+    answerPh:'Répondez aux questions ou précisez…', send:'Envoyer',
+    specTitle:'📋 Description de la tâche pour Jira (en anglais)', summaryLbl:'Titre (Summary)',
+    specPlaceholder:'La spécification se construit au fil du dialogue…',
+    editWiki:'✏️ Modifier la description finale (Jira wiki)', labelsLbl:'Labels (séparés par des virgules, opt.)',
+    create:'✅ Envoyer la tâche dans Jira', author:'Auteur de la tâche indiqué dans la description : ',
+    ready:'✓ prêt à créer', draft:'brouillon', details:'Details',
+    recognizing:'Reconnaissance vocale…', analyzing:'analyse…', creating:'création dans Jira…',
+    descShort:'Décrivez la tâche plus en détail', titleShort:'Renseignez le titre',
+    descEmpty:'Description vide — menez le dialogue', noMic:'Pas d’accès au micro', netErr:'Réseau indisponible',
+    imgBig:'Image supérieure à 10 Mo', fileBig:'Fichier supérieur à 30 Mo', uploadErr:'Échec du téléversement',
+    recognizeErr:'Échec de la reconnaissance', analyzeErr:'Erreur d’analyse', createErr:'Échec de la création',
+    jiraOff:'Jira n’est pas configuré', taskCreated:'Tâche créée', attached:'pièces jointes',
+    thinking:'…', done:'Terminé.',
+  },
+  en: {
+    title:'Searchify — New tasks', h1:'🆕 New tasks',
+    sub:'Describe your idea (text, voice, screenshots and files). Searchify analyses it, asks clarifying questions and drafts the task by template — then files a Jira task in one click. Final requirements are written in English.',
+    configWarn:'⚠️ Jira is not configured on the server (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Task creation is unavailable.',
+    step1:'1. What is the task?', projectLbl:'Jira project', voiceLbl:'Voice (any language)',
+    recStart:'🎙️ Record voice', recStop:'⏹ Stop', descLbl:'Idea / task description',
+    descPh:'What needs doing and why? Context, problem, desired outcome… Keep it short — we’ll clarify in the chat.',
+    imgDrop:'🖼 Screenshots (click or Ctrl+V)', fileDrop:'📎 Files (pdf, docx, xlsx, logs…)',
+    analyze:'🔍 Analyse', back:'← Edit input', chatTitle:'💬 Clarifying questions',
+    answerPh:'Answer the questions or add detail…', send:'Send',
+    specTitle:'📋 Task description for Jira (English)', summaryLbl:'Title (Summary)',
+    specPlaceholder:'The spec builds up as the dialogue progresses…',
+    editWiki:'✏️ Edit the final description (Jira wiki)', labelsLbl:'Labels (comma-separated, opt.)',
+    create:'✅ Send task to Jira', author:'Task author shown in the description: ',
+    ready:'✓ ready to file', draft:'draft', details:'Details',
+    recognizing:'Transcribing…', analyzing:'analysing…', creating:'creating in Jira…',
+    descShort:'Describe the task in more detail', titleShort:'Fill in the title',
+    descEmpty:'Description is empty — run the dialogue', noMic:'No microphone access', netErr:'Network unavailable',
+    imgBig:'Image larger than 10 MB', fileBig:'File larger than 30 MB', uploadErr:'Upload failed',
+    recognizeErr:'Transcription failed', analyzeErr:'Analysis error', createErr:'Could not create',
+    jiraOff:'Jira is not configured', taskCreated:'Task created', attached:'attachments',
+    thinking:'…', done:'Done.',
+  },
+  ru: {
+    title:'Searchify — Новые задачи', h1:'🆕 Новые задачи',
+    sub:'Опишите идею (текстом, голосом, со скриншотами и файлами). Searchify проведёт анализ, задаст уточняющие вопросы и соберёт описание задачи по шаблону — затем одной кнопкой заведёт задачу в Jira. Итоговые требования — на английском.',
+    configWarn:'⚠️ Jira не настроена на сервере (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Создание задач недоступно.',
+    step1:'1. Что за задача?', projectLbl:'Проект Jira', voiceLbl:'Голос (любой язык)',
+    recStart:'🎙️ Записать голос', recStop:'⏹ Остановить', descLbl:'Описание идеи / задачи',
+    descPh:'Что нужно сделать и зачем? Контекст, проблема, желаемый результат… Можно кратко — недостающее уточним в чате.',
+    imgDrop:'🖼 Скриншоты (клик или Ctrl+V)', fileDrop:'📎 Файлы (pdf, docx, xlsx, логи…)',
+    analyze:'🔍 Проанализировать', back:'← Изменить ввод', chatTitle:'💬 Уточняющие вопросы',
+    answerPh:'Ответьте на вопросы или уточните…', send:'Отправить',
+    specTitle:'📋 Описание задачи для Jira (на английском)', summaryLbl:'Заголовок (Summary)',
+    specPlaceholder:'Спека формируется по мере диалога…',
+    editWiki:'✏️ Редактировать итоговое описание (Jira wiki)', labelsLbl:'Labels (через запятую, опц.)',
+    create:'✅ Отправить задачу в Jira', author:'Автор задачи будет указан в описании: ',
+    ready:'✓ готово к заведению', draft:'черновик', details:'Details',
+    recognizing:'Распознаю речь…', analyzing:'анализ…', creating:'создаю в Jira…',
+    descShort:'Опишите задачу подробнее', titleShort:'Заполните заголовок',
+    descEmpty:'Описание пустое — проведите диалог', noMic:'Нет доступа к микрофону', netErr:'Сеть недоступна',
+    imgBig:'Изображение больше 10 МБ', fileBig:'Файл больше 30 МБ', uploadErr:'Не удалось загрузить',
+    recognizeErr:'Не удалось распознать', analyzeErr:'Ошибка анализа', createErr:'Не удалось создать',
+    jiraOff:'Jira не настроена', taskCreated:'Задача создана', attached:'вложений',
+    thinking:'…', done:'Готово.',
+  },
+};
+function t(k){ return (I18N[L] && I18N[L][k]) || I18N.en[k] || k; }
+function applyLang(){
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.getAttribute('data-i18n')); });
+  $('desc').placeholder = t('descPh');
+  $('answer').placeholder = t('answerPh');
+  $('recBtn').textContent = t('recStart');
+  $('analyzeBtn').textContent = t('analyze');
+  $('backBtn').textContent = t('back');
+  $('sendBtn').textContent = t('send');
+  $('createBtn').textContent = t('create');
+}
+
 let me=null, cfgEnabled=false;
-let images=[], files=[]; // files: [{key,name}]
-let messages=[];         // running transcript {role,content}
+let images=[], files=[];
+let messages=[];
 let visionText='';
 let descEdited=false, busy=false;
 let mediaRec=null, recChunks=[], recTarget='desc';
 
 async function boot(){
+  applyLang();
   const r = await fetch('/api/auth/me'); if (!r.ok){ location.href='/login'; return; }
   me = (await r.json()).user;
-  $('authorNote').textContent = 'Автор задачи будет указан в описании: ' + (me.name || me.email || '');
+  $('authorNote').textContent = t('author') + (me.name || me.email || '');
   const cfg = await fetch('/api/tasks/config').then(r=>r.json()).catch(()=>({enabled:false,projects:[]}));
   cfgEnabled = !!cfg.enabled;
   if (!cfg.enabled){ $('configWarn').style.display=''; $('analyzeBtn').disabled=true; }
@@ -185,24 +270,24 @@ $('imgInput').addEventListener('change', e=>{ for(const f of e.target.files) upl
 $('fileInput').addEventListener('change', e=>{ for(const f of e.target.files) uploadFile(f); e.target.value=''; });
 window.addEventListener('paste', e=>{ for(const it of (e.clipboardData?.items||[])) if(it.type.startsWith('image/')){ const f=it.getAsFile(); if(f) uploadImage(f); } });
 async function uploadImage(file){
-  if (file.size > 10*1024*1024){ $('inErr').textContent='Изображение больше 10 МБ'; return; }
+  if (file.size > 10*1024*1024){ $('inErr').textContent=t('imgBig'); return; }
   const fd=new FormData(); fd.append('image', file);
   try { const r=await fetch('/api/knowledge/upload-image',{method:'POST',body:fd}); const d=await r.json();
-    if(!r.ok){ $('inErr').textContent=d.error||'Не удалось загрузить'; return; }
+    if(!r.ok){ $('inErr').textContent=d.error||t('uploadErr'); return; }
     images.push(d.key);
     $('thumbs').insertAdjacentHTML('beforeend', `<img class="thumb" src="${URL.createObjectURL(file)}" title="${esc(file.name)}" />`);
-  } catch(_){ $('inErr').textContent='Сеть недоступна'; }
+  } catch(_){ $('inErr').textContent=t('netErr'); }
 }
 async function uploadFile(file){
-  if (file.size > 30*1024*1024){ $('inErr').textContent='Файл больше 30 МБ'; return; }
+  if (file.size > 30*1024*1024){ $('inErr').textContent=t('fileBig'); return; }
   const fd=new FormData(); fd.append('file', file);
   const chip=document.createElement('span'); chip.className='filechip'; chip.innerHTML=`<span class="spin"></span> ${esc(file.name)}`;
   $('filechips').appendChild(chip);
   try { const r=await fetch('/api/tasks/upload-file',{method:'POST',body:fd}); const d=await r.json();
-    if(!r.ok){ chip.remove(); $('inErr').textContent=d.error||'Не удалось загрузить файл'; return; }
+    if(!r.ok){ chip.remove(); $('inErr').textContent=d.error||t('uploadErr'); return; }
     files.push({key:d.key,name:d.name||file.name});
     chip.innerHTML=`📎 ${esc(d.name||file.name)}`;
-  } catch(_){ chip.remove(); $('inErr').textContent='Сеть недоступна'; }
+  } catch(_){ chip.remove(); $('inErr').textContent=t('netErr'); }
 }
 
 // ---------- voice ----------
@@ -217,22 +302,21 @@ function wireVoice(btnId, target){
       mediaRec.onstop = async ()=>{
         stream.getTracks().forEach(t=>t.stop());
         $(btnId).classList.remove('rec-on');
-        const lbl = btnId==='recBtn' ? '🎙️ Записать голос' : '🎙️';
-        $(btnId).textContent = lbl;
+        $(btnId).textContent = btnId==='recBtn' ? t('recStart') : '🎙️';
         const statusEl = recTarget==='desc' ? $('analyzeStatus') : $('stageLog');
-        statusEl.textContent='Распознаю речь…';
+        statusEl.textContent=t('recognizing');
         const blob=new Blob(recChunks,{type:'audio/webm'}); const fd=new FormData(); fd.append('audio',blob,'voice.webm');
         try { const r=await fetch('/api/tasks/transcribe',{method:'POST',body:fd}); const d=await r.json();
           statusEl.textContent='';
-          if(!r.ok){ ( recTarget==='desc'?$('inErr'):$('prErr') ).textContent=d.error||'Не удалось распознать'; return; }
+          if(!r.ok){ ( recTarget==='desc'?$('inErr'):$('prErr') ).textContent=d.error||t('recognizeErr'); return; }
           const box = recTarget==='desc' ? $('desc') : $('answer');
           box.value = (box.value?box.value+'\n':'') + (d.text||'');
           if (recTarget==='answer') autoGrow(box);
         } catch(_){ statusEl.textContent=''; }
       };
       mediaRec.start();
-      $(btnId).classList.add('rec-on'); $(btnId).textContent = btnId==='recBtn' ? '⏹ Остановить' : '⏹';
-    } catch(_){ $('inErr').textContent='Нет доступа к микрофону'; }
+      $(btnId).classList.add('rec-on'); $(btnId).textContent = btnId==='recBtn' ? t('recStop') : '⏹';
+    } catch(_){ $('inErr').textContent=t('noMic'); }
   });
 }
 wireVoice('recBtn','desc'); wireVoice('chatRecBtn','answer');
@@ -241,9 +325,9 @@ wireVoice('recBtn','desc'); wireVoice('chatRecBtn','answer');
 $('analyzeBtn').addEventListener('click', ()=>{
   $('inErr').textContent='';
   const desc=$('desc').value.trim();
-  if (desc.length<5){ $('inErr').textContent='Опишите задачу подробнее'; return; }
+  if (desc.length<5){ $('inErr').textContent=t('descShort'); return; }
   let brief = desc;
-  if (files.length) brief += `\n\n(Приложены файлы: ${files.map(f=>f.name).join(', ')})`;
+  if (files.length) brief += `\n\n(Attached files: ${files.map(f=>f.name).join(', ')})`;
   messages = [{role:'user', content:brief}];
   $('inputScreen').classList.add('hidden'); $('workScreen').classList.remove('hidden');
   $('msgs').innerHTML=''; addBubble('user', desc);
@@ -281,13 +365,13 @@ function addQuestions(qs){
 // ---------- SSE chat round ----------
 async function runChat(){
   busy=true; $('sendBtn').disabled=true; $('analyzeStatus').textContent='';
-  $('stageLog').innerHTML='<span class="spin"></span> анализ…';
+  $('stageLog').innerHTML='<span class="spin"></span> '+t('analyzing');
   $('llmLog').textContent=''; let llmBuf='';
-  const thinking = addBubble('bot', '…');
+  const thinking = addBubble('bot', t('thinking'));
   try {
     const res = await fetch('/api/tasks/chat/stream',{ method:'POST', headers:{'content-type':'application/json'},
-      body: JSON.stringify({ messages, images, files:files.map(f=>f.key), fileNames:files.map(f=>f.name), visionText: visionText||undefined }) });
-    if (!res.ok || !res.body){ const t=await res.text().catch(()=>''); thinking.textContent='⚠️ '+(t||'Ошибка анализа'); throw new Error('http'); }
+      body: JSON.stringify({ messages, images, files:files.map(f=>f.key), fileNames:files.map(f=>f.name), visionText: visionText||undefined, lang: L }) });
+    if (!res.ok || !res.body){ const tx=await res.text().catch(()=>''); thinking.textContent='⚠️ '+(tx||t('analyzeErr')); throw new Error('http'); }
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
     while(true){
       const {value,done}=await reader.read(); if(done) break;
@@ -299,21 +383,21 @@ async function runChat(){
         if(ev==='stage'){ $('stageLog').innerHTML='<span class="spin"></span> '+esc(data.msg||''); }
         else if(ev==='delta'){ llmBuf+=data.text||''; $('llmLog').classList.remove('hidden'); $('llmLog').textContent=llmBuf; $('llmLog').scrollTop=$('llmLog').scrollHeight; }
         else if(ev==='result'){ result=data; }
-        else if(ev==='error'){ thinking.textContent='⚠️ '+(data.message||'Ошибка'); }
+        else if(ev==='error'){ thinking.textContent='⚠️ '+(data.message||t('analyzeErr')); }
       }
     }
     if(result){
       if(result.visionText) visionText=result.visionText;
-      thinking.textContent = result.reply || 'Готово.';
+      thinking.textContent = result.reply || t('done');
       messages.push({role:'assistant', content: result.reply || ''});
       addQuestions(result.questions);
       renderSpec(result);
     }
-  } catch(_){ if(thinking.textContent==='…') thinking.textContent='⚠️ Сеть недоступна'; }
+  } catch(_){ if(thinking.textContent===t('thinking')) thinking.textContent='⚠️ '+t('netErr'); }
   finally { busy=false; $('sendBtn').disabled=false; $('stageLog').textContent=''; }
 }
 
-// ---------- right pane ----------
+// ---------- right pane (spec headings stay English — final requirements are English) ----------
 function listHtml(arr, ordered){ if(!arr||!arr.length) return '<p class="muted">—</p>';
   const items=arr.map(x=>`<li>${esc(x)}</li>`).join(''); return ordered?`<ol>${items}</ol>`:`<ul>${items}</ul>`; }
 function renderSpec(r){
@@ -327,29 +411,29 @@ function renderSpec(r){
   html+=`<h2>Out of Scope</h2>${listHtml(s.outScope,false)}`;
   html+=`<h2>Definition of Done (DoD)</h2><ul class="dod">${dod||'<li>☐ —</li>'}</ul>`;
   if (s.references&&s.references.length) html+=`<h2>References</h2>${listHtml(s.references,false)}`;
-  if (s.details) html+=`<h2>Детали</h2><p>${esc(s.details)}</p>`;
+  if (s.details) html+=`<h2>${esc(t('details'))}</h2><p>${esc(s.details)}</p>`;
   $('specRender').innerHTML=html;
   if (!descEdited) $('descWiki').value = r.descriptionWiki||'';
-  $('readyBadge').innerHTML = r.ready ? '<span class="badge ready">✓ готово к заведению</span>' : '<span class="badge">черновик</span>';
+  $('readyBadge').innerHTML = r.ready ? `<span class="badge ready">${esc(t('ready'))}</span>` : `<span class="badge">${esc(t('draft'))}</span>`;
 }
 $('descWiki').addEventListener('input', ()=>{ descEdited=true; });
 
 // ---------- create ----------
 $('createBtn').addEventListener('click', async ()=>{
   $('prErr').textContent='';
-  if (!cfgEnabled){ $('prErr').textContent='Jira не настроена'; return; }
+  if (!cfgEnabled){ $('prErr').textContent=t('jiraOff'); return; }
   const summary=$('summary').value.trim();
   const descriptionWiki=$('descWiki').value.trim();
-  if (summary.length<3){ $('prErr').textContent='Заполните заголовок'; return; }
-  if (descriptionWiki.length<5){ $('prErr').textContent='Описание пустое — проведите диалог'; return; }
+  if (summary.length<3){ $('prErr').textContent=t('titleShort'); return; }
+  if (descriptionWiki.length<5){ $('prErr').textContent=t('descEmpty'); return; }
   const body={ project:$('project').value, summary, descriptionWiki,
     labels:$('labels').value.split(',').map(s=>s.trim()).filter(Boolean),
     images, files:files.map(f=>f.key) };
-  const btn=$('createBtn'); btn.disabled=true; $('createStatus').innerHTML='<span class="spin"></span> создаю в Jira…';
+  const btn=$('createBtn'); btn.disabled=true; $('createStatus').innerHTML='<span class="spin"></span> '+t('creating');
   try { const r=await fetch('/api/tasks/create',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json();
-    if(!r.ok){ $('prErr').textContent=(typeof d.error==='string'?d.error:'Не удалось создать'); return; }
-    $('createdOut').innerHTML=`<div class="created">✅ Задача создана (${esc(d.issueType||'Task')}): <a href="${esc(d.url)}" target="_blank"><b>${esc(d.key)}</b></a>${d.attached?` · приложено вложений: ${d.attached}`:''}</div>`;
-  } catch(_){ $('prErr').textContent='Сеть недоступна'; }
+    if(!r.ok){ $('prErr').textContent=(typeof d.error==='string'?d.error:t('createErr')); return; }
+    $('createdOut').innerHTML=`<div class="created">✅ ${esc(t('taskCreated'))} (${esc(d.issueType||'Task')}): <a href="${esc(d.url)}" target="_blank"><b>${esc(d.key)}</b></a>${d.attached?` · ${esc(t('attached'))}: ${d.attached}`:''}</div>`;
+  } catch(_){ $('prErr').textContent=t('netErr'); }
   finally { btn.disabled=false; $('createStatus').textContent=''; }
 });
 

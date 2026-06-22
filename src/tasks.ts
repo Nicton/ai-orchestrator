@@ -107,13 +107,17 @@ function assembleWiki(spec: any, summary: string): string {
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
 
+const LANG_NAME: Record<string, string> = { fr: 'French', en: 'English', ru: 'Russian' };
+
 async function runTaskChat(
   messages: ChatMsg[],
   visionText: string,
   fileNames: string[],
+  lang: string,
   onStage?: (m: string) => void,
   onDelta?: (t: string) => void,
 ) {
+  const replyLang = LANG_NAME[lang] || 'French';
   const transcript = messages.map((m) => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}: ${m.content}`).join('\n\n');
   const attach = [
     visionText ? `Attached images (extracted by vision):\n${visionText}` : '',
@@ -124,7 +128,7 @@ async function runTaskChat(
 
 Conduct a short dialogue. On EVERY turn return the best spec you can with the information so far (fill gaps with explicit "(to be confirmed)" placeholders rather than inventing facts). Ask follow-up questions only while they materially change the spec; once you have enough to file a solid task, set "ready": true and ask no more.
 
-Reply to the user IN THE SAME LANGUAGE they used (most often Russian). Write the SPEC CONTENT in English (professional Jira convention); keep section semantics exactly as the template below.
+Write your conversational "reply" in ${replyLang}. ALWAYS write the SPEC CONTENT (summary + every spec field) in ENGLISH — the final requirements that land in Jira must be English regardless of the chat language. Keep section semantics exactly as the template below.
 
 Return ONLY a JSON object (no prose, no code fences):
 {
@@ -268,6 +272,7 @@ export async function registerTasksApi(app: FastifyInstance) {
     files: z.array(z.string().min(1).max(300)).max(20).optional(),
     fileNames: z.array(z.string().max(200)).max(20).optional(),
     visionText: z.string().max(20000).optional(),
+    lang: z.enum(['fr', 'en', 'ru']).optional(),
   });
 
   // Streaming clarifying dialogue (SSE): stage + live LLM delta, then a final
@@ -276,7 +281,7 @@ export async function registerTasksApi(app: FastifyInstance) {
     const user = await requireAuth(req, reply); if (!user) return;
     const parsed = chatSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const { messages, images = [], fileNames = [] } = parsed.data;
+    const { messages, images = [], fileNames = [], lang = 'fr' } = parsed.data;
 
     reply.hijack();
     const raw = reply.raw;
@@ -293,7 +298,7 @@ export async function registerTasksApi(app: FastifyInstance) {
         visionText = await visionFromImages(images, firstUser);
       }
       const out = await runTaskChat(
-        messages, visionText, fileNames,
+        messages, visionText, fileNames, lang,
         (m) => send('stage', { msg: m }),
         (t) => send('delta', { text: t }),
       );

@@ -69,6 +69,12 @@ html[data-theme="light"] {
   display: inline-flex; align-items: center; justify-content: center; line-height: 1;
 }
 .app-nav .theme-toggle:hover { background: var(--bg-soft); }
+.app-nav .lang-select {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  height: 34px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
+  padding: 0 6px; margin-right: 4px;
+}
+.app-nav .lang-select:hover { background: var(--bg-soft); }
 @media (max-width: 720px) {
   .app-nav { padding: 8px 12px; gap: 2px; }
   .app-nav .who { display: none; }

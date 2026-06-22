@@ -72,7 +72,7 @@
   </div>
 </div>
 <script>
-const GLANG = (() => { try { const l = localStorage.getItem('searchify_lang'); return ['ru','en','fr'].includes(l) ? l : 'ru'; } catch { return 'ru'; } })();
+const GLANG = (() => { try { const l = localStorage.getItem('searchify_lang'); return ['ru','en','fr'].includes(l) ? l : 'fr'; } catch { return 'fr'; } })();
 const GI18N = {
   ru: { search:'Найти узел…', allDomains:'Все домены', risks:'⚠ Риски', risksTitle:'Подсветить узлы, где знание и реализация могут расходиться (icebox/partial/not-implemented) либо изолированные узлы. Клик раскрывает список.', relayout:'↻ Раскладка', back:'← Поиск', loading:'Загрузка графа…', layouting:'расчёт раскладки…', hint:'колесо — зум · тяни фон — сдвиг · тяни узел — двигать · клик — связи', sideTitle:'Граф знаний проекта', sideDesc:'Силовой граф: узлы расталкиваются, связи притягивают. Размер = охват/глубина, цвет = тип/статус. Розовые рёбра — кросс-модульные.', legendTitle:'Что означают типы узлов', chain:'Цепочка трассировки: <b>Требование → Спека → Дока/Код</b>, опубликовано в <b>Confluence</b>. Слои включаются чипами вверху.',
     types:{module:'Модули',area:'Области',spec:'Спека',feature:'Фичи',modal:'Модалки',screen:'Экраны',document:'Доки',code_file:'Код',requirement:'Требования',confluence:'Confluence',api:'API'},

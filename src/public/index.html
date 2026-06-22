@@ -1076,7 +1076,7 @@ $('menuChangePw').addEventListener('click', () => openChangePassword());
 // SEARCH
 // ===================================================================
 let pendingInputMode = 'text';
-let preferredAnswerLanguage = (() => { try { return localStorage.getItem('searchify_lang') || 'ru'; } catch(_) { return 'ru'; } })();
+let preferredAnswerLanguage = (() => { try { return localStorage.getItem('searchify_lang') || 'fr'; } catch(_) { return 'fr'; } })();
 let voiceCountdownTimer = null;
 let voiceWorkflowStage = 'idle';
 let voiceAutoSubmitPending = false;

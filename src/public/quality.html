@@ -104,7 +104,7 @@
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-const QLANG=(()=>{ try{ return localStorage.getItem('searchify_lang')||'ru'; }catch(_){ return 'ru'; } })();
+const QLANG=(()=>{ try{ return localStorage.getItem('searchify_lang')||'fr'; }catch(_){ return 'fr'; } })();
 const QI18N={
   ru:{ subtitle:'единый движок · 3 представления', back:'← Поиск', graph:'Graph',
     layersNote:'Слои покрытия (кликом отключайте с конца — 100% пересчитается):',
