@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { runRolePrompt, transcribeAudioFile, analyzeImages } from './llm.js';
 import { requireAuth } from './auth.js';
 import { getImage, getFile, putFile, storageReady } from './storage.js';
+import { prisma } from './db.js';
 
 // ---------------------------------------------------------------------------
 // "Новые задачи" — turn a free-form brief (typed / voice / images / files)
@@ -312,6 +313,86 @@ export async function registerTasksApi(app: FastifyInstance) {
     }
   });
 
+  // --- Task drafts: save the dialogue + spec so the user can resume later. ---
+  const saveSchema = z.object({
+    id: z.string().max(40).optional(),
+    project: z.string().max(20).optional(),
+    summary: z.string().max(255).optional(),
+    messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).max(60),
+    spec: z.any().optional(),
+    descriptionWiki: z.string().max(40000).optional(),
+    images: z.array(z.string().max(300)).max(20).optional(),
+    files: z.array(z.object({ key: z.string().max(300), name: z.string().max(200) })).max(20).optional(),
+    visionText: z.string().max(20000).optional(),
+    lang: z.enum(['fr', 'en', 'ru']).optional(),
+  });
+
+  // Upsert a draft (owned by the user). Returns the draft id for subsequent saves.
+  app.post('/api/tasks/save', async (req, reply) => {
+    const user = await requireAuth(req, reply); if (!user) return;
+    const parsed = saveSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const d = parsed.data;
+    const data: any = {
+      project: d.project ?? null,
+      summary: (d.summary || '').slice(0, 255),
+      messages: d.messages,
+      spec: d.spec ?? null,
+      descriptionWiki: d.descriptionWiki ?? null,
+      images: d.images ?? [],
+      files: d.files ?? [],
+      visionText: d.visionText ?? null,
+      lang: d.lang ?? null,
+    };
+    try {
+      if (d.id) {
+        const existing = await prisma.taskDraft.findUnique({ where: { id: d.id } });
+        if (existing && existing.userId === user.id) {
+          // don't downgrade a draft that was already filed in Jira
+          if (existing.status !== 'CREATED') {
+            const upd = await prisma.taskDraft.update({ where: { id: d.id }, data });
+            return reply.send({ id: upd.id, status: upd.status });
+          }
+          return reply.send({ id: existing.id, status: existing.status });
+        }
+      }
+      const created = await prisma.taskDraft.create({ data: { ...data, userId: user.id, userLabel: user.name, status: 'DRAFT' } });
+      return reply.send({ id: created.id, status: created.status });
+    } catch (e: any) {
+      return reply.code(500).send({ error: String(e?.message || e).slice(0, 200) });
+    }
+  });
+
+  // List the user's drafts (most recent first) for the History drawer.
+  app.get('/api/tasks/history', async (req, reply) => {
+    const user = await requireAuth(req, reply); if (!user) return;
+    const rows = await prisma.taskDraft.findMany({
+      where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 100,
+      select: { id: true, summary: true, status: true, jiraKey: true, jiraUrl: true, project: true, updatedAt: true, messages: true },
+    });
+    const items = rows.map((r) => ({
+      id: r.id, summary: r.summary, status: r.status, jiraKey: r.jiraKey, jiraUrl: r.jiraUrl, project: r.project,
+      updatedAt: r.updatedAt, turns: Array.isArray(r.messages) ? (r.messages as any[]).length : 0,
+    }));
+    return reply.send({ items });
+  });
+
+  // Fetch one draft in full to resume it.
+  app.get('/api/tasks/draft/:id', async (req: any, reply) => {
+    const user = await requireAuth(req, reply); if (!user) return;
+    const row = await prisma.taskDraft.findUnique({ where: { id: String(req.params.id) } });
+    if (!row || row.userId !== user.id) return reply.code(404).send({ error: 'not found' });
+    return reply.send({ draft: row });
+  });
+
+  app.delete('/api/tasks/draft/:id', async (req: any, reply) => {
+    const user = await requireAuth(req, reply); if (!user) return;
+    const row = await prisma.taskDraft.findUnique({ where: { id: String(req.params.id) } });
+    if (!row || row.userId !== user.id) return reply.code(404).send({ error: 'not found' });
+    await prisma.taskDraft.delete({ where: { id: row.id } });
+    return reply.send({ ok: true });
+  });
+
   const createSchema = z.object({
     project: z.string().min(1).max(20),
     summary: z.string().min(3).max(255),
@@ -319,6 +400,7 @@ export async function registerTasksApi(app: FastifyInstance) {
     labels: z.array(z.string().max(60)).max(20).optional(),
     images: z.array(z.string().min(1).max(300)).max(20).optional(),
     files: z.array(z.string().min(1).max(300)).max(20).optional(),
+    draftId: z.string().max(40).optional(),
   });
 
   // Create the Jira task from the (editable) preview. Stamps the author.
@@ -354,10 +436,18 @@ export async function registerTasksApi(app: FastifyInstance) {
     }
 
     const key = created?.key;
+    const url = `${cfg.baseUrl}/browse/${key}`;
     let attached = 0;
     if (key && (d.images?.length || d.files?.length)) {
       try { attached = await attachToIssue(key, d.images || [], d.files || []); } catch { /* noop */ }
     }
-    return reply.send({ key, url: `${cfg.baseUrl}/browse/${key}`, issueType, attached });
+    // mark the draft as filed so History shows the linked ticket
+    if (key && d.draftId) {
+      try {
+        const row = await prisma.taskDraft.findUnique({ where: { id: d.draftId } });
+        if (row && row.userId === user.id) await prisma.taskDraft.update({ where: { id: row.id }, data: { status: 'CREATED', jiraKey: key, jiraUrl: url, summary: d.summary } });
+      } catch { /* noop */ }
+    }
+    return reply.send({ key, url, issueType, attached });
   });
 }

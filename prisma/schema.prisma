@@ -631,6 +631,31 @@ model Idea {
   @@index([status, createdAt])
 }
 
+// Черновики «Новых задач» (New tasks). Диалог + собранная спека сохраняются,
+// чтобы вернуться к задаче позже и доделать (как история запросов). Статус
+// DRAFT, пока не заведена в Jira → CREATED (с ключом/ссылкой тикета).
+model TaskDraft {
+  id              String   @id @default(cuid())
+  userId          String
+  userLabel       String?
+  project         String?
+  summary         String   @default("")
+  messages        Json     // [{role,content}]
+  spec            Json?    // {context,idea,inScope,outScope,dod,references,details}
+  descriptionWiki String?
+  images          Json?    // [key]
+  files           Json?    // [{key,name}]
+  visionText      String?
+  lang            String?
+  status          String   @default("DRAFT") // DRAFT|CREATED
+  jiraKey         String?
+  jiraUrl         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
 // Снапшот состояния качества (Quality Coverage Analytics) — для анализа динамики.
 model QualitySnapshot {
   id        String   @id @default(cuid())

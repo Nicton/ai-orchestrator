@@ -66,6 +66,23 @@
   details.editwiki summary { cursor:pointer; font-size:13px; color:var(--muted); margin:12px 0 6px; }
   .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite; vertical-align:-2px; }
   @keyframes sp { to { transform:rotate(360deg); } }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:60; display:none; }
+  .drawer-mask.open { display:block; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:min(420px,92vw); background:var(--panel); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.18); z-index:61; transform:translateX(100%); transition:transform .2s ease; display:flex; flex-direction:column; }
+  .drawer.open { transform:translateX(0); }
+  .drawer h3 { margin:0; padding:14px 18px; border-bottom:1px solid var(--line); font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .drawer .list { flex:1; overflow:auto; padding:12px 14px; }
+  .hist-item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; cursor:pointer; }
+  .hist-item:hover { background:var(--bg-soft); }
+  .hist-top { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .hist-title { font-size:14px; font-weight:500; }
+  .hist-meta { color:var(--muted); font-size:12px; margin-top:4px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .st { display:inline-block; padding:1px 8px; border-radius:9px; font-size:11px; font-weight:600; }
+  .st.draft { background:var(--bg-soft); border:1px solid var(--line); color:var(--muted); }
+  .st.created { background:#e9f6ec; color:var(--green,#1f9d57); border:1px solid #bfe6cb; }
+  .hist-del { border:none; background:none; color:var(--muted); cursor:pointer; font-size:13px; }
+  .hist-del:hover { color:var(--red); }
 </style>
 </head>
 <body>
@@ -73,8 +90,13 @@
 <script src="/nav.js"></script>
 
 <div class="wrap">
-  <h1 data-i18n="h1">🆕 New tasks</h1>
-  <p class="sub" data-i18n="sub"></p>
+  <div class="topbar">
+    <div>
+      <h1 data-i18n="h1">🆕 New tasks</h1>
+      <p class="sub" data-i18n="sub"></p>
+    </div>
+    <button class="ghost" id="historyBtn" style="white-space:nowrap"></button>
+  </div>
 
   <div class="panel" id="configWarn" style="display:none">
     <div class="pad muted" data-i18n="configWarn"></div>
@@ -151,6 +173,11 @@
       </div>
     </div>
   </div>
+  <div class="drawer-mask" id="histMask"></div>
+  <div class="drawer" id="histDrawer">
+    <h3><span data-i18n="historyTitle"></span><button class="hist-del" id="histClose">✕</button></h3>
+    <div class="list" id="histList"></div>
+  </div>
 </div>
 
 <script>
@@ -183,6 +210,9 @@ const I18N = {
     recognizeErr:'Échec de la reconnaissance', analyzeErr:'Erreur d’analyse', createErr:'Échec de la création',
     jiraOff:'Jira n’est pas configuré', taskCreated:'Tâche créée', attached:'pièces jointes',
     thinking:'…', done:'Terminé.',
+    history:'🕘 Historique', historyTitle:'Tâches sauvegardées', historyEmpty:'Aucune tâche sauvegardée pour le moment.',
+    stCreated:'créée', untitled:'Sans titre', confirmDel:'Supprimer ce brouillon ?',
+    turns:'échanges', attachNote:'pièces jointes restaurées',
   },
   en: {
     title:'Searchify — New tasks', h1:'🆕 New tasks',
@@ -206,6 +236,9 @@ const I18N = {
     recognizeErr:'Transcription failed', analyzeErr:'Analysis error', createErr:'Could not create',
     jiraOff:'Jira is not configured', taskCreated:'Task created', attached:'attachments',
     thinking:'…', done:'Done.',
+    history:'🕘 History', historyTitle:'Saved tasks', historyEmpty:'No saved tasks yet.',
+    stCreated:'filed', untitled:'Untitled', confirmDel:'Delete this draft?',
+    turns:'turns', attachNote:'attachments restored',
   },
   ru: {
     title:'Searchify — Новые задачи', h1:'🆕 Новые задачи',
@@ -229,6 +262,9 @@ const I18N = {
     recognizeErr:'Не удалось распознать', analyzeErr:'Ошибка анализа', createErr:'Не удалось создать',
     jiraOff:'Jira не настроена', taskCreated:'Задача создана', attached:'вложений',
     thinking:'…', done:'Готово.',
+    history:'🕘 История', historyTitle:'Сохранённые задачи', historyEmpty:'Пока нет сохранённых задач.',
+    stCreated:'заведена', untitled:'Без названия', confirmDel:'Удалить черновик?',
+    turns:'реплик', attachNote:'вложения восстановлены',
   },
 };
 function t(k){ return (I18N[L] && I18N[L][k]) || I18N.en[k] || k; }
@@ -242,6 +278,7 @@ function applyLang(){
   $('backBtn').textContent = t('back');
   $('sendBtn').textContent = t('send');
   $('createBtn').textContent = t('create');
+  $('historyBtn').textContent = t('history');
 }
 
 let me=null, cfgEnabled=false;
@@ -250,6 +287,7 @@ let messages=[];
 let visionText='';
 let descEdited=false, busy=false;
 let mediaRec=null, recChunks=[], recTarget='desc';
+let draftId=null, lastSpec=null;
 
 async function boot(){
   applyLang();
@@ -328,9 +366,11 @@ $('analyzeBtn').addEventListener('click', ()=>{
   if (desc.length<5){ $('inErr').textContent=t('descShort'); return; }
   let brief = desc;
   if (files.length) brief += `\n\n(Attached files: ${files.map(f=>f.name).join(', ')})`;
+  draftId=null; lastSpec=null; descEdited=false;        // fresh task → new draft
   messages = [{role:'user', content:brief}];
   $('inputScreen').classList.add('hidden'); $('workScreen').classList.remove('hidden');
-  $('msgs').innerHTML=''; addBubble('user', desc);
+  $('msgs').innerHTML=''; $('summary').value=''; $('descWiki').value=''; $('createdOut').innerHTML='';
+  addBubble('user', desc);
   runChat();
 });
 $('backBtn').addEventListener('click', ()=>{ $('workScreen').classList.add('hidden'); $('inputScreen').classList.remove('hidden'); });
@@ -392,9 +432,74 @@ async function runChat(){
       messages.push({role:'assistant', content: result.reply || ''});
       addQuestions(result.questions);
       renderSpec(result);
+      saveDraft();
     }
   } catch(_){ if(thinking.textContent===t('thinking')) thinking.textContent='⚠️ '+t('netErr'); }
   finally { busy=false; $('sendBtn').disabled=false; $('stageLog').textContent=''; }
+}
+
+// ---------- persistence (drafts) + history ----------
+async function saveDraft(){
+  try {
+    const body = { id: draftId||undefined, project:$('project').value, summary:$('summary').value||'',
+      messages, spec: lastSpec, descriptionWiki: $('descWiki').value||'', images,
+      files: files.map(f=>({key:f.key,name:f.name})), visionText: visionText||undefined, lang:L };
+    const r = await fetch('/api/tasks/save',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    const d = await r.json(); if(r.ok && d.id) draftId=d.id;
+  } catch(_){}
+}
+$('historyBtn').addEventListener('click', openHistory);
+$('histClose').addEventListener('click', closeHistory);
+$('histMask').addEventListener('click', closeHistory);
+function openHistory(){ $('histMask').classList.add('open'); $('histDrawer').classList.add('open'); loadHistory(); }
+function closeHistory(){ $('histMask').classList.remove('open'); $('histDrawer').classList.remove('open'); }
+async function loadHistory(){
+  $('histList').innerHTML='<p class="muted">…</p>';
+  try {
+    const d = await fetch('/api/tasks/history').then(r=>r.json());
+    if(!d.items||!d.items.length){ $('histList').innerHTML=`<p class="muted">${esc(t('historyEmpty'))}</p>`; return; }
+    $('histList').innerHTML = d.items.map(it=>{
+      const created = it.status==='CREATED';
+      const title = esc(it.summary||t('untitled'));
+      const when = new Date(it.updatedAt).toLocaleString();
+      const st = created ? `<span class="st created">${esc(t('stCreated'))}</span>` : `<span class="st draft">${esc(t('draft'))}</span>`;
+      const jira = (created&&it.jiraKey) ? ` · <a href="${esc(it.jiraUrl)}" target="_blank">${esc(it.jiraKey)}</a>` : '';
+      return `<div class="hist-item" data-id="${esc(it.id)}">
+        <div class="hist-top"><span class="hist-title">${title}</span><button class="hist-del" data-del="${esc(it.id)}">🗑</button></div>
+        <div class="hist-meta">${st} · ${it.turns} ${esc(t('turns'))}${jira} · ${esc(when)}</div>
+      </div>`;
+    }).join('');
+    $('histList').querySelectorAll('.hist-item').forEach(el=>{
+      el.addEventListener('click', e=>{ if(e.target.closest('[data-del]')) return; resumeDraft(el.getAttribute('data-id')); });
+    });
+    $('histList').querySelectorAll('[data-del]').forEach(b=>{
+      b.addEventListener('click', async e=>{ e.stopPropagation(); if(!confirm(t('confirmDel'))) return;
+        try { await fetch('/api/tasks/draft/'+b.getAttribute('data-del'),{method:'DELETE'}); } catch(_){}
+        loadHistory(); });
+    });
+  } catch(_){ $('histList').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
+}
+async function resumeDraft(id){
+  try {
+    const d = await fetch('/api/tasks/draft/'+id).then(r=>r.json());
+    if(!d.draft) return;
+    const dr = d.draft;
+    draftId = dr.id;
+    messages = Array.isArray(dr.messages)?dr.messages:[];
+    visionText = dr.visionText||'';
+    images = Array.isArray(dr.images)?dr.images:[];
+    files = Array.isArray(dr.files)?dr.files:[];
+    if (dr.project) { const opt=[...$('project').options].find(o=>o.value===dr.project); if(opt) $('project').value=dr.project; }
+    $('msgs').innerHTML='';
+    messages.forEach(m=> addBubble(m.role==='user'?'user':'bot', m.content));
+    descEdited=false;
+    renderSpec({ summary:dr.summary, spec:dr.spec||{}, descriptionWiki:dr.descriptionWiki||'', ready:false, questions:[] });
+    $('filechips').innerHTML = files.map(f=>`<span class="filechip">📎 ${esc(f.name)}</span>`).join('');
+    $('thumbs').innerHTML = images.map(()=>`<div class="thumb" style="display:flex;align-items:center;justify-content:center">🖼</div>`).join('');
+    $('createdOut').innerHTML=''; $('prErr').textContent='';
+    closeHistory();
+    $('inputScreen').classList.add('hidden'); $('workScreen').classList.remove('hidden');
+  } catch(_){}
 }
 
 // ---------- right pane (spec headings stay English — final requirements are English) ----------
@@ -402,7 +507,7 @@ function listHtml(arr, ordered){ if(!arr||!arr.length) return '<p class="muted">
   const items=arr.map(x=>`<li>${esc(x)}</li>`).join(''); return ordered?`<ol>${items}</ol>`:`<ul>${items}</ul>`; }
 function renderSpec(r){
   if (!$('summary').value || !descEdited) $('summary').value = r.summary||$('summary').value;
-  const s=r.spec||{};
+  const s=r.spec||{}; lastSpec=s;
   const dod = (s.dod||[]).map(x=>`<li>☐ ${esc(String(x).replace(/^\s*\[[ x]\]\s*/i,''))}</li>`).join('');
   let html='';
   html+=`<h2>Context</h2><p>${esc(s.context||'')||'<span class="muted">—</span>'}</p>`;
@@ -426,9 +531,10 @@ $('createBtn').addEventListener('click', async ()=>{
   const descriptionWiki=$('descWiki').value.trim();
   if (summary.length<3){ $('prErr').textContent=t('titleShort'); return; }
   if (descriptionWiki.length<5){ $('prErr').textContent=t('descEmpty'); return; }
+  await saveDraft(); // persist latest summary/wiki edits before filing
   const body={ project:$('project').value, summary, descriptionWiki,
     labels:$('labels').value.split(',').map(s=>s.trim()).filter(Boolean),
-    images, files:files.map(f=>f.key) };
+    images, files:files.map(f=>f.key), draftId: draftId||undefined };
   const btn=$('createBtn'); btn.disabled=true; $('createStatus').innerHTML='<span class="spin"></span> '+t('creating');
   try { const r=await fetch('/api/tasks/create',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json();
     if(!r.ok){ $('prErr').textContent=(typeof d.error==='string'?d.error:t('createErr')); return; }

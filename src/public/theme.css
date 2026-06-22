@@ -62,6 +62,7 @@ html[data-theme="light"] {
 .app-nav .navlink:hover { background: var(--bg-soft); color: var(--ink); }
 .app-nav .navlink.active { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue-dark); font-weight: 600; }
 .app-nav .spacer { flex: 1; }
+.app-nav .nav-right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 .app-nav .who { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .app-nav .theme-toggle {
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);

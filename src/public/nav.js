@@ -71,11 +71,11 @@
       + LANGS.map(function (l) { return '<option value="' + l + '"' + (l === lang ? ' selected' : '') + '>' + LANG_LABELS[l] + '</option>'; }).join('')
       + '</select>';
     var right = authed ? '<span class="who">' + esc(me.name || me.email || '') + '</span><button class="navlink" id="navLogout">' + esc(tr(T.logout)) + '</button>' : '';
+    var themeBtn = '<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme"></button>';
     mount.className = 'app-nav';
     mount.innerHTML =
       '<a class="brand" href="/">Searchify</a>' + links + admin +
-      '<span class="spacer"></span>' + right + langSel +
-      '<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme"></button>';
+      '<span class="nav-right">' + right + langSel + themeBtn + '</span>';
     updateIcon();
     var tg = document.getElementById('themeToggle');
     if (tg) tg.addEventListener('click', function () { setTheme(effectiveDark() ? 'light' : 'dark'); });
