@@ -43,6 +43,20 @@
   .created { border:1px solid #ceead6; background:#e6f4ea; border-radius:10px; padding:14px 16px; font-size:14px; }
   .drop { border:2px dashed var(--line); border-radius:10px; padding:10px 14px; text-align:center; color:var(--muted); font-size:13px; cursor:pointer; }
   .hidden { display:none !important; }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:60; display:none; }
+  .drawer-mask.open { display:block; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:min(420px,92vw); background:var(--panel); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.18); z-index:61; transform:translateX(100%); transition:transform .2s ease; display:flex; flex-direction:column; }
+  .drawer.open { transform:translateX(0); }
+  .drawer h3 { margin:0; padding:14px 18px; border-bottom:1px solid var(--line); font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .drawer .list { flex:1; overflow:auto; padding:12px 14px; }
+  .hist-item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; cursor:pointer; }
+  .hist-item:hover { background:var(--bg-soft); }
+  .hist-top { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .hist-title { font-size:14px; font-weight:500; }
+  .hist-meta { color:var(--muted); font-size:12px; margin-top:4px; }
+  .hist-del { border:none; background:none; color:var(--muted); cursor:pointer; font-size:13px; }
+  .hist-del:hover { color:var(--red); }
 </style>
 </head>
 <body>
@@ -50,8 +64,13 @@
 <script src="/nav.js"></script>
 
 <div class="wrap">
-  <h1>🐞 БАГи</h1>
-  <p class="sub" id="sub">Опишите дефект (текстом или голосом) — Searchify проверит по существующим багам в Jira, соберёт структурированное описание на английском и поможет завести дефект.</p>
+  <div class="topbar">
+    <div>
+      <h1>🐞 БАГи</h1>
+      <p class="sub" id="sub">Опишите дефект (текстом или голосом) — Searchify проверит по существующим багам в Jira, соберёт структурированное описание на английском и поможет завести дефект.</p>
+    </div>
+    <button class="ghost" id="historyBtn" style="white-space:nowrap">🕘 История</button>
+  </div>
 
   <div class="panel" id="configWarn" style="display:none">
     <div class="pad muted">⚠️ Jira не настроена на сервере (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Анализ и создание дефектов недоступны.</div>
@@ -100,18 +119,25 @@
       <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button class="pri" id="createBtn">✅ Завести дефект</button>
         <button class="ghost" id="copyBtn">📋 Скопировать описание</button>
+        <button class="ghost" id="copyLinkBtn" style="display:none">🔗 Скопировать ссылку</button>
         <span class="muted" id="createStatus"></span>
       </div>
       <div class="err" id="prErr"></div>
       <div id="createdOut" style="margin-top:14px"></div>
     </div>
   </div>
+
+  <div class="drawer-mask" id="histMask"></div>
+  <div class="drawer" id="histDrawer">
+    <h3><span>Сохранённые анализы</span><button class="hist-del" id="histClose">✕</button></h3>
+    <div class="list" id="histList"></div>
+  </div>
 </div>
 
 <script>
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-let me=null, images=[], mediaRec=null, recChunks=[];
+let me=null, images=[], mediaRec=null, recChunks=[], currentAnswerId=null;
 
 async function boot(){
   const r = await fetch('/api/auth/me');
@@ -178,6 +204,7 @@ $('analyzeBtn').addEventListener('click', async ()=>{
     const d = await r.json();
     if (!r.ok){ $('inErr').textContent = (typeof d.error==='string'?d.error:'Ошибка анализа'); return; }
     fillPreview(d);
+    saveAnswer(d);
   } catch(_){ $('inErr').textContent='Сеть недоступна'; }
   finally { btn.disabled=false; $('analyzeStatus').textContent=''; }
 });
@@ -229,7 +256,46 @@ $('createBtn').addEventListener('click', async ()=>{
   finally { btn.disabled=false; $('createStatus').textContent=''; }
 });
 
-boot();
+// ---------- save / share / history ----------
+function updateUrl(id){ try{ history.replaceState(null,'',location.pathname+'?id='+encodeURIComponent(id)); }catch(_){} }
+async function saveAnswer(d){
+  try{
+    const title=(d.preview&&d.preview.summary)||'';
+    const r=await fetch('/api/answers',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({feature:'bugs', ref:title, title, data:d})});
+    const j=await r.json(); if(r.ok&&j.id){ currentAnswerId=j.id; $('copyLinkBtn').style.display=''; updateUrl(j.id); }
+  }catch(_){}
+}
+async function loadAnswer(id){
+  try{
+    const r=await fetch('/api/answers/'+id); const j=await r.json(); if(!j.answer) return;
+    const d=j.answer.data||{};
+    if(d.project){ const opt=[...$('project').options].find(o=>o.value===d.project); if(opt) $('project').value=d.project; }
+    fillPreview(d); currentAnswerId=id; $('copyLinkBtn').style.display=''; updateUrl(id);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(_){}
+}
+$('copyLinkBtn').addEventListener('click', ()=>{ if(!currentAnswerId) return; navigator.clipboard?.writeText(location.origin+'/bugs?id='+currentAnswerId); $('createStatus').textContent='Ссылка скопирована'; setTimeout(()=>$('createStatus').textContent='',1800); });
+
+$('historyBtn').addEventListener('click', openHistory);
+$('histClose').addEventListener('click', closeHistory);
+$('histMask').addEventListener('click', closeHistory);
+function openHistory(){ $('histMask').classList.add('open'); $('histDrawer').classList.add('open'); loadHistory(); }
+function closeHistory(){ $('histMask').classList.remove('open'); $('histDrawer').classList.remove('open'); }
+async function loadHistory(){
+  $('histList').innerHTML='<p class="muted">…</p>';
+  try{
+    const d=await fetch('/api/answers?feature=bugs').then(r=>r.json());
+    if(!d.items||!d.items.length){ $('histList').innerHTML='<p class="muted">Нет сохранённых анализов.</p>'; return; }
+    $('histList').innerHTML=d.items.map(it=>`<div class="hist-item" data-id="${esc(it.id)}">
+      <div class="hist-top"><span class="hist-title">${esc(it.title||it.ref||'Без названия')}</span><button class="hist-del" data-del="${esc(it.id)}">🗑</button></div>
+      <div class="hist-meta">${new Date(it.createdAt).toLocaleString()}</div></div>`).join('');
+    $('histList').querySelectorAll('.hist-item').forEach(el=> el.addEventListener('click', e=>{ if(e.target.closest('[data-del]'))return; loadAnswer(el.getAttribute('data-id')); closeHistory(); }));
+    $('histList').querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', async e=>{ e.stopPropagation(); if(!confirm('Удалить этот анализ?'))return; try{await fetch('/api/answers/'+b.getAttribute('data-del'),{method:'DELETE'});}catch(_){} loadHistory(); }));
+  }catch(_){ $('histList').innerHTML='<p class="muted">Сеть недоступна</p>'; }
+}
+
+(async ()=>{ await boot(); const sid=new URLSearchParams(location.search).get('id'); if(sid) loadAnswer(sid); })();
 </script>
 </body>
 </html>

@@ -46,6 +46,34 @@
   .report table { border-collapse:collapse; width:100%; margin:0 0 12px; font-size:13px; }
   .report th,.report td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
   .hidden { display:none !important; }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  /* report TOC + collapsible blocks */
+  .toc { position:sticky; top:8px; background:var(--bg-soft); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:0 0 14px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; z-index:5; }
+  .toc-head { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-right:2px; }
+  .toc-item { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:7px; padding:5px 9px; font-size:12.5px; cursor:pointer; }
+  .toc-item:hover { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .block { border:1px solid var(--line); border-radius:10px; margin-bottom:12px; overflow:hidden; }
+  .block-h { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:11px 14px; background:var(--bg-soft); cursor:pointer; user-select:none; font-weight:600; font-size:15px; }
+  .block-h .chev { color:var(--muted); font-size:12px; transition:transform .15s; }
+  .block.collapsed .block-h .chev { transform:rotate(-90deg); }
+  .block.collapsed .block-body { display:none; }
+  .block-body { padding:4px 16px 12px; }
+  .block-body h3 { margin-top:14px; }
+  /* history drawer */
+  .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:60; display:none; }
+  .drawer-mask.open { display:block; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:min(420px,92vw); background:var(--panel); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.18); z-index:61; transform:translateX(100%); transition:transform .2s ease; display:flex; flex-direction:column; }
+  .drawer.open { transform:translateX(0); }
+  .drawer h3 { margin:0; padding:14px 18px; border-bottom:1px solid var(--line); font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .drawer .list { flex:1; overflow:auto; padding:12px 14px; }
+  .hist-item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; cursor:pointer; }
+  .hist-item:hover { background:var(--bg-soft); }
+  .hist-top { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .hist-title { font-size:14px; font-weight:500; }
+  .hist-meta { color:var(--muted); font-size:12px; margin-top:4px; }
+  .hist-del { border:none; background:none; color:var(--muted); cursor:pointer; font-size:13px; }
+  .hist-del:hover { color:var(--red); }
 </style>
 </head>
 <body>
@@ -53,8 +81,13 @@
 <script src="/nav.js"></script>
 
 <div class="wrap">
-  <h1 data-i18n="h1">🧪 Task Testing</h1>
-  <p class="sub" data-i18n="sub"></p>
+  <div class="topbar">
+    <div>
+      <h1 data-i18n="h1">🧪 Task Testing</h1>
+      <p class="sub" data-i18n="sub"></p>
+    </div>
+    <button class="ghost" id="historyBtn" style="white-space:nowrap"></button>
+  </div>
 
   <div class="panel" id="configWarn" style="display:none">
     <div class="pad muted" data-i18n="configWarn"></div>
@@ -81,9 +114,22 @@
       <div id="metaChips"></div>
       <div class="stagelog" id="stageLog"></div>
       <pre class="llmlog hidden" id="llmLog"></pre>
+      <div class="toolbar" id="reportTools" style="display:none">
+        <button class="ghost" id="copyLinkBtn"></button>
+        <button class="ghost" id="copyBtn"></button>
+        <button class="ghost" id="expandAllBtn"></button>
+        <button class="ghost" id="collapseAllBtn"></button>
+        <span class="muted" id="copyStatus"></span>
+      </div>
+      <div class="toc" id="toc" style="display:none"></div>
       <div class="report" id="report"></div>
-      <div style="margin-top:14px"><button class="ghost" id="copyBtn"></button> <span class="muted" id="copyStatus"></span></div>
     </div>
+  </div>
+
+  <div class="drawer-mask" id="histMask"></div>
+  <div class="drawer" id="histDrawer">
+    <h3><span data-i18n="historyTitle"></span><button class="hist-del" id="histClose">✕</button></h3>
+    <div class="list" id="histList"></div>
   </div>
 </div>
 
@@ -101,7 +147,9 @@ const I18N = {
     reportTitle:'Rapport de test statique', copy:'📋 Copier le rapport', copied:'Copié',
     repoErr:'Décrivez une clé valide (ex. TMS-3726)', netErr:'Réseau indisponible', analyzeErr:'Erreur d’analyse',
     reposFull:(n)=>`Dépôts de code disponibles pour le pull des branches : ${n}.`,
-    reposNone:'Aucun dépôt git local — le code des branches ne sera pas tiré ici ; rapport basé sur Jira.' },
+    reposNone:'Aucun dépôt git local — le code des branches ne sera pas tiré ici ; rapport basé sur Jira.',
+    copyLink:'🔗 Copier le lien', linkCopied:'Lien copié', contents:'Sommaire', expandAll:'Tout déplier', collapseAll:'Tout replier',
+    history:'🕘 Historique', historyTitle:'Rapports sauvegardés', historyEmpty:'Aucun rapport sauvegardé.', untitled:'Sans titre', confirmDel:'Supprimer ce rapport ?' },
   en: { title:'Searchify — Task Testing', h1:'🧪 Task Testing',
     sub:'Enter a Jira task/subtask. Searchify gathers requirements, links, all comments and the linked GitLab branch code (pull + diff), then takes the tester role and produces a static-testing report (without running the code).',
     configWarn:'⚠️ Jira is not configured on the server. Analysis is unavailable.',
@@ -109,7 +157,9 @@ const I18N = {
     reportTitle:'Static-testing report', copy:'📋 Copy report', copied:'Copied',
     repoErr:'Enter a valid key (e.g. TMS-3726)', netErr:'Network unavailable', analyzeErr:'Analysis error',
     reposFull:(n)=>`Code repos available for branch pull: ${n}.`,
-    reposNone:'No local git repos — branch code will not be pulled here; report is Jira-based.' },
+    reposNone:'No local git repos — branch code will not be pulled here; report is Jira-based.',
+    copyLink:'🔗 Copy link', linkCopied:'Link copied', contents:'Contents', expandAll:'Expand all', collapseAll:'Collapse all',
+    history:'🕘 History', historyTitle:'Saved reports', historyEmpty:'No saved reports.', untitled:'Untitled', confirmDel:'Delete this report?' },
   ru: { title:'Searchify — Тестирование задач', h1:'🧪 Тестирование задач',
     sub:'Укажите задачу/подзадачу Jira. Searchify соберёт требования, связи, все комментарии и код связанных GitLab-веток (пулл + дифф), затем возьмёт роль тестировщика и выдаст отчёт статического тестирования (без запуска кода).',
     configWarn:'⚠️ Jira не настроена на сервере. Анализ недоступен.',
@@ -117,13 +167,17 @@ const I18N = {
     reportTitle:'Отчёт статического тестирования', copy:'📋 Скопировать отчёт', copied:'Скопировано',
     repoErr:'Укажите корректный ключ (напр. TMS-3726)', netErr:'Сеть недоступна', analyzeErr:'Ошибка анализа',
     reposFull:(n)=>`Репозиториев кода для пулла веток: ${n}.`,
-    reposNone:'Локальных git-репозиториев нет — код веток здесь не тянется; отчёт по Jira.' },
+    reposNone:'Локальных git-репозиториев нет — код веток здесь не тянется; отчёт по Jira.',
+    copyLink:'🔗 Скопировать ссылку', linkCopied:'Ссылка скопирована', contents:'Содержание', expandAll:'Развернуть всё', collapseAll:'Свернуть всё',
+    history:'🕘 История', historyTitle:'Сохранённые отчёты', historyEmpty:'Нет сохранённых отчётов.', untitled:'Без названия', confirmDel:'Удалить отчёт?' },
 };
 function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
 function applyLang(){
   document.title=t('title');
   document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
   $('runBtn').textContent=t('run'); $('copyBtn').textContent=t('copy');
+  $('copyLinkBtn').textContent=t('copyLink'); $('expandAllBtn').textContent=t('expandAll'); $('collapseAllBtn').textContent=t('collapseAll');
+  $('historyBtn').textContent=t('history');
 }
 
 // ---------- minimal markdown renderer (headings, lists, tables, fenced code, inline) ----------
@@ -197,21 +251,86 @@ async function run(){
   finally { btn.disabled=false; }
 }
 
-function renderResult(r){
+let reportMeta=null, reportKey='', currentAnswerId=null;
+
+// Render the report as a TOC + collapsible blocks (sections split on "## ").
+function renderReport(md){
+  const lines=(md||'').split(/\r?\n/); const sections=[]; let cur=null; const pre=[];
+  for(const ln of lines){ const m=ln.match(/^##\s+(.*)$/); if(m){ cur={title:m[1].trim(),body:[]}; sections.push(cur); } else if(cur){ cur.body.push(ln); } else pre.push(ln); }
+  if(sections.length>1){
+    $('toc').style.display='';
+    $('toc').innerHTML=`<span class="toc-head">${esc(t('contents'))}</span>`+sections.map((s,i)=>`<button class="toc-item" data-sec="${i}">${esc(s.title)}</button>`).join('');
+  } else { $('toc').style.display='none'; $('toc').innerHTML=''; }
+  let html='';
+  if(pre.join('').trim()) html+=`<div style="margin-bottom:12px">${renderMarkdown(pre.join('\n'))}</div>`;
+  sections.forEach((s,i)=>{ html+=`<div class="block" id="sec${i}"><div class="block-h"><span>${esc(s.title)}</span><span class="chev">▾</span></div><div class="block-body">${renderMarkdown(s.body.join('\n'))}</div></div>`; });
+  $('report').innerHTML=html;
+  $('report').querySelectorAll('.block-h').forEach(h=> h.addEventListener('click', ()=> h.parentElement.classList.toggle('collapsed')));
+  $('toc').querySelectorAll('.toc-item').forEach(b=> b.addEventListener('click', ()=>{ const el=$('sec'+b.dataset.sec); if(el){ el.classList.remove('collapsed'); el.scrollIntoView({behavior:'smooth',block:'start'}); } }));
+}
+
+function displayReport(report, meta, key, answerId){
   $('stageLog').textContent=''; $('llmLog').classList.add('hidden');
-  reportText=r.report||'';
-  const m=r.meta||{};
+  reportText=report||''; reportMeta=meta||{}; reportKey=key||''; currentAnswerId=answerId||null;
+  const m=reportMeta;
   const chips=[];
-  if(m.issue) chips.push(`<span class="chip"><b>${esc(r.key)}</b> · ${esc(m.issue.type||'')} · ${esc(m.issue.status||'')}</span>`);
+  if(m.issue) chips.push(`<span class="chip"><b>${esc(reportKey)}</b> · ${esc(m.issue.type||'')} · ${esc(m.issue.status||'')}</span>`);
   (m.related||[]).forEach(x=> chips.push(`<span class="chip">${esc(x.rel||'')}: ${esc(x.key)}</span>`));
   (m.branches||[]).forEach(b=> chips.push(`<span class="chip code">🔀 ${esc(b.repo)}:${esc(b.branch)} · ${b.files} files</span>`));
   $('metaChips').innerHTML = chips.length?`<div class="chips" style="margin-bottom:12px">${chips.join('')}</div>`:'';
   $('repTok').textContent = m.tokens?`· ${m.tokens} токенов`:'';
-  $('report').innerHTML = renderMarkdown(reportText);
+  renderReport(reportText);
+  $('reportTools').style.display='';
+  $('copyLinkBtn').style.display = currentAnswerId ? '' : 'none';
+  $('resultPanel').classList.remove('hidden');
 }
-$('copyBtn').addEventListener('click', ()=>{ navigator.clipboard?.writeText(reportText); $('copyStatus').textContent=t('copied'); setTimeout(()=>$('copyStatus').textContent='',1500); });
 
-boot();
+function renderResult(r){ displayReport(r.report, r.meta, r.key, null); saveAnswer(); }
+
+function updateUrl(id){ try{ history.replaceState(null,'',location.pathname+'?id='+encodeURIComponent(id)); }catch(_){} }
+async function saveAnswer(){
+  try{
+    const title=(reportMeta&&reportMeta.issue&&reportMeta.issue.summary)||reportKey;
+    const r=await fetch('/api/answers',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({feature:'testing', ref:reportKey, title, data:{report:reportText, meta:reportMeta, key:reportKey}})});
+    const d=await r.json(); if(r.ok&&d.id){ currentAnswerId=d.id; $('copyLinkBtn').style.display=''; updateUrl(d.id); }
+  }catch(_){}
+}
+async function loadAnswer(id){
+  try{
+    const d=await fetch('/api/answers/'+id).then(r=>r.json());
+    if(!d.answer){ return; }
+    const a=d.answer.data||{};
+    displayReport(a.report, a.meta, a.key||d.answer.ref, id);
+    updateUrl(id); window.scrollTo({top:0,behavior:'smooth'});
+  }catch(_){}
+}
+
+$('copyBtn').addEventListener('click', ()=>{ navigator.clipboard?.writeText(reportText); $('copyStatus').textContent=t('copied'); setTimeout(()=>$('copyStatus').textContent='',1500); });
+$('copyLinkBtn').addEventListener('click', ()=>{ if(!currentAnswerId) return; navigator.clipboard?.writeText(location.origin+'/testing?id='+currentAnswerId); $('copyStatus').textContent=t('linkCopied'); setTimeout(()=>$('copyStatus').textContent='',1800); });
+$('expandAllBtn').addEventListener('click', ()=> $('report').querySelectorAll('.block').forEach(b=>b.classList.remove('collapsed')));
+$('collapseAllBtn').addEventListener('click', ()=> $('report').querySelectorAll('.block').forEach(b=>b.classList.add('collapsed')));
+
+// ---------- history ----------
+$('historyBtn').addEventListener('click', openHistory);
+$('histClose').addEventListener('click', closeHistory);
+$('histMask').addEventListener('click', closeHistory);
+function openHistory(){ $('histMask').classList.add('open'); $('histDrawer').classList.add('open'); loadHistory(); }
+function closeHistory(){ $('histMask').classList.remove('open'); $('histDrawer').classList.remove('open'); }
+async function loadHistory(){
+  $('histList').innerHTML='<p class="muted">…</p>';
+  try{
+    const d=await fetch('/api/answers?feature=testing').then(r=>r.json());
+    if(!d.items||!d.items.length){ $('histList').innerHTML=`<p class="muted">${esc(t('historyEmpty'))}</p>`; return; }
+    $('histList').innerHTML=d.items.map(it=>`<div class="hist-item" data-id="${esc(it.id)}">
+      <div class="hist-top"><span class="hist-title">${esc(it.title||it.ref||t('untitled'))}</span><button class="hist-del" data-del="${esc(it.id)}">🗑</button></div>
+      <div class="hist-meta">${esc(it.ref||'')} · ${new Date(it.createdAt).toLocaleString()}</div></div>`).join('');
+    $('histList').querySelectorAll('.hist-item').forEach(el=> el.addEventListener('click', e=>{ if(e.target.closest('[data-del]'))return; loadAnswer(el.getAttribute('data-id')); closeHistory(); }));
+    $('histList').querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', async e=>{ e.stopPropagation(); if(!confirm(t('confirmDel')))return; try{await fetch('/api/answers/'+b.getAttribute('data-del'),{method:'DELETE'});}catch(_){} loadHistory(); }));
+  }catch(_){ $('histList').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
+}
+
+(async ()=>{ await boot(); const sid=new URLSearchParams(location.search).get('id'); if(sid) loadAnswer(sid); })();
 </script>
 </body>
 </html>

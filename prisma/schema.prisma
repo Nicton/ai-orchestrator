@@ -676,6 +676,22 @@ model FeatureUsage {
   @@index([createdAt])
 }
 
+// Сохранённые ответы фич (Testing/Bugs) — для истории запросов и шаринга по
+// ссылке (/testing?id=… , /bugs?id=…). Tasks использует TaskDraft.
+model FeatureAnswer {
+  id        String   @id @default(cuid())
+  userId    String
+  userLabel String?
+  feature   String   // testing | bugs
+  ref       String?  // jira key / краткое описание
+  title     String   @default("")
+  data      Json     // полный ответ (report+meta / preview+duplicate …)
+  createdAt DateTime @default(now())
+
+  @@index([userId, feature, createdAt])
+  @@index([feature, createdAt])
+}
+
 // Снапшот состояния качества (Quality Coverage Analytics) — для анализа динамики.
 model QualitySnapshot {
   id        String   @id @default(cuid())

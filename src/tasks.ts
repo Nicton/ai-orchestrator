@@ -384,11 +384,13 @@ export async function registerTasksApi(app: FastifyInstance) {
     return reply.send({ items });
   });
 
-  // Fetch one draft in full to resume it.
+  // Fetch one draft in full to resume it. Any authenticated user can open it by
+  // id so a shared link (/tasks?id=…) works for colleagues; editing still
+  // upserts under the opener (save is owner-checked), delete is owner-only.
   app.get('/api/tasks/draft/:id', async (req: any, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
     const row = await prisma.taskDraft.findUnique({ where: { id: String(req.params.id) } });
-    if (!row || row.userId !== user.id) return reply.code(404).send({ error: 'not found' });
+    if (!row) return reply.code(404).send({ error: 'not found' });
     return reply.send({ draft: row });
   });
 

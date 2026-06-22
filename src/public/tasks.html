@@ -164,6 +164,7 @@
         <div class="pad" style="border-top:1px solid var(--line)">
           <div class="pillrow">
             <button class="pri go" id="createBtn"></button>
+            <button class="ghost" id="copyLinkBtn" style="display:none"></button>
             <span class="muted" id="createStatus"></span>
           </div>
           <div class="muted" style="margin-top:8px" id="authorNote"></div>
@@ -212,7 +213,7 @@ const I18N = {
     thinking:'…', done:'Terminé.',
     history:'🕘 Historique', historyTitle:'Tâches sauvegardées', historyEmpty:'Aucune tâche sauvegardée pour le moment.',
     stCreated:'créée', untitled:'Sans titre', confirmDel:'Supprimer ce brouillon ?',
-    turns:'échanges', attachNote:'pièces jointes restaurées',
+    turns:'échanges', attachNote:'pièces jointes restaurées', copyLink:'🔗 Copier le lien', linkCopied:'Lien copié',
   },
   en: {
     title:'Searchify — New tasks', h1:'🆕 New tasks',
@@ -238,7 +239,7 @@ const I18N = {
     thinking:'…', done:'Done.',
     history:'🕘 History', historyTitle:'Saved tasks', historyEmpty:'No saved tasks yet.',
     stCreated:'filed', untitled:'Untitled', confirmDel:'Delete this draft?',
-    turns:'turns', attachNote:'attachments restored',
+    turns:'turns', attachNote:'attachments restored', copyLink:'🔗 Copy link', linkCopied:'Link copied',
   },
   ru: {
     title:'Searchify — Новые задачи', h1:'🆕 Новые задачи',
@@ -264,7 +265,7 @@ const I18N = {
     thinking:'…', done:'Готово.',
     history:'🕘 История', historyTitle:'Сохранённые задачи', historyEmpty:'Пока нет сохранённых задач.',
     stCreated:'заведена', untitled:'Без названия', confirmDel:'Удалить черновик?',
-    turns:'реплик', attachNote:'вложения восстановлены',
+    turns:'реплик', attachNote:'вложения восстановлены', copyLink:'🔗 Скопировать ссылку', linkCopied:'Ссылка скопирована',
   },
 };
 function t(k){ return (I18N[L] && I18N[L][k]) || I18N.en[k] || k; }
@@ -278,6 +279,7 @@ function applyLang(){
   $('backBtn').textContent = t('back');
   $('sendBtn').textContent = t('send');
   $('createBtn').textContent = t('create');
+  $('copyLinkBtn').textContent = t('copyLink');
   $('historyBtn').textContent = t('history');
 }
 
@@ -445,9 +447,10 @@ async function saveDraft(){
       messages, spec: lastSpec, descriptionWiki: $('descWiki').value||'', images,
       files: files.map(f=>({key:f.key,name:f.name})), visionText: visionText||undefined, lang:L };
     const r = await fetch('/api/tasks/save',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
-    const d = await r.json(); if(r.ok && d.id) draftId=d.id;
+    const d = await r.json(); if(r.ok && d.id){ draftId=d.id; $('copyLinkBtn').style.display=''; try{ history.replaceState(null,'',location.pathname+'?id='+encodeURIComponent(draftId)); }catch(_){} }
   } catch(_){}
 }
+$('copyLinkBtn').addEventListener('click', ()=>{ if(!draftId) return; navigator.clipboard?.writeText(location.origin+'/tasks?id='+draftId); $('createStatus').textContent=t('linkCopied'); setTimeout(()=>$('createStatus').textContent='',1800); });
 $('historyBtn').addEventListener('click', openHistory);
 $('histClose').addEventListener('click', closeHistory);
 $('histMask').addEventListener('click', closeHistory);
@@ -484,7 +487,7 @@ async function resumeDraft(id){
     const d = await fetch('/api/tasks/draft/'+id).then(r=>r.json());
     if(!d.draft) return;
     const dr = d.draft;
-    draftId = dr.id;
+    draftId = dr.id; $('copyLinkBtn').style.display='';
     messages = Array.isArray(dr.messages)?dr.messages:[];
     visionText = dr.visionText||'';
     images = Array.isArray(dr.images)?dr.images:[];
@@ -543,7 +546,7 @@ $('createBtn').addEventListener('click', async ()=>{
   finally { btn.disabled=false; $('createStatus').textContent=''; }
 });
 
-boot();
+(async ()=>{ await boot(); const sid=new URLSearchParams(location.search).get('id'); if(sid) resumeDraft(sid); })();
 </script>
 </body>
 </html>
