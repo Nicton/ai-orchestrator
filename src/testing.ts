@@ -220,16 +220,18 @@ export async function registerTestingApi(app: FastifyInstance) {
     return reply.send({ jiraEnabled: jiraConfig().enabled, repos: codeRepos().length });
   });
 
-  const schema = z.object({ key: z.string().min(3).max(30), lang: z.enum(['fr', 'en', 'ru']).optional() });
+  const schema = z.object({ key: z.string().min(3).max(300), lang: z.enum(['fr', 'en', 'ru']).optional() });
 
   app.post('/api/testing/analyze/stream', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
     if (!jiraConfig().enabled) return reply.code(503).send({ error: 'Jira is not configured (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN)' });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const key = parsed.data.key.trim().toUpperCase();
+    // accept a bare key OR a full Jira URL/text (e.g. https://…/browse/TMS-3726)
+    const km = parsed.data.key.toUpperCase().match(/([A-Z][A-Z0-9]+-\d+)/);
+    const key = km ? km[1] : '';
     const lang = parsed.data.lang || 'ru';
-    if (!KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid Jira key (expected like TMS-3726)' });
+    if (!KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid Jira key (expected like TMS-3726 or a browse URL)' });
 
     reply.hijack();
     const raw = reply.raw;

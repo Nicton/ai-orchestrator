@@ -66,7 +66,7 @@
       <div class="row">
         <div style="flex:1;min-width:200px">
           <label class="fld" data-i18n="keyLbl"></label>
-          <input type="text" id="key" placeholder="TMS-3726" />
+          <input type="text" id="key" placeholder="TMS-3726  ·  https://shiptify.atlassian.net/browse/TMS-3726" />
         </div>
         <button class="pri" id="runBtn"></button>
       </div>
@@ -165,8 +165,10 @@ $('runBtn').addEventListener('click', run);
 let reportText='';
 async function run(){
   $('inErr').textContent='';
-  const key=$('key').value.trim().toUpperCase();
-  if(!/^[A-Z][A-Z0-9]+-\d+$/.test(key)){ $('inErr').textContent=t('repoErr'); return; }
+  // accept a bare key OR a full Jira URL/text (e.g. https://…/browse/TMS-3726)
+  const km=$('key').value.toUpperCase().match(/([A-Z][A-Z0-9]+-\d+)/);
+  const key=km?km[1]:'';
+  if(!key){ $('inErr').textContent=t('repoErr'); return; }
   $('resultPanel').classList.remove('hidden');
   $('report').innerHTML=''; $('metaChips').innerHTML=''; $('repTok').textContent=''; reportText='';
   $('llmLog').textContent=''; $('llmLog').classList.add('hidden');
