@@ -186,7 +186,7 @@ source_type: confluence
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `tms.shipments.03_details`
+- **id:** `tms.shipments.03_details.03-details`
 - **type:** module-doc · **domain:** TMS · **status:** implemented
 - **confluence:** 631111801 · **repo:** `tms/shipments/03_details.md`
 - **code_refs:** TODO (заполнить при углублении)

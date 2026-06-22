@@ -41,7 +41,7 @@ function list(v) {
 }
 
 const files = walk(ROOT);
-const nodes = { doc: {}, module: {}, code_file: {}, requirement: {}, confluence: {}, feature: {}, screen: {} };
+const nodes = { doc: {}, module: {}, code_file: {}, requirement: {}, confluence: {}, feature: {}, screen: {}, api: {} };
 const edges = [];
 const docsWithMeta = [];
 const docsWithoutMeta = [];
@@ -64,6 +64,7 @@ for (const file of files) {
   const codeRefs = list(field(block, 'code_refs'));
   const modules = list(field(block, 'modules'));
   const references = list(field(block, 'references'));
+  const specifies = list(field(block, 'specifies'));
   const reqRaw = field(block, 'requirements') || '';
   const requirements = (reqRaw.match(/REQ-[A-Z]+-[0-9.]+/g) || []);
 
@@ -75,6 +76,7 @@ for (const file of files) {
   for (const m of modules) { nodes.module[m] = { id: m }; edges.push(['doc:' + id, 'relates_to', 'module:' + m]); }
   for (const c of codeRefs) { nodes.code_file[c] = { id: c }; edges.push(['doc:' + id, 'documents', 'code:' + c]); }
   for (const r of references) { edges.push(['doc:' + id, 'references', 'doc:' + r]); }
+  for (const s of specifies) { edges.push(['doc:' + id, 'specifies', 'doc:' + s]); }
   for (const q of requirements) { nodes.requirement[q] = { id: q }; edges.push(['req:' + q, 'covered_by', 'doc:' + id]); }
   if (confluence && /^\d+$/.test(confluence)) { nodes.confluence[confluence] = { id: confluence }; edges.push(['doc:' + id, 'published_as', 'confluence:' + confluence]); }
 }
@@ -103,6 +105,13 @@ function findDocByHint(hint) {
   return k ? relDirToDoc[k] : null;
 }
 function slug(s) { return s.toLowerCase().replace(/[^a-zа-я0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
+// сопоставить относительный путь из RTM («dock-doors/README.md») с doc id
+function findDocByRtmPath(p) {
+  p = p.replace(/^\.\//, '').trim();
+  if (relDirToDoc[p]) return relDirToDoc[p];
+  const hit = docsWithMeta.find(d => d.rel === p || d.rel.endsWith('/' + p));
+  return hit ? hit.id : null;
+}
 
 // регистрация экрана/модалки + ребро от дока
 function addScreen(label, route, docId) {
@@ -194,6 +203,129 @@ for (const [docId, { md }] of Object.entries(docStore)) {
   }
 }
 
+// 6b) Требования из RTM-MASTER.md: | REQ-... | описание | `путь`,… | статус |
+//     RTM уже маппит требование→док — заводим узлы-требования и рёбра covered_by.
+try {
+  const rtm = fs.readFileSync(path.join(ROOT, 'RTM-MASTER.md'), 'utf8');
+  let rtmPage = null;
+  try { rtmPage = ((JSON.parse(fs.readFileSync(path.join(__dirname, 'confluence-map.json'), 'utf8')).docs || {})['RTM-MASTER.md'] || {}).id || null; } catch { /* нет карты */ }
+  const rowRe = /^\|\s*(REQ-[A-Z]+-[0-9][^|]*)\|([^|]*)\|([^|]*)\|/gm;
+  let m;
+  while ((m = rowRe.exec(rtm))) {
+    const reqIds = (m[1].match(/REQ-[A-Z]+-[0-9]+(?:\.\.[0-9]+)?/g) || []);
+    const desc = m[2].replace(/`/g, '').trim();
+    const docIds = (m[3].match(/`([^`]+\.md)`/g) || []).map(s => findDocByRtmPath(s.replace(/`/g, ''))).filter(Boolean);
+    for (const rid of reqIds) {
+      const node = nodes.requirement[rid] || (nodes.requirement[rid] = { id: rid });
+      if (desc) node.desc = desc;
+      if (rtmPage) node.confluence = rtmPage;
+      for (const did of [...new Set(docIds)]) edges.push(['req:' + rid, 'covered_by', 'doc:' + did]);
+    }
+  }
+} catch { /* нет RTM */ }
+
+// 6c) Иерархия под-областей (area) из префиксов id: doc → area → … → module.
+//     Связывает «модули одного типа»: tms.shipments.flow-types ↔ booking-types
+//     через общий узел области tms.shipments. Группирует доки/фичи/требования по теме.
+nodes.area = {};
+const docArea = {}; // doc id → ближайшая родительская область
+for (const id of Object.keys(nodes.doc)) {
+  const domain = nodes.doc[id].domain || '?';
+  const parts = id.split('.');
+  if (parts.length === 1) { if (domain !== '?') edges.push(['doc:' + id, 'part_of', 'module:' + domain]); continue; }
+  let child = 'doc:' + id;
+  for (let len = parts.length - 1; len >= 1; len--) {
+    if (len >= 2) {
+      const pref = parts.slice(0, len).join('.');
+      nodes.area[pref] = nodes.area[pref] || { id: pref, domain };
+      edges.push([child, 'part_of', 'area:' + pref]);
+      if (child === 'doc:' + id) docArea[id] = pref;
+      child = 'area:' + pref;
+    } else if (domain !== '?') {
+      edges.push([child, 'part_of', 'module:' + domain]); // верхний сегмент → домен-модуль
+    }
+  }
+}
+
+// 7) Производные рёбра модуль/область → {feature,screen,modal,code,requirement},
+//    чтобы связи были видны даже при выключенном слое «Доки».
+{
+  const relMap = { has_feature: 'feature', mentions: 'feature', has_screen: 'screen', has_modal: 'modal', documents: 'code' };
+  const docDomain = {};
+  for (const [id, v] of Object.entries(docStore)) if (v.domain && v.domain !== '?') docDomain['doc:' + id] = v.domain;
+  const seenD = new Set();
+  const addE = (from, rel, to) => { const k = from + '|' + rel + '|' + to; if (seenD.has(k)) return; seenD.add(k); edges.push([from, rel, to]); };
+  for (const e of edges.slice()) {
+    const rel = relMap[e[1]];
+    if (rel) {
+      const docId = e[0].startsWith('doc:') ? e[0].slice(4) : null;
+      const dom = docDomain[e[0]];
+      if (dom) { nodes.module[dom] = nodes.module[dom] || { id: dom }; addE('module:' + dom, rel, e[2]); }
+      const ar = docId && docArea[docId];
+      if (ar) addE('area:' + ar, rel, e[2]);
+    }
+    if (e[1] === 'covered_by') {
+      const dom = docDomain[e[2]];
+      if (dom) addE('module:' + dom, 'requirement', e[0]);
+      const ar = docArea[e[2].slice(4)];
+      if (ar) addE('area:' + ar, 'requirement', e[0]);
+    }
+  }
+}
+
+// 8) Экран → Модалка (направленно): модалки, доступные в пределах экрана.
+//    Точных данных «модалка на конкретном экране» нет, поэтому группируем по области
+//    (а при отсутствии области — по доку): экраны и модалки одной темы связываются.
+{
+  const gkey = doc => docArea[doc] || ('@' + doc);
+  const grpScr = {}, grpMod = {};
+  for (const e of edges) {
+    if (e[1] === 'has_screen' && e[0].startsWith('doc:')) (grpScr[gkey(e[0].slice(4))] = grpScr[gkey(e[0].slice(4))] || new Set()).add(e[2]);
+    if (e[1] === 'has_modal' && e[0].startsWith('doc:')) (grpMod[gkey(e[0].slice(4))] = grpMod[gkey(e[0].slice(4))] || new Set()).add(e[2]);
+  }
+  const seen = new Set();
+  for (const g in grpMod) { const ss = grpScr[g]; if (!ss) continue; for (const s of ss) for (const m of grpMod[g]) { const k = s + '|' + m; if (seen.has(k)) continue; seen.add(k); edges.push([s, 'opens', m]); } }
+}
+
+// 9) Требование → Экран/Модалка: требование проверяется на экранах своих доков.
+{
+  const docScr = {};
+  for (const e of edges) if ((e[1] === 'has_screen' || e[1] === 'has_modal') && e[0].startsWith('doc:')) (docScr[e[0].slice(4)] = docScr[e[0].slice(4)] || []).push(e[2]);
+  const seen = new Set();
+  for (const e of edges.slice()) {
+    if (e[1] !== 'covered_by') continue; // req --covered_by--> doc
+    const req = e[0], doc = e[2].slice(4);
+    for (const s of (docScr[doc] || [])) { const k = req + '|' + s; if (seen.has(k)) continue; seen.add(k); edges.push([req, 'verified_on', s]); }
+  }
+}
+
+// 10) Confluence → Confluence: вложенность страниц (mirror-дерево confluence-map.json).
+try {
+  const cmap = JSON.parse(fs.readFileSync(path.join(__dirname, 'confluence-map.json'), 'utf8'));
+  const folders = cmap.folders || {}, docsMap = cmap.docs || {}, root = cmap.root;
+  const addC = id => { if (id) nodes.confluence[id] = nodes.confluence[id] || { id }; };
+  addC(root);
+  for (const fid of Object.values(folders)) addC(fid);
+  const parentOf = rel => { const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''; return (dir && folders[dir]) ? folders[dir] : root; };
+  for (const [rel, info] of Object.entries(docsMap)) { const cid = info.id, pid = parentOf(rel); if (cid && pid && cid !== pid) { addC(cid); edges.push(['confluence:' + cid, 'child_of', 'confluence:' + pid]); } }
+  for (const [rel, fid] of Object.entries(folders)) { const pid = parentOf(rel); if (fid && pid && fid !== pid) edges.push(['confluence:' + fid, 'child_of', 'confluence:' + pid]); }
+} catch { /* нет карты */ }
+
+// 11) Public API: эндпоинты OpenAPI → узлы type:api (id = "METHOD /path").
+//     Связи: api --part_of--> doc:public-api.<resource>; api --relates_to--> module:Integrations.
+//     Источник — public-api-endpoints.json (генерится scripts/openapi-to-md.cjs).
+try {
+  const apiData = JSON.parse(fs.readFileSync(path.join(__dirname, 'public-api-endpoints.json'), 'utf8'));
+  for (const ep of (apiData.endpoints || [])) {
+    const id = `${ep.method} ${ep.path}`;
+    nodes.api[id] = { id, method: ep.method, path: ep.path, resource: ep.resource, summary: ep.summary || '' };
+    const resourceDoc = 'public-api.' + ep.resource;
+    if (nodes.doc[resourceDoc]) edges.push(['api:' + id, 'part_of', 'doc:' + resourceDoc]);
+    nodes.module.Integrations = nodes.module.Integrations || { id: 'Integrations' };
+    edges.push(['api:' + id, 'relates_to', 'module:Integrations']);
+  }
+} catch { /* нет списка эндпоинтов — пропуск */ }
+
 // дедуп рёбер (могли продублироваться при множественных проходах)
 {
   const seen = new Set();
@@ -211,11 +343,13 @@ const graph = {
     docs_with_metadata: docsWithMeta.length,
     docs_without_metadata: docsWithoutMeta.length,
     modules: Object.keys(nodes.module).length,
+    areas: Object.keys(nodes.area || {}).length,
     code_files: Object.keys(nodes.code_file).length,
     requirements: Object.keys(nodes.requirement).length,
     features: Object.keys(nodes.feature).length,
     screens: Object.keys(nodes.screen).length - modalCount,
     modals: modalCount,
+    api_endpoints: Object.keys(nodes.api).length,
     edges: edges.length,
   },
   nodes,

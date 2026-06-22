@@ -42,7 +42,7 @@ API: `GET /galaxies`, `POST/PATCH /galaxies/:id/accounts`, `/galaxies/managed-ac
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `tms.galaxy`
+- **id:** `tms.galaxy.module`
 - **type:** module-doc · **domain:** TMS · **status:** implemented
 - **confluence:** 629243979 · **repo:** `tms/galaxy/galaxy-module.md`
 - **code_refs:** `backend/app/models/{galaxy,galaxy_mentor,galaxy_service,constellation,constellation_account}.js`, `account.js:116-122`, `services/galaxies/*`, `routes/api/galaxy.js`, `frontend/public/app/galaxy`

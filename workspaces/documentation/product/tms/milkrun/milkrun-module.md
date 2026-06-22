@@ -40,7 +40,7 @@ API: `GET/POST/PATCH/DELETE /milkrun`, `/milkrun/:id/assign-shipments`, `/milkru
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `tms.milkrun`
+- **id:** `tms.milkrun.module`
 - **type:** module-doc · **domain:** TMS · **status:** implemented
 - **confluence:** 629375014 · **repo:** `tms/milkrun/milkrun-module.md`
 - **code_refs:** `backend/app/services/milkrun/index.js`, `helper.js`, `query.js`, `models/{milkrun_group,milkrun_group_shipment,milkrun_group_location}.js`, `routes/api/milkrun.js`, `frontend/public/app/milkrun`

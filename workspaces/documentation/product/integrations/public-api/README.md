@@ -7,6 +7,10 @@ source_type: confluence
 **shiptify-public-api** (`workspaces/public-api`, 583 файла) — публичный REST API для **внешних интеграторов**: перевозчиков, отправителей, партнёров и кластерных (Galaxy) интеграций. Это **отдельный сервис**, не внутренний backend. Ранее в документации был представлен только Swagger-спецификацией (`public-api-docs`); поведение самого сервиса не описывалось — заполняем пробел.
 
 > Репозиторий: `workspaces/public-api` · Swagger: `workspaces/public-api-docs/swagger/` (OpenAPI 3.0.2).
+>
+> **Hosted Swagger UI** (`BLU`/`Flint` — названия окружений, не клиентов; прод — без поддомена): прод — https://api-docs.shiptify.com/ · BLU (тест-стенд) — https://api-docs.blu.shiptify.com/ · Flint — https://api-docs.flint.shiptify.com/.
+> **Полный справочник эндпоинтов** (274 эндпоинта, авто-генерация из OpenAPI): [reference/README.md](reference/README.md). Реестр ссылок: [LINKS.md](../../LINKS.md).
+> **📘 Сквозное руководство разработчика** (модель данных, ER, цепочки вызовов, сценарии интеграции, Galaxy, события, примеры): [guide/README.md](guide/README.md).
 
 ---
 

@@ -43,7 +43,7 @@ API: `/sales-accounts` (+contacts/touchpoints/mrr-lines/opportunities/am-opportu
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `back-office.sales-accounts`
+- **id:** `back-office.sales-accounts.sales-am-module`
 - **type:** module-doc · **domain:** Back-Office · **status:** implemented
 - **confluence:** 629571659 · **repo:** `back-office/sales-accounts/sales-am-module.md`
 - **code_refs:** `back-office/server/models/{SalesAccount,SalesAccountTouchpoint,SalesAccountMrr,SalesAccountOpportunity,SalesAccountAMOpportunity}.js`, `routes/api/sales_accounts.js`, `client/containers/{salesAccounts,salesAccount,salesAccountTouchpoints,amDashboard,amOpportunities,amSalesAccounts}.tsx`

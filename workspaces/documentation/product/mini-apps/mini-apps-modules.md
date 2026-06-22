@@ -47,7 +47,7 @@ source_type: confluence
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `mini-apps`
+- **id:** `mini-apps.modules`
 - **type:** module-doc · **domain:** Mini-Apps · **status:** implemented
 - **confluence:** 629080106 · **repo:** `mini-apps/mini-apps-modules.md`
 - **code_refs:** `mini-apps/src/services/{driver,carrier,slotify,slots,customs,quick-shipment,transport-requests,shared-templates,subscriptions,access-tokens,feedback}`, `db/models/{Driver,AccessToken,TransportRequest}.js`

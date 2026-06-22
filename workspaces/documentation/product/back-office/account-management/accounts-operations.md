@@ -34,7 +34,7 @@ Back-Office управляет жизненным циклом всех сущн
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `back-office.account-management`
+- **id:** `back-office.account-management.accounts-operations`
 - **type:** module-doc · **domain:** Back-Office · **status:** implemented
 - **confluence:** 629309491 · **repo:** `back-office/account-management/accounts-operations.md`
 - **code_refs:** `back-office/client/containers/{accounts,accountsOperations,companies,carriers,carriersOperations,mergeAccountsOperation,shippersOperations,galaxiesOperations}.tsx`, `server/routes/api/{accounts,carriers}.js`

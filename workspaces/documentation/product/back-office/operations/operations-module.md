@@ -39,7 +39,7 @@ source_type: confluence
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `back-office.operations`
+- **id:** `back-office.operations.module`
 - **type:** module-doc · **domain:** Back-Office · **status:** implemented
 - **confluence:** 629309475 · **repo:** `back-office/operations/operations-module.md`
 - **code_refs:** `back-office/server/models/Alert.js`, `routes/api/{nsm,alerts}.js`, `client/containers/{nsm,alerts,pendingDocks,pendingTm,dockLeads,newSellers,killedCarriers,newCarriers}.tsx`

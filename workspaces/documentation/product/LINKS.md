@@ -23,6 +23,22 @@ source_type: confluence
 
 ---
 
+## Public API (Swagger / OpenAPI)
+
+Публичный REST API, которым пользуются клиенты. Контракт — OpenAPI 3.0.2 (`public-api-docs/swagger/api.json`), сервис — `workspaces/public-api`. Справочник эндпоинтов в доке: [integrations/public-api/reference/README.md](integrations/public-api/reference/README.md).
+
+`BLU`/`Flint` — **названия окружений** (стендов), не клиентов. Продакшн — на домене без поддомена.
+
+| Окружение | Swagger UI | Назначение |
+|-----------|-----------|-----------|
+| **Прод** | https://api-docs.shiptify.com/ | продакшн (app: https://app.shiptify.com/) |
+| **BLU** | https://api-docs.blu.shiptify.com/ | тест-стенд (app: https://app.blu.shiptify.com/) |
+| **Flint** | https://api-docs.flint.shiptify.com/ | отдельное окружение |
+
+Аутентификация: заголовок `Authorization: Api-Key <key>` (ключ на уровне user) + контекст аккаунта `x-account-id`.
+
+---
+
 ## Confluence TD Space
 
 ### Page IDs (для автосинка)

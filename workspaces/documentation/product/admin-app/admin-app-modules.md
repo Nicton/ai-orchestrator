@@ -64,7 +64,7 @@ Admin-App — внутренний инструмент команды Shiptify 
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `admin-app`
+- **id:** `admin-app.modules`
 - **type:** module-doc · **domain:** Admin-App · **status:** implemented
 - **confluence:** 629571675 · **repo:** `admin-app/admin-app-modules.md`
 - **code_refs:** `admin-app/app/controllers/api/{dictionaries-*,carrier-rules,carrier-divisions,galaxy-services,active-integrations,integration-*,customer-auth-credantials,customer-workflows,accounts,admins,access_users_to_*}.js`

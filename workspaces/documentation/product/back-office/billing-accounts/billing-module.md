@@ -39,7 +39,7 @@ API: `/billing-accounts` (+contacts/mrr-line/spot), `/billing-accounts/:id/mrr-l
 ---
 
 ## 🔗 Граф-метаданные
-- **id:** `back-office.billing-accounts`
+- **id:** `back-office.billing-accounts.billing-module`
 - **type:** module-doc · **domain:** Back-Office · **status:** implemented
 - **confluence:** 629375095 · **repo:** `back-office/billing-accounts/billing-module.md`
 - **code_refs:** `back-office/server/models/{BillingAccount,BillingAccountMrrLines,BillingAccountSpots,BillingAccountMrrRuleTms}.js`, `routes/api/billing_accounts.js`, `client/containers/{billingAccounts,billingAccount,billingMrrLines}.tsx`
