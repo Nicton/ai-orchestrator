@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — Task Testing</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button,input,select,textarea { font-family:inherit; }
+  .wrap { max-width:1080px; margin:22px auto; padding:0 18px 80px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .panel > h3 { margin:0; padding:13px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; }
+  .pad { padding:16px 18px; }
+  label.fld { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:0 0 5px; }
+  input[type=text] { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:var(--panel); color:var(--ink); }
+  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  button.pri { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; }
+  button.pri:hover { background:var(--blue-dark); } button.pri:disabled { opacity:.55; cursor:default; }
+  button.ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:10px 14px; font-size:14px; cursor:pointer; }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--red); font-size:13px; margin-top:10px; min-height:16px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .chip { display:inline-block; padding:3px 10px; border-radius:9px; font-size:12px; background:var(--bg-soft); border:1px solid var(--line); }
+  .chip.code { background:#eef4ff; border-color:#cdddff; }
+  .stagelog { font-size:12px; color:var(--muted); padding:0 0 8px; min-height:16px; }
+  .llmlog { white-space:pre-wrap; background:#0d1117; color:#c9d1d9; border-radius:8px; padding:10px; font-size:11px; line-height:1.45; max-height:180px; overflow:auto; margin:8px 0; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .report { font-size:14px; line-height:1.6; }
+  .report h2 { font-size:17px; margin:22px 0 8px; padding-top:10px; border-top:1px solid var(--line); }
+  .report h2:first-child { border-top:none; padding-top:0; margin-top:0; }
+  .report h3 { font-size:15px; margin:16px 0 6px; }
+  .report p { margin:0 0 10px; }
+  .report ul,.report ol { margin:0 0 12px; padding-left:22px; }
+  .report li { margin:4px 0; }
+  .report code { background:var(--bg-soft); padding:1px 5px; border-radius:4px; font-size:13px; }
+  .report pre.md-code { background:#0d1117; color:#c9d1d9; border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin:0 0 14px; overflow-x:auto; font-size:12.5px; line-height:1.5; }
+  .report pre.md-code code { background:none; padding:0; color:inherit; font-family:ui-monospace,Consolas,monospace; white-space:pre; }
+  .report table { border-collapse:collapse; width:100%; margin:0 0 12px; font-size:13px; }
+  .report th,.report td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
+
+<div class="wrap">
+  <h1 data-i18n="h1">🧪 Task Testing</h1>
+  <p class="sub" data-i18n="sub"></p>
+
+  <div class="panel" id="configWarn" style="display:none">
+    <div class="pad muted" data-i18n="configWarn"></div>
+  </div>
+
+  <div class="panel">
+    <h3 data-i18n="step1"></h3>
+    <div class="pad">
+      <div class="row">
+        <div style="flex:1;min-width:200px">
+          <label class="fld" data-i18n="keyLbl"></label>
+          <input type="text" id="key" placeholder="TMS-3726" />
+        </div>
+        <button class="pri" id="runBtn"></button>
+      </div>
+      <div class="muted" id="repoNote" style="margin-top:8px"></div>
+      <div class="err" id="inErr"></div>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="resultPanel">
+    <h3><span data-i18n="reportTitle"></span> <span class="muted" id="repTok" style="font-weight:400;font-size:12px"></span></h3>
+    <div class="pad">
+      <div id="metaChips"></div>
+      <div class="stagelog" id="stageLog"></div>
+      <pre class="llmlog hidden" id="llmLog"></pre>
+      <div class="report" id="report"></div>
+      <div style="margin-top:14px"><button class="ghost" id="copyBtn"></button> <span class="muted" id="copyStatus"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const L = (window.SearchifyI18N && window.SearchifyI18N.getLang()) || 'fr';
+document.documentElement.lang = L;
+
+const I18N = {
+  fr: { title:'Searchify — Test de tâches', h1:'🧪 Test de tâches',
+    sub:"Indiquez une tâche/sous-tâche Jira. Searchify récupère les exigences, les liens, tous les commentaires et le code des branches GitLab liées (pull + diff), puis joue le rôle de testeur et produit un rapport de test statique (sans exécuter le code).",
+    configWarn:'⚠️ Jira n’est pas configuré sur le serveur. L’analyse est indisponible.',
+    step1:'Tâche à tester', keyLbl:'Clé Jira (1 tâche ou sous-tâche)', run:'🧪 Analyser',
+    reportTitle:'Rapport de test statique', copy:'📋 Copier le rapport', copied:'Copié',
+    repoErr:'Décrivez une clé valide (ex. TMS-3726)', netErr:'Réseau indisponible', analyzeErr:'Erreur d’analyse',
+    reposFull:(n)=>`Dépôts de code disponibles pour le pull des branches : ${n}.`,
+    reposNone:'Aucun dépôt git local — le code des branches ne sera pas tiré ici ; rapport basé sur Jira.' },
+  en: { title:'Searchify — Task Testing', h1:'🧪 Task Testing',
+    sub:'Enter a Jira task/subtask. Searchify gathers requirements, links, all comments and the linked GitLab branch code (pull + diff), then takes the tester role and produces a static-testing report (without running the code).',
+    configWarn:'⚠️ Jira is not configured on the server. Analysis is unavailable.',
+    step1:'Task to test', keyLbl:'Jira key (1 task or subtask)', run:'🧪 Analyse',
+    reportTitle:'Static-testing report', copy:'📋 Copy report', copied:'Copied',
+    repoErr:'Enter a valid key (e.g. TMS-3726)', netErr:'Network unavailable', analyzeErr:'Analysis error',
+    reposFull:(n)=>`Code repos available for branch pull: ${n}.`,
+    reposNone:'No local git repos — branch code will not be pulled here; report is Jira-based.' },
+  ru: { title:'Searchify — Тестирование задач', h1:'🧪 Тестирование задач',
+    sub:'Укажите задачу/подзадачу Jira. Searchify соберёт требования, связи, все комментарии и код связанных GitLab-веток (пулл + дифф), затем возьмёт роль тестировщика и выдаст отчёт статического тестирования (без запуска кода).',
+    configWarn:'⚠️ Jira не настроена на сервере. Анализ недоступен.',
+    step1:'Задача для тестирования', keyLbl:'Ключ Jira (1 задача или подзадача)', run:'🧪 Анализировать',
+    reportTitle:'Отчёт статического тестирования', copy:'📋 Скопировать отчёт', copied:'Скопировано',
+    repoErr:'Укажите корректный ключ (напр. TMS-3726)', netErr:'Сеть недоступна', analyzeErr:'Ошибка анализа',
+    reposFull:(n)=>`Репозиториев кода для пулла веток: ${n}.`,
+    reposNone:'Локальных git-репозиториев нет — код веток здесь не тянется; отчёт по Jira.' },
+};
+function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
+function applyLang(){
+  document.title=t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
+  $('runBtn').textContent=t('run'); $('copyBtn').textContent=t('copy');
+}
+
+// ---------- minimal markdown renderer (headings, lists, tables, fenced code, inline) ----------
+function renderMarkdown(src){
+  const esc2=esc; const lines=esc2(src).split(/\r?\n/);
+  let html='',inUl=false,inOl=false;
+  const closeLists=()=>{ if(inUl){html+='</ul>';inUl=false;} if(inOl){html+='</ol>';inOl=false;} };
+  const isT=(l)=>/^\s*\|.*\|\s*$/.test(l);
+  const isSep=(l)=>{ const x=l.trim(); return isT(x)&&/^\|?(\s*:?-{3,}:?\s*\|)+\s*$/.test(x); };
+  const cells=(l)=>l.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(c=>c.trim());
+  const inline=(x)=>x.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i].replace(/\s+$/,''); let m;
+    if(/^\s*```/.test(line)){ closeLists(); const lang=line.replace(/^\s*```/,'').trim(); const buf=[]; i++;
+      while(i<lines.length&&!/^\s*```/.test(lines[i])){ buf.push(lines[i]); i++; }
+      html+=`<pre class="md-code"${lang?` data-lang="${lang}"`:''}><code>${buf.join('\n')}</code></pre>`; continue; }
+    if(isT(line)&&isSep(lines[i+1]||'')){ closeLists(); const h=cells(line); const rows=[]; let o=i+2;
+      while(o<lines.length&&isT(lines[o])){ rows.push(cells(lines[o])); o++; }
+      html+=`<table><thead><tr>${h.map(c=>`<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${h.map((_,j)=>`<td>${inline(r[j]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`; i=o-1; continue; }
+    if((m=line.match(/^(#{1,4})\s+(.*)$/))){ closeLists(); const lv=Math.min(m[1].length+1,4); html+=`<h${lv}>${inline(m[2])}</h${lv}>`; continue; }
+    if((m=line.match(/^\s*[-*]\s+(.*)$/))){ if(!inUl){closeLists();html+='<ul>';inUl=true;} html+=`<li>${inline(m[1])}</li>`; continue; }
+    if((m=line.match(/^\s*\d+[.)]\s+(.*)$/))){ if(!inOl){closeLists();html+='<ol>';inOl=true;} html+=`<li>${inline(m[1])}</li>`; continue; }
+    if(line.trim()===''){ closeLists(); continue; }
+    closeLists(); html+=`<p>${inline(line)}</p>`;
+  }
+  closeLists(); return html;
+}
+
+async function boot(){
+  applyLang();
+  const r=await fetch('/api/auth/me'); if(!r.ok){ location.href='/login'; return; }
+  const cfg=await fetch('/api/testing/config').then(r=>r.json()).catch(()=>({jiraEnabled:false,repos:0}));
+  if(!cfg.jiraEnabled){ $('configWarn').style.display=''; $('runBtn').disabled=true; }
+  $('repoNote').textContent = cfg.repos>0 ? t('reposFull')(cfg.repos) : t('reposNone');
+}
+
+$('key').addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
+$('runBtn').addEventListener('click', run);
+let reportText='';
+async function run(){
+  $('inErr').textContent='';
+  const key=$('key').value.trim().toUpperCase();
+  if(!/^[A-Z][A-Z0-9]+-\d+$/.test(key)){ $('inErr').textContent=t('repoErr'); return; }
+  $('resultPanel').classList.remove('hidden');
+  $('report').innerHTML=''; $('metaChips').innerHTML=''; $('repTok').textContent=''; reportText='';
+  $('llmLog').textContent=''; $('llmLog').classList.add('hidden');
+  $('stageLog').innerHTML='<span class="spin"></span> …';
+  const btn=$('runBtn'); btn.disabled=true;
+  let llmBuf='';
+  try {
+    const res=await fetch('/api/testing/analyze/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({key,lang:L})});
+    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('stageLog').textContent='⚠️ '+(tx||t('analyzeErr')); return; }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    while(true){
+      const {value,done}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n'); buf=parts.pop()||'';
+      for(const block of parts){
+        const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m);
+        if(!ev||!dm) continue; let data; try{ data=JSON.parse(dm[1]); }catch(_){ continue; }
+        if(ev==='stage'){ $('stageLog').innerHTML='<span class="spin"></span> '+esc(data.msg||''); }
+        else if(ev==='delta'){ llmBuf+=data.text||''; $('llmLog').classList.remove('hidden'); $('llmLog').textContent=llmBuf; $('llmLog').scrollTop=$('llmLog').scrollHeight; }
+        else if(ev==='result'){ result=data; }
+        else if(ev==='error'){ $('stageLog').textContent='⚠️ '+(data.message||t('analyzeErr')); }
+      }
+    }
+    if(result){ renderResult(result); }
+  } catch(_){ $('stageLog').textContent='⚠️ '+t('netErr'); }
+  finally { btn.disabled=false; }
+}
+
+function renderResult(r){
+  $('stageLog').textContent=''; $('llmLog').classList.add('hidden');
+  reportText=r.report||'';
+  const m=r.meta||{};
+  const chips=[];
+  if(m.issue) chips.push(`<span class="chip"><b>${esc(r.key)}</b> · ${esc(m.issue.type||'')} · ${esc(m.issue.status||'')}</span>`);
+  (m.related||[]).forEach(x=> chips.push(`<span class="chip">${esc(x.rel||'')}: ${esc(x.key)}</span>`));
+  (m.branches||[]).forEach(b=> chips.push(`<span class="chip code">🔀 ${esc(b.repo)}:${esc(b.branch)} · ${b.files} files</span>`));
+  $('metaChips').innerHTML = chips.length?`<div class="chips" style="margin-bottom:12px">${chips.join('')}</div>`:'';
+  $('repTok').textContent = m.tokens?`· ${m.tokens} токенов`:'';
+  $('report').innerHTML = renderMarkdown(reportText);
+}
+$('copyBtn').addEventListener('click', ()=>{ navigator.clipboard?.writeText(reportText); $('copyStatus').textContent=t('copied'); setTimeout(()=>$('copyStatus').textContent='',1500); });
+
+boot();
+</script>
+</body>
+</html>

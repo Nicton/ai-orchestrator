@@ -29,6 +29,7 @@
     ['/ideas', '💡', { fr: 'Idées', en: 'Ideas', ru: 'Идеи' }],
     ['/bugs', '🐞', { fr: 'Bugs', en: 'Bugs', ru: 'БАГи' }],
     ['/tasks', '🆕', { fr: 'Nouvelles tâches', en: 'New tasks', ru: 'Новые задачи' }],
+    ['/testing', '🧪', { fr: 'Test de tâches', en: 'Task testing', ru: 'Тестирование задач' }],
     ['/pre-planning', '🧭', { fr: 'Pré-planning', en: 'Pre-planning', ru: 'Pre-planning' }],
   ];
   var T = {
