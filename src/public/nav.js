@@ -36,6 +36,9 @@
     admin: { fr: 'Admin', en: 'Admin', ru: 'Админ' },
     logout: { fr: 'Déconnexion', en: 'Log out', ru: 'Выйти' },
     langTitle: { fr: 'Langue', en: 'Language', ru: 'Язык' },
+    verTitle: { fr: 'Version du build', en: 'Build version', ru: 'Версия сборки' },
+    verCommit: { fr: 'commit n°', en: 'commit #', ru: 'коммит №' },
+    verLoading: { fr: 'chargement…', en: 'loading…', ru: 'загрузка…' },
   };
   function tr(dict) { return dict[getLang()] || dict.en || dict.fr; }
 
@@ -58,6 +61,38 @@
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]); }); }
 
+  // --- Build/version badge (header) — small popover, no overlay/backdrop. ---
+  var verData = null;
+  function fmtDate(iso) {
+    if (!iso) return '';
+    var loc = getLang() === 'ru' ? 'ru-RU' : (getLang() === 'fr' ? 'fr-FR' : 'en-US');
+    try { return new Date(iso).toLocaleString(loc); } catch (e) { return iso; }
+  }
+  function fillVerPop() {
+    var pop = document.getElementById('verPop'); if (!pop) return;
+    if (!verData) { pop.innerHTML = '<div class="ver-meta">' + esc(tr(T.verLoading)) + '</div>'; return; }
+    var num = verData.number != null ? esc(tr(T.verCommit)) + verData.number : '';
+    pop.innerHTML =
+      '<div class="ver-head">' + esc(tr(T.verTitle)) + '</div>' +
+      '<div class="ver-msg">' + esc(verData.subject || '—') + '</div>' +
+      '<div class="ver-meta">' + esc(fmtDate(verData.date)) + (num ? ' · ' + num : '') + (verData.sha ? ' · ' + esc(verData.sha) : '') + '</div>';
+  }
+  function setupVersionBadge() {
+    var wrap = document.querySelector('.ver-wrap');
+    var btn = document.getElementById('verBtn');
+    var pop = document.getElementById('verPop');
+    if (!wrap || !btn || !pop) return;
+    var pinned = false;
+    function show() { fillVerPop(); pop.classList.add('open'); }
+    function hide() { pop.classList.remove('open'); }
+    wrap.addEventListener('mouseenter', show);
+    wrap.addEventListener('mouseleave', function () { if (!pinned) hide(); });
+    btn.addEventListener('click', function (e) { e.stopPropagation(); pinned = !pinned; if (pinned) show(); else hide(); });
+    document.addEventListener('click', function (e) { if (pinned && !wrap.contains(e.target)) { pinned = false; hide(); } });
+    if (verData) { fillVerPop(); }
+    else fetch('/api/version').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { verData = d; fillVerPop(); }).catch(function () {});
+  }
+
   function render(me) {
     var mount = document.getElementById('app-nav'); if (!mount) return;
     var here = location.pathname.replace(/\/$/, '') || '/';
@@ -73,10 +108,12 @@
       + '</select>';
     var right = authed ? '<span class="who">' + esc(me.name || me.email || '') + '</span><button class="navlink" id="navLogout">' + esc(tr(T.logout)) + '</button>' : '';
     var themeBtn = '<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme"></button>';
+    var verWrap = '<span class="ver-wrap"><button class="ver-btn" id="verBtn" title="' + esc(tr(T.verTitle)) + '" aria-label="' + esc(tr(T.verTitle)) + '">📒</button><div class="ver-pop" id="verPop"></div></span>';
     mount.className = 'app-nav';
     mount.innerHTML =
       '<a class="brand" href="/">Searchify</a>' + links + admin +
-      '<span class="nav-right">' + right + langSel + themeBtn + '</span>';
+      '<span class="nav-right">' + right + verWrap + langSel + themeBtn + '</span>';
+    setupVersionBadge();
     updateIcon();
     var tg = document.getElementById('themeToggle');
     if (tg) tg.addEventListener('click', function () { setTheme(effectiveDark() ? 'light' : 'dark'); });

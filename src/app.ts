@@ -22,6 +22,7 @@ import { registerTasksApi } from './tasks.js';
 import { registerTestingApi } from './testing.js';
 import { registerUsageApi } from './usage.js';
 import { registerAnswersApi } from './answers.js';
+import { registerVersionApi } from './version.js';
 import { loadGraphIntoDb } from './graphLoader.js';
 import { ensureBucket } from './storage.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
@@ -55,6 +56,7 @@ await registerTasksApi(app);
 await registerTestingApi(app);
 await registerUsageApi(app);
 await registerAnswersApi(app);
+await registerVersionApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
