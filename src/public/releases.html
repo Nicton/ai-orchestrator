@@ -86,12 +86,17 @@
     <h3 data-i18n="genTitle"></h3>
     <div class="pad">
       <div class="row">
-        <div style="flex:1;min-width:220px">
+        <div style="flex:0 0 200px">
+          <label class="fld" data-i18n="fromDateLbl"></label>
+          <input type="date" id="fromDate" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:var(--panel);color:var(--ink)" />
+        </div>
+        <div style="flex:1;min-width:200px">
           <label class="fld" data-i18n="fromLbl"></label>
-          <input type="text" id="fromRef" placeholder="" />
+          <input type="text" id="fromRef" placeholder="v0.389.0 / 2026-06-11" />
         </div>
         <button class="pri" id="genBtn"></button>
       </div>
+      <div class="muted" data-i18n="fromHint" style="margin-top:6px;font-size:12px"></div>
       <div class="muted" id="repoNote" style="margin-top:8px"></div>
       <div class="err" id="genErr"></div>
       <div class="stagelog" id="stageLog" style="margin-top:8px"></div>
@@ -140,7 +145,8 @@ const I18N = {
     history:'🕘 Historique', historyTitle:'Releases sauvegardées', historyEmpty:'Aucune release.', confirmDel:'Supprimer ?',
     tabQa:'QA / Tests', tabDev:'Développeurs', tabBiz:'Business', tabBaseline:'Baseline',
     netErr:'Réseau indisponible', genErr:'Erreur de génération', translating:'traduction…', noReports:'Aucun rapport.',
-    blRepos:'Dépôts (baseline → develop)', blTasks:'Tâches' },
+    blRepos:'Dépôts (baseline → develop)', blTasks:'Tâches',
+    fromDateLbl:'Depuis la date', fromHint:'La date prime sur le tag/réf. Vide = dernier tag prod par dépôt.', blDate:'Dernière release (cut)' },
   en: { title:'Searchify — Release Notes', h1:'🚀 Release Notes',
     sub:'Generate release notes for 3 audiences (QA / Devs / Business) from the code delta since the last release. History, shareable link, copy and on-demand translation.',
     cfgWarn:'⚠️ No prod git repos available / Jira not configured — generation may be limited.',
@@ -150,7 +156,8 @@ const I18N = {
     history:'🕘 History', historyTitle:'Saved releases', historyEmpty:'No releases.', confirmDel:'Delete?',
     tabQa:'QA / Testing', tabDev:'Developers', tabBiz:'Business', tabBaseline:'Baseline',
     netErr:'Network unavailable', genErr:'Generation error', translating:'translating…', noReports:'No report.',
-    blRepos:'Repos (baseline → develop)', blTasks:'Tasks' },
+    blRepos:'Repos (baseline → develop)', blTasks:'Tasks',
+    fromDateLbl:'From date', fromHint:'The date takes precedence over the tag/ref. Empty = last prod tag per repo.', blDate:'Last release (cut)' },
   ru: { title:'Searchify — Release Notes', h1:'🚀 Релиз-ноты',
     sub:'Сгенерируйте релиз-ноты для 3 ЦА (QA / Разработчики / Бизнес) из дельты кода с прошлого релиза. История, шарабельная ссылка, копирование и перевод по запросу.',
     cfgWarn:'⚠️ Нет доступных прод-репозиториев / Jira не настроена — генерация может быть ограничена.',
@@ -160,7 +167,8 @@ const I18N = {
     history:'🕘 История', historyTitle:'Сохранённые релизы', historyEmpty:'Нет релизов.', confirmDel:'Удалить?',
     tabQa:'QA / Тесты', tabDev:'Разработчики', tabBiz:'Бизнес', tabBaseline:'Baseline',
     netErr:'Сеть недоступна', genErr:'Ошибка генерации', translating:'перевод…', noReports:'Нет отчёта.',
-    blRepos:'Репозитории (baseline → develop)', blTasks:'Задачи' },
+    blRepos:'Репозитории (baseline → develop)', blTasks:'Задачи',
+    fromDateLbl:'С даты', fromHint:'Дата приоритетнее тега/рефа. Пусто = последний прод-тег по репо.', blDate:'Последний релиз (срез)' },
 };
 function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
 function applyLang(){
@@ -176,7 +184,7 @@ function renderMarkdown(src){
   const close=()=>{ if(inUl){html+='</ul>';inUl=false;} if(inOl){html+='</ol>';inOl=false;} };
   const isT=l=>/^\s*\|.*\|\s*$/.test(l), isSep=l=>{const x=l.trim();return isT(x)&&/^\|?(\s*:?-{3,}:?\s*\|)+\s*$/.test(x);};
   const cells=l=>l.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(c=>c.trim());
-  const inl=x=>x.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+  const inl=x=>x.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/(?<![\w\/>-])([A-Z][A-Z0-9]+-\d+)(?![\w<])/g,'<a href="https://shiptify.atlassian.net/browse/$1" target="_blank" rel="noopener">$1</a>');
   for(let i=0;i<lines.length;i++){ const line=lines[i].replace(/\s+$/,''); let m;
     if(/^\s*```/.test(line)){ close(); const lang=line.replace(/^\s*```/,'').trim(); const buf=[]; i++; while(i<lines.length&&!/^\s*```/.test(lines[i])){buf.push(lines[i]);i++;} html+=`<pre class="md-code"${lang?` data-lang="${lang}"`:''}><code>${buf.join('\n')}</code></pre>`; continue; }
     if(isT(line)&&isSep(lines[i+1]||'')){ close(); const h=cells(line); const rows=[]; let o=i+2; while(o<lines.length&&isT(lines[o])){rows.push(cells(lines[o]));o++;} html+=`<table><thead><tr>${h.map(c=>`<th>${inl(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${h.map((_,j)=>`<td>${inl(r[j]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`; i=o-1; continue; }
@@ -218,7 +226,8 @@ async function generate(){
   const liveByAud={qa:'',dev:'',business:''};
   const draft={ reports:{} };
   try{
-    const res=await fetch('/api/releases/generate/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from:$('fromRef').value.trim()||undefined,lang:L})});
+    const fromVal=($('fromDate').value.trim()||$('fromRef').value.trim())||undefined; // date wins over tag/ref
+    const res=await fetch('/api/releases/generate/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from:fromVal,lang:L})});
     if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('stageLog').textContent='⚠️ '+(tx||t('genErr')); return; }
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
     while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
@@ -276,14 +285,17 @@ async function showReport(){
   }catch(_){ $('reportView').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
 }
 function switchLang(lang){ const rep=release.reports[activeTab]; if(!rep) return; rep.displayLang=lang; renderLangBtns(); showReport(); }
+function jiraLink(key){ return `<a href="https://shiptify.atlassian.net/browse/${esc(key)}" target="_blank" rel="noopener">${esc(key)}</a>`; }
 function renderBaseline(){
   const b=release.baseline||{}; const repos=(b.repos||[]);
-  let html=`<div class="block"><div class="block-h"><span>${esc(t('blRepos'))} (${repos.length})</span><span class="chev">▾</span></div><div class="block-body">`;
-  html+=repos.map(r=>`<div class="bl-repo">${esc(r.repo)} @ ${esc(r.from)} → ${esc(String(r.to).replace('origin/',''))} · ${r.commits} commits · ${r.files} files</div>`).join('')||'—';
+  let html='';
+  if(b.baselineDate) html+=`<div class="panel" style="margin-bottom:12px"><div class="pad"><b>${esc(t('blDate'))}:</b> ${esc(b.baselineDate)}</div></div>`;
+  html+=`<div class="block"><div class="block-h"><span>${esc(t('blRepos'))} (${repos.length})</span><span class="chev">▾</span></div><div class="block-body">`;
+  html+=repos.map(r=>`<div class="bl-repo">${esc(r.repo)} @ ${esc(r.from)}${r.fromDate?` <span class="muted">(${esc(r.fromDate)})</span>`:''} → ${esc(String(r.to).replace('origin/',''))} · ${r.commits} commits · ${r.files} files</div>`).join('')||'—';
   html+=`</div></div>`;
   const tasks=(b.tasks||[]);
   html+=`<div class="block"><div class="block-h"><span>${esc(t('blTasks'))} (${b.taskCount||tasks.length})</span><span class="chev">▾</span></div><div class="block-body">`;
-  html+=tasks.map(tk=>`<div class="bl-task"><b>${esc(tk.key)}</b> <span class="muted">[${esc((tk.repos||[]).join(','))}]</span> ${esc(tk.summary||'')}</div>`).join('')||'—';
+  html+=tasks.map(tk=>`<div class="bl-task">${jiraLink(tk.key)} <span class="muted">[${esc((tk.repos||[]).join(','))}]</span> ${esc(tk.summary||'')}</div>`).join('')||'—';
   if(b.otherCount) html+=`<div class="muted" style="margin-top:8px">+ ${b.otherCount} commits without a Jira key</div>`;
   html+=`</div></div>`;
   $('reportView').innerHTML=html;

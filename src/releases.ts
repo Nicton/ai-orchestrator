@@ -54,9 +54,11 @@ function commitType(subject: string): string {
 type Commit = { repo: string; sha: string; author: string; date: string; subject: string; type: string; keys: string[] };
 
 // Per-repo delta since the last prod tag (or a given `from`) up to origin/<default>.
+const isDateStr = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+
 async function collectBaseline(fromOverride: string | null, onStage?: (m: string) => void) {
   const repos = availableRepos();
-  const repoInfo: Array<{ repo: string; from: string; to: string; commits: number; files: string[] }> = [];
+  const repoInfo: Array<{ repo: string; from: string; fromDate: string; to: string; commits: number; files: string[] }> = [];
   const commits: Commit[] = [];
   for (const repo of repos) {
     const cwd = path.join(WORKSPACES, repo);
@@ -67,12 +69,26 @@ async function collectBaseline(fromOverride: string | null, onStage?: (m: string
     if (!(await shp(`${GIT} rev-parse --verify --quiet origin/develop`, cwd, 15000)).trim()) {
       to = (await shp(`${GIT} rev-parse --verify --quiet origin/master`, cwd, 15000)).trim() ? 'origin/master' : 'origin/HEAD';
     }
-    let from = fromOverride || '';
-    if (!from) {
-      const tags = (await shp(`${GIT} tag --sort=-creatordate`, cwd, 20000)).split('\n').map((s) => s.trim()).filter((s) => /^v[0-9]/.test(s));
-      from = tags[0] || '';
+    let range = '';
+    let fromLabel = '';
+    let fromDate = '';
+    if (fromOverride && isDateStr(fromOverride)) {
+      // commits since a chosen date → take a larger span
+      let base = (await shp(`${GIT} rev-list -1 --before="${fromOverride} 00:00" ${to}`, cwd, 20000)).trim();
+      if (!base) base = ''; // repo younger than the date → include everything up to `to`
+      range = base ? `${base}..${to}` : `${to}~200..${to}`;
+      fromLabel = `since ${fromOverride}`;
+      fromDate = fromOverride;
+    } else {
+      let from = fromOverride || '';
+      if (!from) {
+        const tags = (await shp(`${GIT} tag --sort=-creatordate`, cwd, 20000)).split('\n').map((s) => s.trim()).filter((s) => /^v[0-9]/.test(s));
+        from = tags[0] || '';
+      }
+      range = from ? `${from}..${to}` : `${to}~80..${to}`;
+      fromLabel = from || '(last 80)';
+      if (from) fromDate = (await shp(`${GIT} log -1 --format=%ad --date=short ${from}`, cwd, 20000)).trim();
     }
-    const range = from ? `${from}..${to}` : `${to}~80..${to}`;
     const log = await shp(`${GIT} log ${range} --no-merges --pretty=%H%x09%an%x09%ad%x09%s --date=short`, cwd, 60000);
     const lines = log.split('\n').map((l) => l.trim()).filter(Boolean);
     for (const l of lines) {
@@ -82,9 +98,12 @@ async function collectBaseline(fromOverride: string | null, onStage?: (m: string
       commits.push({ repo, sha: (sha || '').slice(0, 9), author: author || '', date: date || '', subject, type: commitType(subject), keys: subject.match(KEY_RE) || [] });
     }
     const files = (await shp(`${GIT} diff --name-only ${range}`, cwd, 60000)).split('\n').map((s) => s.trim()).filter(Boolean);
-    repoInfo.push({ repo, from: from || '(last 80)', to, commits: lines.length, files });
+    repoInfo.push({ repo, from: fromLabel, fromDate, to, commits: lines.length, files });
   }
-  return { repos: repoInfo, commits };
+  // "Last release / cut" date = the most recent baseline (tag/date) across repos.
+  const dates = repoInfo.map((r) => r.fromDate).filter(Boolean).sort();
+  const baselineDate = dates.length ? dates[dates.length - 1] : '';
+  return { repos: repoInfo, commits, baselineDate };
 }
 
 // commits → tasks (grouped by Jira key); commits without a key → "other".
@@ -171,6 +190,7 @@ function buildDigest(baseline: any, tasksMap: Map<string, any>, other: Commit[],
   const moduleLines = impact.modules.map(([m, n]: [string, number]) => `- ${m}: ${n} файлов`);
   return [
     `RELEASE ${releaseId}`,
+    baseline.baselineDate ? `Baseline (last release) date: ${baseline.baselineDate}` : '',
     `Repos (baseline → develop):\n${repoHdr}`,
     `\nTASKS (commits aggregated by Jira key; ${tasksMap.size}):\n${taskLines.join('\n') || '(none)'}`,
     other.length ? `\nOTHER commits without a Jira key (${other.length}):\n${otherLines.join('\n')}` : '',
@@ -270,7 +290,7 @@ export async function registerReleasesApi(app: FastifyInstance) {
         data: {
           createdById: user.id, createdBy: user.name, releaseId, title: `Release ${releaseId}`,
           fromRefs, toRefs,
-          baseline: { repos: baseline.repos.map((r: any) => ({ repo: r.repo, from: r.from, to: r.to, commits: r.commits, files: r.files.length })), taskCount: tasks.size, otherCount: other.length, tasks: [...tasks.values()].slice(0, 200).map((t) => ({ key: t.key, repos: [...t.repos], summary: (jira.get(t.key) || {}).summary || t.subjects[0] || '' })) },
+          baseline: { baselineDate: baseline.baselineDate, repos: baseline.repos.map((r: any) => ({ repo: r.repo, from: r.from, fromDate: r.fromDate, to: r.to, commits: r.commits, files: r.files.length })), taskCount: tasks.size, otherCount: other.length, tasks: [...tasks.values()].slice(0, 200).map((t) => ({ key: t.key, repos: [...t.repos], summary: (jira.get(t.key) || {}).summary || t.subjects[0] || '' })) },
           reports: { create: reports.map((r) => ({ audience: r.audience, lang, bodyMd: r.bodyMd })) },
         },
         include: { reports: true },
