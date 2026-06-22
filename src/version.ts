@@ -21,7 +21,9 @@ function sh(cmd: string, cwd: string): Promise<string> {
 let cache: { at: number; data: any } | null = null;
 
 export async function registerVersionApi(app: FastifyInstance) {
-  app.get('/api/version', async (_req, reply) => {
+  // NB: /api/version is reserved by the front Caddy proxy on this host (routed
+  // to another service) → use /api/app-version so it reaches this app.
+  app.get('/api/app-version', async (_req, reply) => {
     if (cache && Date.now() - cache.at < 60000) return reply.send(cache.data);
     const dir = repoDir();
     let data: any = { number: null, subject: '', date: '', sha: '' };

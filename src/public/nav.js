@@ -90,7 +90,7 @@
     btn.addEventListener('click', function (e) { e.stopPropagation(); pinned = !pinned; if (pinned) show(); else hide(); });
     document.addEventListener('click', function (e) { if (pinned && !wrap.contains(e.target)) { pinned = false; hide(); } });
     if (verData) { fillVerPop(); }
-    else fetch('/api/version').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { verData = d; fillVerPop(); }).catch(function () {});
+    else fetch('/api/app-version').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { verData = d; fillVerPop(); }).catch(function () {});
   }
 
   function render(me) {
