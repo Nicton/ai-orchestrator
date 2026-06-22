@@ -1010,6 +1010,73 @@ async function graphContext(question: string, plan?: KnowledgeQueryPlan): Promis
   }
 }
 
+// ── Code dive: when the answer needs the actual implementation, read the real
+// source under workspaces/ (baked into the image) and answer from it. ──
+const CODE_EXT_RE = /\.(?:js|ts|jsx|tsx|mjs|cjs|vue|py)$/i;
+const WORKSPACES_ROOT = path.resolve(process.cwd(), 'workspaces');
+
+async function resolveCodePath(hint: string): Promise<string | null> {
+  const clean = hint.replace(/[:#].*$/, '').replace(/^[`'"(]+|[`'")]+$/g, '').trim();
+  if (!clean || !CODE_EXT_RE.test(clean) || clean.includes('..')) return null;
+  const norm = clean.replace(/^workspaces\//, '').replace(/^\.\//, '');
+  const cands = [norm, `backend/${norm}`, `public-api/${norm}`, `frontend/${norm}`, `microservices/${norm}`];
+  for (const c of cands) {
+    const p = path.join(WORKSPACES_ROOT, c);
+    if (!p.startsWith(WORKSPACES_ROOT)) continue;
+    try { if ((await fs.stat(p)).isFile()) return p; } catch { /* not here */ }
+  }
+  return null;
+}
+function extractCodeHints(text: string): { paths: string[]; idents: string[] } {
+  const paths = new Set<string>();
+  for (const m of String(text).matchAll(/((?:[\w@.-]+\/){1,}[\w.-]+\.(?:js|ts|jsx|tsx|mjs|cjs|vue|py))/g)) paths.add(m[1]);
+  const idents = new Set<string>();
+  for (const m of String(text).matchAll(/`([a-zA-Z_][a-zA-Z0-9_]{3,})\(?\)?`/g)) idents.add(m[1].replace(/\(\)$/, ''));
+  return { paths: [...paths].slice(0, 14), idents: [...idents].slice(0, 10) };
+}
+// Did the model punt to "go read the code"? (or did the doc answer fall short)
+function needsCode(t: string): boolean {
+  return /смотреть в код|в коде\b|посмотреть\s+(?:в\s+)?код|исходник|look at the code|check the (?:source )?code|in the (?:source )?code|see the (?:source )?code|read(?:ing)? the (?:code|implementation|source)|нужно смотреть/i.test(String(t));
+}
+async function codeDive(
+  question: string,
+  sourceText: string,
+  lang: string,
+  progress?: { stage: (m: string) => void; delta: (t: string) => void },
+): Promise<{ answer: string; files: string[]; result: Awaited<ReturnType<typeof runRolePrompt>> } | null> {
+  const { paths, idents } = extractCodeHints(sourceText);
+  const files: Array<{ path: string; text: string }> = [];
+  const seen = new Set<string>();
+  for (const h of paths) {
+    if (files.length >= 4) break;
+    const real = await resolveCodePath(h);
+    if (!real || seen.has(real)) continue;
+    seen.add(real);
+    try {
+      const txt = await fs.readFile(real, 'utf8');
+      files.push({ path: path.relative(WORKSPACES_ROOT, real).split(path.sep).join('/'), text: txt });
+    } catch { /* skip unreadable */ }
+  }
+  if (!files.length) return null;
+  progress?.stage(`📂 Читаю исходный код: ${files.map((f) => f.path).join(', ')}`);
+  const terms = [...idents, ...tokenize(question)];
+  const block = files.map((f) => {
+    const body = f.text.length > 7000 ? buildEvidence(f.text, terms) : f.text;
+    return `FILE: ${f.path}\n\`\`\`\n${body.slice(0, 7000)}\n\`\`\``;
+  }).join('\n\n');
+  const prompt = `You are a senior Shiptify engineer with access to the ACTUAL SOURCE CODE below. The documentation did not fully answer the question, so answer by READING THE CODE. Be concrete: state the exact behavior and cite file + function. Source code is authoritative — if it answers the question, give the definitive answer (do NOT punt with "look at the code"). If the provided files genuinely do not contain the answer, say precisely what is missing and which file would hold it. Respond in language: ${lang}. End with a "Sources:" line listing the code files you used.
+
+Question:
+${question}
+
+SOURCE CODE:
+${block}`;
+  const r = await runRolePrompt('engineer.code_answer', prompt, config.answerModel, progress?.delta);
+  const ans = (r.text || '').trim();
+  if (!ans || looksInsufficient(ans)) return null;
+  return { answer: ans, files: files.map((f) => f.path), result: r };
+}
+
 async function composeAnswer(
   question: string,
   hits: KnowledgeSearchHit[],
@@ -1128,8 +1195,32 @@ ${evidence}`;
 
   // Грунтованный ответ от LLM (по документации) — основной путь. Граф добавляем дополнением.
   if (llmAnswer && !looksInsufficient(llmAnswer)) {
+    // Если ответ «упирается в код» — сами идём читать исходники и доотвечаем (код авторитетнее).
+    if (result?.engine === 'claude' && needsCode(llmAnswer)) {
+      progress?.stage('🧩 Ответ упирается в код — открываю исходники…');
+      try {
+        const cd = await codeDive(question, `${llmAnswer}\n\n${evidence}`, lang, progress);
+        if (cd) {
+          const answer = graphCtx ? `${cd.answer}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : cd.answer;
+          return { mode: 'llm', answer, usedGraph, llmLog: mkLog(`code-dive used: ${cd.files.join(', ')}`), ...tokOf(result, cd.result) };
+        }
+      } catch { /* fall back to the doc answer */ }
+    }
     const answer = graphCtx ? `${llmAnswer}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : llmAnswer;
     return { mode: 'llm', answer, usedGraph, llmLog: mkLog('LLM answer used' + (graphCtx ? ' + graph appended' : '')), ...tokOf(result) };
+  }
+
+  // Документация не дала ответа, но Claude доступен → сперва пробуем ПОЧИТАТЬ КОД (авторитетно),
+  // и только если кода нет — режим «Додумывания».
+  if (result?.engine === 'claude') {
+    progress?.stage('🧩 В доке ответа нет — открываю исходный код…');
+    try {
+      const cd = await codeDive(question, `${llmAnswer}\n\n${evidence}`, lang, progress);
+      if (cd) {
+        const answer = graphCtx ? `${cd.answer}\n\n---\n\n${formatGraphAnswer(graphCtx, lang)}` : cd.answer;
+        return { mode: 'llm', answer, usedGraph, llmLog: mkLog(`code-dive used (doc answer insufficient): ${cd.files.join(', ')}`), ...tokOf(result, cd.result) };
+      }
+    } catch { /* fall through to speculative */ }
   }
 
   // РЕЖИМ «ДОДУМЫВАНИЯ»: точного ответа в документации нет, но Claude доступен →
