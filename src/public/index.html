@@ -550,6 +550,8 @@ const I18N = {
     histEmpty: 'Пока нет вопросов.',
     histSrc: 'ист.',
     histVoice: '🎙️ голос',
+    histOpen: '↗ К ответу',
+    histRerun: '↻ Перезапросить',
   },
   en: {
     appTagline: 'Ask anything about our products, processes and docs',
@@ -628,6 +630,8 @@ const I18N = {
     histEmpty: 'No questions yet.',
     histSrc: 'src',
     histVoice: '🎙️ voice',
+    histOpen: '↗ Open answer',
+    histRerun: '↻ Re-run',
   },
   fr: {
     appTagline: 'Pose une question sur nos produits, processus et documentations',
@@ -706,6 +710,8 @@ const I18N = {
     histEmpty: 'Aucune question pour le moment.',
     histSrc: 'src',
     histVoice: '🎙️ voix',
+    histOpen: '↗ Voir la réponse',
+    histRerun: '↻ Relancer',
   },
 };
 
@@ -1009,6 +1015,8 @@ async function openSharedAnswer(id){
     $('resultsArea').style.display = '';
     lastQuery = { id: d.queryId, rating: null };
     renderAnswer(d);
+    // Reflect the answer in the URL so it can be bookmarked / shared directly.
+    try { history.replaceState(null, '', `${location.pathname}?answer=${encodeURIComponent(d.queryId)}`); } catch(_){}
     toast(t('sharedAnswerOpened'));
   }catch(_){ toast(t('answerNotFound')); }
 }
@@ -1672,7 +1680,7 @@ async function openHistory(){
   const body = $('drBody');
   if (!data.queries || !data.queries.length){ body.innerHTML = `<div class="empty">${escapeHtml(t('histEmpty'))}</div>`; return; }
   body.innerHTML = data.queries.map((q, i) => `
-    <div class="hist-item" data-q="${escapeHtml(q.question)}">
+    <div class="hist-item" data-q="${escapeHtml(q.question)}" data-id="${escapeHtml(q.id)}">
       <div class="hist-q">${escapeHtml(q.question)}</div>
       <div class="hist-meta">
         <span>${new Date(q.createdAt).toLocaleString()}</span>
@@ -1682,13 +1690,26 @@ async function openHistory(){
         ${q.inputMode==='voice' ? `<span>${escapeHtml(t('histVoice'))}</span>` : ''}
         ${q.llmLog ? `<span class="hist-log-toggle" data-i="${i}" style="cursor:pointer;color:var(--blue)">🧠 LLM-лог</span>` : ''}
       </div>
+      <div class="hist-meta">
+        <span class="hist-open" data-id="${escapeHtml(q.id)}" style="cursor:pointer;color:var(--blue)">${escapeHtml(t('histOpen'))}</span>
+        <span class="hist-rerun" data-q="${escapeHtml(q.question)}" style="cursor:pointer;color:var(--muted)">${escapeHtml(t('histRerun'))}</span>
+      </div>
       ${q.llmLog ? `<pre class="hist-log" id="histLog${i}" style="display:none;white-space:pre-wrap;background:#0d1117;color:#c9d1d9;border-radius:8px;padding:10px;font-size:11px;line-height:1.4;max-height:300px;overflow:auto;margin-top:8px">${escapeHtml(q.llmLog)}</pre>` : ''}
     </div>`).join('');
   body.querySelectorAll('.hist-log-toggle').forEach(el => {
     el.addEventListener('click', (e) => { e.stopPropagation(); const box = $('histLog'+el.dataset.i); if (box) box.style.display = box.style.display==='none' ? 'block' : 'none'; });
   });
+  // Open the saved answer directly — no re-run, no extra LLM cost.
+  body.querySelectorAll('.hist-open').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); closeDrawer(); openSharedAnswer(el.dataset.id); });
+  });
+  // Re-run the query from scratch (fresh answer).
+  body.querySelectorAll('.hist-rerun').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); $('q').value = el.dataset.q; closeDrawer(); runSearch(); });
+  });
+  // Clicking the item body opens the saved answer by default.
   body.querySelectorAll('.hist-item').forEach(el => {
-    el.addEventListener('click', () => { $('q').value = el.dataset.q; closeDrawer(); runSearch(); });
+    el.addEventListener('click', () => { closeDrawer(); openSharedAnswer(el.dataset.id); });
   });
 }
 function closeDrawer(){ $('drawerMount').innerHTML = ''; }
