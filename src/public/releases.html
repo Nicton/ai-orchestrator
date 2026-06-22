@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — Release Notes</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button,input,select,textarea { font-family:inherit; }
+  .wrap { max-width:1080px; margin:22px auto; padding:0 18px 80px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 18px; }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .panel > h3 { margin:0; padding:13px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; }
+  .pad { padding:16px 18px; }
+  label.fld { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:0 0 5px; }
+  input[type=text] { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:var(--panel); color:var(--ink); }
+  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  button.pri { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; }
+  button.pri:hover { background:var(--blue-dark); } button.pri:disabled { opacity:.55; cursor:default; }
+  button.ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; }
+  button.ghost:hover { background:var(--bg-soft); }
+  button.ghost.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--red); font-size:13px; margin-top:10px; min-height:16px; }
+  .stagelog { font-size:12px; color:var(--muted); padding:0 0 8px; min-height:16px; }
+  .llmlog { white-space:pre-wrap; background:#0d1117; color:#c9d1d9; border-radius:8px; padding:10px; font-size:11px; line-height:1.45; max-height:200px; overflow:auto; margin:8px 0; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .tab { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:9px; padding:8px 14px; font-size:14px; cursor:pointer; font-weight:500; }
+  .tab.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .langbtns { display:inline-flex; gap:4px; margin-left:auto; }
+  .toc { position:sticky; top:8px; background:var(--bg-soft); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:0 0 14px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; z-index:5; }
+  .toc-head { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-right:2px; }
+  .toc-item { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:7px; padding:5px 9px; font-size:12.5px; cursor:pointer; }
+  .toc-item:hover { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .block { border:1px solid var(--line); border-radius:10px; margin-bottom:12px; overflow:hidden; }
+  .block-h { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:11px 14px; background:var(--bg-soft); cursor:pointer; user-select:none; font-weight:600; font-size:15px; }
+  .block-h .chev { color:var(--muted); font-size:12px; }
+  .block.collapsed .block-h .chev { transform:rotate(-90deg); }
+  .block.collapsed .block-body { display:none; }
+  .block-body { padding:4px 16px 12px; font-size:14px; line-height:1.6; }
+  .block-body h3 { font-size:15px; margin:14px 0 6px; }
+  .block-body ul,.block-body ol { margin:0 0 10px; padding-left:22px; }
+  .block-body code { background:var(--bg-soft); padding:1px 5px; border-radius:4px; font-size:13px; }
+  .block-body pre.md-code { background:#0d1117; color:#c9d1d9; border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto; font-size:12.5px; }
+  .block-body pre.md-code code { background:none; padding:0; color:inherit; font-family:ui-monospace,Consolas,monospace; white-space:pre; }
+  .block-body table { border-collapse:collapse; width:100%; margin:0 0 12px; font-size:13px; }
+  .block-body th,.block-body td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
+  .bl-repo { font-family:ui-monospace,Consolas,monospace; font-size:12.5px; }
+  .bl-task { font-size:13px; padding:3px 0; border-bottom:1px solid var(--line); }
+  .hidden { display:none !important; }
+  /* drawer */
+  .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:60; display:none; } .drawer-mask.open { display:block; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:min(420px,92vw); background:var(--panel); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.18); z-index:61; transform:translateX(100%); transition:transform .2s ease; display:flex; flex-direction:column; } .drawer.open { transform:translateX(0); }
+  .drawer h3 { margin:0; padding:14px 18px; border-bottom:1px solid var(--line); font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .drawer .list { flex:1; overflow:auto; padding:12px 14px; }
+  .hist-item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; cursor:pointer; } .hist-item:hover { background:var(--bg-soft); }
+  .hist-title { font-size:14px; font-weight:500; } .hist-meta { color:var(--muted); font-size:12px; margin-top:4px; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1 data-i18n="h1">🚀 Release Notes</h1>
+      <p class="sub" data-i18n="sub"></p>
+    </div>
+    <button class="ghost" id="historyBtn" style="white-space:nowrap"></button>
+  </div>
+
+  <div class="panel" id="cfgWarn" style="display:none"><div class="pad muted" data-i18n="cfgWarn"></div></div>
+
+  <div class="panel">
+    <h3 data-i18n="genTitle"></h3>
+    <div class="pad">
+      <div class="row">
+        <div style="flex:1;min-width:220px">
+          <label class="fld" data-i18n="fromLbl"></label>
+          <input type="text" id="fromRef" placeholder="" />
+        </div>
+        <button class="pri" id="genBtn"></button>
+      </div>
+      <div class="muted" id="repoNote" style="margin-top:8px"></div>
+      <div class="err" id="genErr"></div>
+      <div class="stagelog" id="stageLog" style="margin-top:8px"></div>
+      <pre class="llmlog hidden" id="llmLog"></pre>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="resultPanel">
+    <h3><span data-i18n="resultTitle"></span> <span class="muted" id="relMeta" style="font-weight:400;font-size:12px"></span></h3>
+    <div class="pad">
+      <div class="tabs" id="tabs"></div>
+      <div class="toolbar" id="reportTools" style="display:none">
+        <button class="ghost" id="copyBtn"></button>
+        <button class="ghost" id="copyLinkBtn"></button>
+        <button class="ghost" id="expandAllBtn"></button>
+        <button class="ghost" id="collapseAllBtn"></button>
+        <span class="muted" id="copyStatus"></span>
+        <span class="langbtns" id="langBtns"></span>
+      </div>
+      <div class="toc" id="toc" style="display:none"></div>
+      <div id="reportView"></div>
+    </div>
+  </div>
+
+  <div class="drawer-mask" id="histMask"></div>
+  <div class="drawer" id="histDrawer">
+    <h3><span data-i18n="historyTitle"></span><button class="ghost" id="histClose" style="border:none;background:none;font-size:16px">✕</button></h3>
+    <div class="list" id="histList"></div>
+  </div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const L = (window.SearchifyI18N && window.SearchifyI18N.getLang()) || 'fr';
+document.documentElement.lang = L;
+const LANGS = ['fr','en','ru'];
+
+const I18N = {
+  fr: { title:'Searchify — Release Notes', h1:'🚀 Release Notes',
+    sub:'Générez les notes de version pour 3 publics (QA / Devs / Business) à partir du delta de code depuis la dernière release. Historique, lien partageable, copie et traduction à la demande.',
+    cfgWarn:'⚠️ Aucun dépôt git de prod disponible / Jira non configuré — la génération peut être limitée.',
+    genTitle:'Générer une release', fromLbl:'Depuis (tag/réf, vide = dernier tag prod par dépôt)', gen:'🚀 Générer la release',
+    resultTitle:'Notes de version', copy:'📋 Copier', copyLink:'🔗 Copier le lien', copied:'Copié', linkCopied:'Lien copié',
+    expandAll:'Tout déplier', collapseAll:'Tout replier', contents:'Sommaire',
+    history:'🕘 Historique', historyTitle:'Releases sauvegardées', historyEmpty:'Aucune release.', confirmDel:'Supprimer ?',
+    tabQa:'QA / Tests', tabDev:'Développeurs', tabBiz:'Business', tabBaseline:'Baseline',
+    netErr:'Réseau indisponible', genErr:'Erreur de génération', translating:'traduction…', noReports:'Aucun rapport.',
+    blRepos:'Dépôts (baseline → develop)', blTasks:'Tâches' },
+  en: { title:'Searchify — Release Notes', h1:'🚀 Release Notes',
+    sub:'Generate release notes for 3 audiences (QA / Devs / Business) from the code delta since the last release. History, shareable link, copy and on-demand translation.',
+    cfgWarn:'⚠️ No prod git repos available / Jira not configured — generation may be limited.',
+    genTitle:'Generate a release', fromLbl:'From (tag/ref, empty = last prod tag per repo)', gen:'🚀 Generate release',
+    resultTitle:'Release notes', copy:'📋 Copy', copyLink:'🔗 Copy link', copied:'Copied', linkCopied:'Link copied',
+    expandAll:'Expand all', collapseAll:'Collapse all', contents:'Contents',
+    history:'🕘 History', historyTitle:'Saved releases', historyEmpty:'No releases.', confirmDel:'Delete?',
+    tabQa:'QA / Testing', tabDev:'Developers', tabBiz:'Business', tabBaseline:'Baseline',
+    netErr:'Network unavailable', genErr:'Generation error', translating:'translating…', noReports:'No report.',
+    blRepos:'Repos (baseline → develop)', blTasks:'Tasks' },
+  ru: { title:'Searchify — Release Notes', h1:'🚀 Релиз-ноты',
+    sub:'Сгенерируйте релиз-ноты для 3 ЦА (QA / Разработчики / Бизнес) из дельты кода с прошлого релиза. История, шарабельная ссылка, копирование и перевод по запросу.',
+    cfgWarn:'⚠️ Нет доступных прод-репозиториев / Jira не настроена — генерация может быть ограничена.',
+    genTitle:'Сгенерировать релиз', fromLbl:'От (тег/реф, пусто = последний прод-тег по репо)', gen:'🚀 Сгенерировать релиз',
+    resultTitle:'Релиз-ноты', copy:'📋 Копировать', copyLink:'🔗 Скопировать ссылку', copied:'Скопировано', linkCopied:'Ссылка скопирована',
+    expandAll:'Развернуть всё', collapseAll:'Свернуть всё', contents:'Содержание',
+    history:'🕘 История', historyTitle:'Сохранённые релизы', historyEmpty:'Нет релизов.', confirmDel:'Удалить?',
+    tabQa:'QA / Тесты', tabDev:'Разработчики', tabBiz:'Бизнес', tabBaseline:'Baseline',
+    netErr:'Сеть недоступна', genErr:'Ошибка генерации', translating:'перевод…', noReports:'Нет отчёта.',
+    blRepos:'Репозитории (baseline → develop)', blTasks:'Задачи' },
+};
+function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
+function applyLang(){
+  document.title=t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
+  $('genBtn').textContent=t('gen'); $('copyBtn').textContent=t('copy'); $('copyLinkBtn').textContent=t('copyLink');
+  $('expandAllBtn').textContent=t('expandAll'); $('collapseAllBtn').textContent=t('collapseAll'); $('historyBtn').textContent=t('history');
+}
+
+// ---- markdown renderer (headings/lists/tables/fenced/inline) ----
+function renderMarkdown(src){
+  const lines=esc(src).split(/\r?\n/); let html='',inUl=false,inOl=false;
+  const close=()=>{ if(inUl){html+='</ul>';inUl=false;} if(inOl){html+='</ol>';inOl=false;} };
+  const isT=l=>/^\s*\|.*\|\s*$/.test(l), isSep=l=>{const x=l.trim();return isT(x)&&/^\|?(\s*:?-{3,}:?\s*\|)+\s*$/.test(x);};
+  const cells=l=>l.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(c=>c.trim());
+  const inl=x=>x.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+  for(let i=0;i<lines.length;i++){ const line=lines[i].replace(/\s+$/,''); let m;
+    if(/^\s*```/.test(line)){ close(); const lang=line.replace(/^\s*```/,'').trim(); const buf=[]; i++; while(i<lines.length&&!/^\s*```/.test(lines[i])){buf.push(lines[i]);i++;} html+=`<pre class="md-code"${lang?` data-lang="${lang}"`:''}><code>${buf.join('\n')}</code></pre>`; continue; }
+    if(isT(line)&&isSep(lines[i+1]||'')){ close(); const h=cells(line); const rows=[]; let o=i+2; while(o<lines.length&&isT(lines[o])){rows.push(cells(lines[o]));o++;} html+=`<table><thead><tr>${h.map(c=>`<th>${inl(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${h.map((_,j)=>`<td>${inl(r[j]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`; i=o-1; continue; }
+    if((m=line.match(/^(#{1,4})\s+(.*)$/))){ close(); const lv=Math.min(m[1].length+1,4); html+=`<h${lv}>${inl(m[2])}</h${lv}>`; continue; }
+    if((m=line.match(/^\s*[-*]\s+(.*)$/))){ if(!inUl){close();html+='<ul>';inUl=true;} html+=`<li>${inl(m[1])}</li>`; continue; }
+    if((m=line.match(/^\s*\d+[.)]\s+(.*)$/))){ if(!inOl){close();html+='<ol>';inOl=true;} html+=`<li>${inl(m[1])}</li>`; continue; }
+    if(line.trim()===''){ close(); continue; } close(); html+=`<p>${inl(line)}</p>`;
+  } close(); return html;
+}
+function renderReportInto(md, mountEl){
+  const lines=(md||'').split(/\r?\n/); const sections=[]; let cur=null; const pre=[];
+  for(const ln of lines){ const m=ln.match(/^##\s+(.*)$/); if(m){cur={title:m[1].trim(),body:[]};sections.push(cur);} else if(cur){cur.body.push(ln);} else pre.push(ln); }
+  if(sections.length>1){ $('toc').style.display=''; $('toc').innerHTML=`<span class="toc-head">${esc(t('contents'))}</span>`+sections.map((s,i)=>`<button class="toc-item" data-sec="${i}">${esc(s.title)}</button>`).join(''); }
+  else { $('toc').style.display='none'; $('toc').innerHTML=''; }
+  let html=''; if(pre.join('').trim()) html+=`<div style="margin-bottom:12px" class="block-body">${renderMarkdown(pre.join('\n'))}</div>`;
+  sections.forEach((s,i)=>{ html+=`<div class="block" id="sec${i}"><div class="block-h"><span>${esc(s.title)}</span><span class="chev">▾</span></div><div class="block-body">${renderMarkdown(s.body.join('\n'))}</div></div>`; });
+  mountEl.innerHTML=html;
+  mountEl.querySelectorAll('.block-h').forEach(h=> h.addEventListener('click', ()=> h.parentElement.classList.toggle('collapsed')));
+  $('toc').querySelectorAll('.toc-item').forEach(b=> b.addEventListener('click', ()=>{ const el=$('sec'+b.dataset.sec); if(el){ el.classList.remove('collapsed'); el.scrollIntoView({behavior:'smooth',block:'start'}); } }));
+}
+
+let release=null, activeTab='qa';
+const AUD=['qa','dev','business'];
+const AUD_LABEL={qa:'tabQa',dev:'tabDev',business:'tabBiz'};
+
+async function boot(){
+  applyLang();
+  const r=await fetch('/api/auth/me'); if(!r.ok){ location.href='/login'; return; }
+  const cfg=await fetch('/api/releases/config').then(r=>r.json()).catch(()=>({repos:[]}));
+  if(!cfg.repos||!cfg.repos.length){ $('cfgWarn').style.display=''; }
+  $('repoNote').textContent = (cfg.repos||[]).length ? ((L==='ru'?'Репозитории: ':'Repos: ')+cfg.repos.join(', ')) : '';
+}
+
+// ---- generate ----
+$('genBtn').addEventListener('click', generate);
+async function generate(){
+  $('genErr').textContent=''; const btn=$('genBtn'); btn.disabled=true;
+  $('resultPanel').classList.add('hidden'); $('stageLog').innerHTML='<span class="spin"></span> …'; $('llmLog').textContent=''; $('llmLog').classList.remove('hidden');
+  const liveByAud={qa:'',dev:'',business:''};
+  const draft={ reports:{} };
+  try{
+    const res=await fetch('/api/releases/generate/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from:$('fromRef').value.trim()||undefined,lang:L})});
+    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('stageLog').textContent='⚠️ '+(tx||t('genErr')); return; }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n'); buf=parts.pop()||'';
+      for(const block of parts){ const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m); if(!ev||!dm) continue; let d; try{d=JSON.parse(dm[1]);}catch(_){continue;}
+        if(ev==='stage'){ $('stageLog').innerHTML='<span class="spin"></span> '+esc(d.msg||''); }
+        else if(ev==='delta'){ liveByAud[d.audience]=(liveByAud[d.audience]||'')+(d.text||''); $('llmLog').textContent=liveByAud[d.audience]; $('llmLog').scrollTop=$('llmLog').scrollHeight; }
+        else if(ev==='report'){ draft.reports[d.audience]=d.bodyMd; }
+        else if(ev==='result'){ result=d; }
+        else if(ev==='error'){ $('stageLog').textContent='⚠️ '+(d.message||t('genErr')); }
+      }
+    }
+    if(result){ loadReleaseObj(result); updateUrl(result.id, activeTab); }
+  } catch(_){ $('stageLog').textContent='⚠️ '+t('netErr'); }
+  finally { btn.disabled=false; $('llmLog').classList.add('hidden'); $('stageLog').textContent=''; }
+}
+
+// shape a release (from generate result or GET /:id) into local state
+function loadReleaseObj(d){
+  release={ id:d.id, releaseId:d.releaseId, baseline:d.baseline, reports:{} };
+  (d.reports||[]).forEach(r=>{ const lng=r.lang||d.lang||'ru'; release.reports[r.audience]={ id:r.id, origLang:lng, displayLang:lng, cache:{}, translations:r.translations||[] }; release.reports[r.audience].cache[lng]=r.bodyMd; });
+  $('resultPanel').classList.remove('hidden');
+  $('relMeta').textContent = `${release.releaseId} · ${(d.createdBy||'')}`;
+  renderTabs(); selectTab(AUD.find(a=>release.reports[a])||'qa');
+  $('resultPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderTabs(){
+  const tabs=[]; AUD.forEach(a=>{ if(release.reports[a]) tabs.push(`<button class="tab" data-tab="${a}">${esc(t(AUD_LABEL[a]))}</button>`); });
+  tabs.push(`<button class="tab" data-tab="baseline">${esc(t('tabBaseline'))}</button>`);
+  $('tabs').innerHTML=tabs.join('');
+  $('tabs').querySelectorAll('.tab').forEach(b=> b.addEventListener('click', ()=> selectTab(b.dataset.tab)));
+}
+function selectTab(tab){
+  activeTab=tab;
+  $('tabs').querySelectorAll('.tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
+  if(tab==='baseline'){ $('reportTools').style.display='none'; $('toc').style.display='none'; renderBaseline(); updateUrl(release.id,'baseline'); return; }
+  $('reportTools').style.display='';
+  renderLangBtns();
+  showReport();
+  updateUrl(release.id, tab);
+}
+function renderLangBtns(){
+  const rep=release.reports[activeTab]; if(!rep) return;
+  $('langBtns').innerHTML = LANGS.map(l=>`<button class="ghost${l===rep.displayLang?' on':''}" data-lang="${l}">${l.toUpperCase()}</button>`).join('');
+  $('langBtns').querySelectorAll('[data-lang]').forEach(b=> b.addEventListener('click', ()=> switchLang(b.dataset.lang)));
+}
+async function showReport(){
+  const rep=release.reports[activeTab]; if(!rep){ $('reportView').innerHTML=`<p class="muted">${esc(t('noReports'))}</p>`; return; }
+  const lang=rep.displayLang;
+  if(rep.cache[lang]){ renderReportInto(rep.cache[lang], $('reportView')); return; }
+  $('reportView').innerHTML=`<p class="muted"><span class="spin"></span> ${esc(t('translating'))}</p>`;
+  try{
+    const d=await fetch(`/api/releases/report/${rep.id}?lang=${lang}`).then(r=>r.json());
+    rep.cache[lang]=d.bodyMd||''; renderReportInto(rep.cache[lang], $('reportView'));
+  }catch(_){ $('reportView').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
+}
+function switchLang(lang){ const rep=release.reports[activeTab]; if(!rep) return; rep.displayLang=lang; renderLangBtns(); showReport(); }
+function renderBaseline(){
+  const b=release.baseline||{}; const repos=(b.repos||[]);
+  let html=`<div class="block"><div class="block-h"><span>${esc(t('blRepos'))} (${repos.length})</span><span class="chev">▾</span></div><div class="block-body">`;
+  html+=repos.map(r=>`<div class="bl-repo">${esc(r.repo)} @ ${esc(r.from)} → ${esc(String(r.to).replace('origin/',''))} · ${r.commits} commits · ${r.files} files</div>`).join('')||'—';
+  html+=`</div></div>`;
+  const tasks=(b.tasks||[]);
+  html+=`<div class="block"><div class="block-h"><span>${esc(t('blTasks'))} (${b.taskCount||tasks.length})</span><span class="chev">▾</span></div><div class="block-body">`;
+  html+=tasks.map(tk=>`<div class="bl-task"><b>${esc(tk.key)}</b> <span class="muted">[${esc((tk.repos||[]).join(','))}]</span> ${esc(tk.summary||'')}</div>`).join('')||'—';
+  if(b.otherCount) html+=`<div class="muted" style="margin-top:8px">+ ${b.otherCount} commits without a Jira key</div>`;
+  html+=`</div></div>`;
+  $('reportView').innerHTML=html;
+  $('reportView').querySelectorAll('.block-h').forEach(h=> h.addEventListener('click', ()=> h.parentElement.classList.toggle('collapsed')));
+}
+
+// ---- copy / link / expand ----
+$('copyBtn').addEventListener('click', ()=>{
+  const rep=release&&release.reports[activeTab]; if(!rep) return;
+  const md=rep.cache[rep.displayLang]||''; const link=`${location.origin}/releases?id=${release.id}&report=${activeTab}`;
+  navigator.clipboard?.writeText(md+`\n\n— Источник / Source: ${link}`); $('copyStatus').textContent=t('copied'); setTimeout(()=>$('copyStatus').textContent='',1600);
+});
+$('copyLinkBtn').addEventListener('click', ()=>{ if(!release) return; navigator.clipboard?.writeText(`${location.origin}/releases?id=${release.id}&report=${activeTab}`); $('copyStatus').textContent=t('linkCopied'); setTimeout(()=>$('copyStatus').textContent='',1600); });
+$('expandAllBtn').addEventListener('click', ()=> $('reportView').querySelectorAll('.block').forEach(b=>b.classList.remove('collapsed')));
+$('collapseAllBtn').addEventListener('click', ()=> $('reportView').querySelectorAll('.block').forEach(b=>b.classList.add('collapsed')));
+
+function updateUrl(id, report){ try{ history.replaceState(null,'',`${location.pathname}?id=${encodeURIComponent(id)}${report?`&report=${report}`:''}`); }catch(_){} }
+async function loadRelease(id, report){
+  try{ const d=await fetch('/api/releases/'+id).then(r=>r.json()); if(!d||!d.id) return; loadReleaseObj(d); if(report) selectTab(report); window.scrollTo({top:0,behavior:'smooth'}); }catch(_){}
+}
+
+// ---- history ----
+$('historyBtn').addEventListener('click', openHistory);
+$('histClose').addEventListener('click', closeHistory);
+$('histMask').addEventListener('click', closeHistory);
+function openHistory(){ $('histMask').classList.add('open'); $('histDrawer').classList.add('open'); loadHistory(); }
+function closeHistory(){ $('histMask').classList.remove('open'); $('histDrawer').classList.remove('open'); }
+async function loadHistory(){
+  $('histList').innerHTML='<p class="muted">…</p>';
+  try{ const d=await fetch('/api/releases').then(r=>r.json());
+    if(!d.items||!d.items.length){ $('histList').innerHTML=`<p class="muted">${esc(t('historyEmpty'))}</p>`; return; }
+    $('histList').innerHTML=d.items.map(it=>`<div class="hist-item" data-id="${esc(it.id)}"><div class="hist-title">${esc(it.title||it.releaseId)}</div><div class="hist-meta">${esc(it.releaseId)} · ${esc(it.createdBy||'')} · ${new Date(it.createdAt).toLocaleString()}</div></div>`).join('');
+    $('histList').querySelectorAll('.hist-item').forEach(el=> el.addEventListener('click', ()=>{ loadRelease(el.getAttribute('data-id')); closeHistory(); }));
+  }catch(_){ $('histList').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
+}
+
+(async ()=>{ await boot(); const p=new URLSearchParams(location.search); const id=p.get('id'); if(id) loadRelease(id, p.get('report')||null); })();
+</script>
+</body>
+</html>

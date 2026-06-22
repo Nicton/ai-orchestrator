@@ -23,6 +23,7 @@ import { registerTestingApi } from './testing.js';
 import { registerUsageApi } from './usage.js';
 import { registerAnswersApi } from './answers.js';
 import { registerVersionApi } from './version.js';
+import { registerReleasesApi } from './releases.js';
 import { loadGraphIntoDb } from './graphLoader.js';
 import { ensureBucket } from './storage.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
@@ -57,6 +58,7 @@ await registerTestingApi(app);
 await registerUsageApi(app);
 await registerAnswersApi(app);
 await registerVersionApi(app);
+await registerReleasesApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -862,6 +864,11 @@ app.get('/tasks', async (_, reply) => {
 // Task testing — Jira + GitLab branch code → static-testing report.
 app.get('/testing', async (_, reply) => {
   return reply.sendFile('testing.html');
+});
+
+// Release notes — 3-audience reports from the release delta.
+app.get('/releases', async (_, reply) => {
+  return reply.sendFile('releases.html');
 });
 
 // Legacy internal orchestrator dashboard (engineering use).

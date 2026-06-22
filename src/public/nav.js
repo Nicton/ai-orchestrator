@@ -30,6 +30,7 @@
     ['/bugs', '🐞', { fr: 'Bugs', en: 'Bugs', ru: 'БАГи' }],
     ['/tasks', '🆕', { fr: 'Nouvelles tâches', en: 'New tasks', ru: 'Новые задачи' }],
     ['/testing', '🧪', { fr: 'Test de tâches', en: 'Task testing', ru: 'Тестирование задач' }],
+    ['/releases', '🚀', { fr: 'Release Notes', en: 'Release Notes', ru: 'Релиз-ноты' }],
     ['/pre-planning', '🧭', { fr: 'Pré-planning', en: 'Pre-planning', ru: 'Pre-planning' }],
   ];
   var T = {

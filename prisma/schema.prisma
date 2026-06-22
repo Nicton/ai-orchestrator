@@ -692,6 +692,47 @@ model FeatureAnswer {
   @@index([feature, createdAt])
 }
 
+// Release Notes — сгенерированные ноты релиза для 3 ЦА (QA/Dev/Business) +
+// переводы по запросу. Движок — skill 31-release-notes-writer; см. ТЗ
+// docs/specs/release-notes-searchify-TZ.md.
+model ReleaseNote {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  createdById String?
+  createdBy   String?
+  releaseId   String                 // напр. "2026-06-22"
+  title       String   @default("")
+  fromRefs    Json?                  // { repo: tag }
+  toRefs      Json?                  // { repo: ref }
+  baseline    Json?                  // сырые задачи/коммиты для секции Baseline
+  reports     ReleaseReport[]
+
+  @@index([createdAt])
+}
+
+model ReleaseReport {
+  id            String   @id @default(cuid())
+  releaseNoteId String
+  audience      String                 // 'qa' | 'dev' | 'business'
+  lang          String                 // язык оригинала
+  bodyMd        String
+  releaseNote   ReleaseNote @relation(fields: [releaseNoteId], references: [id], onDelete: Cascade)
+  translations  ReleaseReportTranslation[]
+
+  @@index([releaseNoteId])
+}
+
+model ReleaseReportTranslation {
+  id        String   @id @default(cuid())
+  reportId  String
+  lang      String
+  bodyMd    String
+  createdAt DateTime @default(now())
+  report    ReleaseReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, lang])
+}
+
 // Снапшот состояния качества (Quality Coverage Analytics) — для анализа динамики.
 model QualitySnapshot {
   id        String   @id @default(cuid())
