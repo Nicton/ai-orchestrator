@@ -26,8 +26,11 @@ export async function registerVersionApi(app: FastifyInstance) {
     const dir = repoDir();
     let data: any = { number: null, subject: '', date: '', sha: '' };
     if (dir) {
-      const number = await sh('git rev-list --count HEAD', dir);
-      const line = await sh('git log -1 --no-merges --format=%s%x1f%cI%x1f%h', dir);
+      // -c safe.directory=* bypasses git's "dubious ownership" guard (the repo is
+      // owned by the deploy user but the container runs as root).
+      const G = "git -c safe.directory='*'";
+      const number = await sh(`${G} rev-list --count HEAD`, dir);
+      const line = await sh(`${G} log -1 --no-merges --format=%s%x1f%cI%x1f%h`, dir);
       const [subject, date, sha] = line.split('\x1f');
       data = {
         number: number ? Number(number) : null,
