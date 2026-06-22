@@ -208,6 +208,9 @@
   .answer ul,.answer ol { margin: 0 0 12px; padding-left: 22px; }
   .answer li { margin: 4px 0; }
   .answer code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+  .answer pre.md-code { position: relative; background: #0d1117; color: #c9d1d9; border: 1px solid var(--border, #30363d); border-radius: 8px; padding: 12px 14px; margin: 0 0 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  .answer pre.md-code code { background: none; padding: 0; border-radius: 0; font-size: inherit; color: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+  .answer pre.md-code[data-lang]::before { content: attr(data-lang); position: absolute; top: 6px; right: 10px; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: #8b949e; }
   .answer strong { font-weight: 600; }
   .md-table-wrap { overflow-x: auto; margin: 0 0 14px; }
   .md-table { width: 100%; border-collapse: collapse; min-width: 420px; font-size: 14px; }
@@ -749,6 +752,15 @@ function renderMarkdown(src){
   for (let i = 0; i < lines.length; i += 1){
     const line = lines[i].trimEnd();
     let m;
+    if (/^\s*```/.test(line)){
+      closeLists();
+      const lang = line.replace(/^\s*```/, '').trim();
+      const buf = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```/.test(lines[i])){ buf.push(lines[i]); i += 1; }
+      html += `<pre class="md-code"${lang ? ` data-lang="${lang}"` : ''}><code>${buf.join('\n')}</code></pre>`;
+      continue;
+    }
     if (isTableLine(line) && isTableSeparator(lines[i + 1] || '')){
       closeLists();
       const header = splitTableCells(line);
