@@ -76,3 +76,35 @@ export async function getImage(key: string): Promise<{ buffer: Buffer; mime: str
 export async function presignedUrl(key: string, expirySec = 3600): Promise<string> {
   return client().presignedGetObject(config.storage.bucket, key, expirySec);
 }
+
+// --- Generic file storage (any mime) — used by the "New tasks" module to keep
+// arbitrary attachments (pdf/docx/xlsx/logs/...) until they are pushed to Jira. ---
+function safeName(name: string): string {
+  return String(name || 'file').replace(/[^\w.\-]+/g, '_').replace(/_{2,}/g, '_').slice(0, 120) || 'file';
+}
+
+// Сохранить произвольный файл; имя кодируется в metadata, чтобы вернуть его при скачивании.
+export async function putFile(buffer: Buffer, mime: string, filename: string, userId?: string): Promise<{ key: string; mime: string; name: string }> {
+  const name = safeName(filename);
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `task-files/${day}/${userId || 'anon'}/${randomUUID()}-${name}`;
+  await client().putObject(config.storage.bucket, key, buffer, buffer.length, {
+    'Content-Type': mime || 'application/octet-stream',
+    'x-amz-meta-filename': name,
+  });
+  return { key, mime: mime || 'application/octet-stream', name };
+}
+
+// Прочитать произвольный файл по ключу (для приложения в Jira).
+export async function getFile(key: string): Promise<{ buffer: Buffer; mime: string; name: string }> {
+  const stat = await client().statObject(config.storage.bucket, key).catch(() => null);
+  const stream = await client().getObject(config.storage.bucket, key);
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    stream.on('data', (c: Buffer) => chunks.push(c));
+    stream.on('end', () => resolve());
+    stream.on('error', reject);
+  });
+  const name = (stat?.metaData?.['filename'] as string) || (stat?.metaData?.['x-amz-meta-filename'] as string) || key.split('/').pop() || 'file';
+  return { buffer: Buffer.concat(chunks), mime: (stat?.metaData?.['content-type'] as string) || 'application/octet-stream', name };
+}

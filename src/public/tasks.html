@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — Новые задачи</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button,input,select,textarea { font-family:inherit; }
+  .wrap { max-width:1240px; margin:22px auto; padding:0 18px 80px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .panel > h3 { margin:0; padding:13px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; display:flex; align-items:center; gap:8px; }
+  .pad { padding:16px 18px; }
+  label.fld { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:0 0 5px; }
+  textarea, input[type=text], select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:var(--panel); color:var(--ink); }
+  textarea { resize:vertical; line-height:1.5; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  button.pri { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; }
+  button.pri:hover { background:var(--blue-dark); } button.pri:disabled { opacity:.55; cursor:default; }
+  button.go { background:var(--green,#1f9d57); } button.go:hover { filter:brightness(1.05); }
+  button.ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:10px 14px; font-size:14px; cursor:pointer; }
+  button.ghost:hover { background:var(--bg-soft); }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--red); font-size:13px; margin-top:10px; min-height:16px; }
+  .rec-on { background:var(--red) !important; color:#fff !important; border-color:var(--red) !important; }
+  .drop { border:2px dashed var(--line); border-radius:10px; padding:10px 14px; text-align:center; color:var(--muted); font-size:13px; cursor:pointer; }
+  .imgrow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .thumb { width:54px; height:54px; object-fit:cover; border-radius:6px; border:1px solid var(--line); }
+  .filechip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; font-size:13px; background:var(--bg-soft); }
+  .hidden { display:none !important; }
+
+  /* two-pane work screen */
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width:900px){ .split { grid-template-columns:1fr; } }
+  .col { display:flex; flex-direction:column; }
+  .chat { display:flex; flex-direction:column; height:60vh; min-height:420px; }
+  .msgs { flex:1; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  .bubble { max-width:88%; padding:9px 12px; border-radius:12px; font-size:14px; line-height:1.5; white-space:pre-wrap; }
+  .bubble.user { align-self:flex-end; background:var(--blue); color:#fff; border-bottom-right-radius:4px; }
+  .bubble.bot { align-self:flex-start; background:var(--bg-soft); border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .qchips { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+  .qchip { text-align:left; border:1px dashed var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:7px 10px; font-size:13px; cursor:pointer; }
+  .qchip:hover { background:var(--bg-soft); border-style:solid; }
+  .composer { border-top:1px solid var(--line); padding:10px 12px; display:flex; gap:8px; align-items:flex-end; }
+  .composer textarea { flex:1; min-height:42px; max-height:140px; }
+  .stagelog { font-size:12px; color:var(--muted); padding:0 16px 8px; min-height:16px; }
+  .llmlog { white-space:pre-wrap; background:#0d1117; color:#c9d1d9; border-radius:8px; padding:10px; font-size:11px; line-height:1.45; max-height:160px; overflow:auto; margin:0 16px 10px; }
+
+  .spec h2 { font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--blue); margin:16px 0 6px; }
+  .spec h2:first-child { margin-top:0; }
+  .spec p { margin:0 0 6px; font-size:14px; line-height:1.55; }
+  .spec ul,.spec ol { margin:0 0 8px; padding-left:22px; font-size:14px; line-height:1.55; }
+  .spec li { margin:3px 0; }
+  .spec .dod li { list-style:none; margin-left:-18px; }
+  .specbox { padding:16px 18px; max-height:50vh; overflow:auto; }
+  .pillrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:9px; font-size:11px; font-weight:600; background:var(--bg-soft); border:1px solid var(--line); }
+  .badge.ready { background:#e9f6ec; color:var(--green,#1f9d57); border-color:#bfe6cb; }
+  .created { border:1px solid #ceead6; background:#e6f4ea; border-radius:10px; padding:14px 16px; font-size:14px; color:#14532d; margin-top:12px; }
+  details.editwiki summary { cursor:pointer; font-size:13px; color:var(--muted); margin:12px 0 6px; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
+
+<div class="wrap">
+  <h1>🆕 Новые задачи</h1>
+  <p class="sub">Опишите идею (текстом, голосом, со скриншотами и файлами). Searchify проведёт анализ, задаст уточняющие вопросы и соберёт описание задачи по шаблону — затем одной кнопкой заведёт задачу в Jira.</p>
+
+  <div class="panel" id="configWarn" style="display:none">
+    <div class="pad muted">⚠️ Jira не настроена на сервере (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Создание задач недоступно.</div>
+  </div>
+
+  <!-- ============ SCREEN 1: INPUT ============ -->
+  <div id="inputScreen">
+    <div class="panel">
+      <h3>1. Что за задача?</h3>
+      <div class="pad">
+        <div class="row" style="margin-bottom:12px">
+          <div style="flex:0 0 240px">
+            <label class="fld">Проект Jira</label>
+            <select id="project"></select>
+          </div>
+          <div style="flex:0 0 auto">
+            <label class="fld">Голос (любой язык)</label>
+            <button class="ghost" id="recBtn">🎙️ Записать голос</button>
+          </div>
+        </div>
+        <label class="fld">Описание идеи / задачи</label>
+        <textarea id="desc" rows="6" placeholder="Что нужно сделать и зачем? Контекст, проблема, желаемый результат… Можно кратко — недостающее уточним в чате."></textarea>
+        <div class="row" style="margin-top:10px">
+          <div class="drop" id="imgDrop" style="flex:1">🖼 Скриншоты (клик или Ctrl+V)</div>
+          <div class="drop" id="fileDrop" style="flex:1">📎 Файлы (pdf, docx, xlsx, логи…)</div>
+        </div>
+        <input type="file" id="imgInput" accept="image/*" multiple class="hidden" />
+        <input type="file" id="fileInput" multiple class="hidden" />
+        <div class="imgrow" id="thumbs"></div>
+        <div class="imgrow" id="filechips"></div>
+        <div style="margin-top:16px"><button class="pri" id="analyzeBtn">🔍 Проанализировать</button> <span class="muted" id="analyzeStatus"></span></div>
+        <div class="err" id="inErr"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 2: WORK (chat | spec) ============ -->
+  <div id="workScreen" class="hidden">
+    <div style="margin-bottom:12px"><button class="ghost" id="backBtn">← Изменить ввод</button></div>
+    <div class="split">
+      <!-- LEFT: chat -->
+      <div class="panel col">
+        <h3>💬 Уточняющие вопросы</h3>
+        <div class="chat">
+          <div class="msgs" id="msgs"></div>
+          <div class="stagelog" id="stageLog"></div>
+          <pre class="llmlog hidden" id="llmLog"></pre>
+          <div class="composer">
+            <button class="ghost" id="chatRecBtn" title="Голосом" style="padding:9px 11px">🎙️</button>
+            <textarea id="answer" rows="1" placeholder="Ответьте на вопросы или уточните…"></textarea>
+            <button class="pri" id="sendBtn">Отправить</button>
+          </div>
+        </div>
+      </div>
+      <!-- RIGHT: spec -->
+      <div class="panel col">
+        <h3>📋 Описание задачи для Jira <span id="readyBadge"></span></h3>
+        <div class="specbox">
+          <div style="margin-bottom:10px"><label class="fld">Заголовок (Summary)</label><input type="text" id="summary" /></div>
+          <div class="spec" id="specRender"><p class="muted">Спека формируется по мере диалога…</p></div>
+          <details class="editwiki">
+            <summary>✏️ Редактировать итоговое описание (Jira wiki)</summary>
+            <textarea id="descWiki" rows="14" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px;margin-top:6px"></textarea>
+          </details>
+          <div style="margin-top:10px"><label class="fld">Labels (через запятую, опц.)</label><input type="text" id="labels" /></div>
+        </div>
+        <div class="pad" style="border-top:1px solid var(--line)">
+          <div class="pillrow">
+            <button class="pri go" id="createBtn">✅ Отправить задачу в Jira</button>
+            <span class="muted" id="createStatus"></span>
+          </div>
+          <div class="muted" style="margin-top:8px" id="authorNote"></div>
+          <div class="err" id="prErr"></div>
+          <div id="createdOut"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+let me=null, cfgEnabled=false;
+let images=[], files=[]; // files: [{key,name}]
+let messages=[];         // running transcript {role,content}
+let visionText='';
+let descEdited=false, busy=false;
+let mediaRec=null, recChunks=[], recTarget='desc';
+
+async function boot(){
+  const r = await fetch('/api/auth/me'); if (!r.ok){ location.href='/login'; return; }
+  me = (await r.json()).user;
+  $('authorNote').textContent = 'Автор задачи будет указан в описании: ' + (me.name || me.email || '');
+  const cfg = await fetch('/api/tasks/config').then(r=>r.json()).catch(()=>({enabled:false,projects:[]}));
+  cfgEnabled = !!cfg.enabled;
+  if (!cfg.enabled){ $('configWarn').style.display=''; $('analyzeBtn').disabled=true; }
+  const projects = (cfg.projects&&cfg.projects.length) ? cfg.projects : [{key:cfg.defaultProject||'TMS',name:cfg.defaultProject||'TMS'}];
+  $('project').innerHTML = projects.map(p=>`<option value="${esc(p.key)}"${p.key===cfg.defaultProject?' selected':''}>${esc(p.key)} — ${esc(p.name)}${p.taskType?` (${esc(p.taskType)})`:''}</option>`).join('');
+}
+
+// ---------- attachments ----------
+$('imgDrop').addEventListener('click', ()=>$('imgInput').click());
+$('fileDrop').addEventListener('click', ()=>$('fileInput').click());
+$('imgInput').addEventListener('change', e=>{ for(const f of e.target.files) uploadImage(f); e.target.value=''; });
+$('fileInput').addEventListener('change', e=>{ for(const f of e.target.files) uploadFile(f); e.target.value=''; });
+window.addEventListener('paste', e=>{ for(const it of (e.clipboardData?.items||[])) if(it.type.startsWith('image/')){ const f=it.getAsFile(); if(f) uploadImage(f); } });
+async function uploadImage(file){
+  if (file.size > 10*1024*1024){ $('inErr').textContent='Изображение больше 10 МБ'; return; }
+  const fd=new FormData(); fd.append('image', file);
+  try { const r=await fetch('/api/knowledge/upload-image',{method:'POST',body:fd}); const d=await r.json();
+    if(!r.ok){ $('inErr').textContent=d.error||'Не удалось загрузить'; return; }
+    images.push(d.key);
+    $('thumbs').insertAdjacentHTML('beforeend', `<img class="thumb" src="${URL.createObjectURL(file)}" title="${esc(file.name)}" />`);
+  } catch(_){ $('inErr').textContent='Сеть недоступна'; }
+}
+async function uploadFile(file){
+  if (file.size > 30*1024*1024){ $('inErr').textContent='Файл больше 30 МБ'; return; }
+  const fd=new FormData(); fd.append('file', file);
+  const chip=document.createElement('span'); chip.className='filechip'; chip.innerHTML=`<span class="spin"></span> ${esc(file.name)}`;
+  $('filechips').appendChild(chip);
+  try { const r=await fetch('/api/tasks/upload-file',{method:'POST',body:fd}); const d=await r.json();
+    if(!r.ok){ chip.remove(); $('inErr').textContent=d.error||'Не удалось загрузить файл'; return; }
+    files.push({key:d.key,name:d.name||file.name});
+    chip.innerHTML=`📎 ${esc(d.name||file.name)}`;
+  } catch(_){ chip.remove(); $('inErr').textContent='Сеть недоступна'; }
+}
+
+// ---------- voice ----------
+function wireVoice(btnId, target){
+  $(btnId).addEventListener('click', async ()=>{
+    if (mediaRec && mediaRec.state==='recording'){ mediaRec.stop(); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      recTarget = target;
+      mediaRec = new MediaRecorder(stream); recChunks=[];
+      mediaRec.ondataavailable = e=>{ if(e.data.size) recChunks.push(e.data); };
+      mediaRec.onstop = async ()=>{
+        stream.getTracks().forEach(t=>t.stop());
+        $(btnId).classList.remove('rec-on');
+        const lbl = btnId==='recBtn' ? '🎙️ Записать голос' : '🎙️';
+        $(btnId).textContent = lbl;
+        const statusEl = recTarget==='desc' ? $('analyzeStatus') : $('stageLog');
+        statusEl.textContent='Распознаю речь…';
+        const blob=new Blob(recChunks,{type:'audio/webm'}); const fd=new FormData(); fd.append('audio',blob,'voice.webm');
+        try { const r=await fetch('/api/tasks/transcribe',{method:'POST',body:fd}); const d=await r.json();
+          statusEl.textContent='';
+          if(!r.ok){ ( recTarget==='desc'?$('inErr'):$('prErr') ).textContent=d.error||'Не удалось распознать'; return; }
+          const box = recTarget==='desc' ? $('desc') : $('answer');
+          box.value = (box.value?box.value+'\n':'') + (d.text||'');
+          if (recTarget==='answer') autoGrow(box);
+        } catch(_){ statusEl.textContent=''; }
+      };
+      mediaRec.start();
+      $(btnId).classList.add('rec-on'); $(btnId).textContent = btnId==='recBtn' ? '⏹ Остановить' : '⏹';
+    } catch(_){ $('inErr').textContent='Нет доступа к микрофону'; }
+  });
+}
+wireVoice('recBtn','desc'); wireVoice('chatRecBtn','answer');
+
+// ---------- start analysis ----------
+$('analyzeBtn').addEventListener('click', ()=>{
+  $('inErr').textContent='';
+  const desc=$('desc').value.trim();
+  if (desc.length<5){ $('inErr').textContent='Опишите задачу подробнее'; return; }
+  let brief = desc;
+  if (files.length) brief += `\n\n(Приложены файлы: ${files.map(f=>f.name).join(', ')})`;
+  messages = [{role:'user', content:brief}];
+  $('inputScreen').classList.add('hidden'); $('workScreen').classList.remove('hidden');
+  $('msgs').innerHTML=''; addBubble('user', desc);
+  runChat();
+});
+$('backBtn').addEventListener('click', ()=>{ $('workScreen').classList.add('hidden'); $('inputScreen').classList.remove('hidden'); });
+
+// ---------- chat send ----------
+function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,140)+'px'; }
+$('answer').addEventListener('input', e=>autoGrow(e.target));
+$('answer').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAnswer(); } });
+$('sendBtn').addEventListener('click', sendAnswer);
+function sendAnswer(){
+  if (busy) return;
+  const a=$('answer').value.trim(); if(!a) return;
+  messages.push({role:'user', content:a});
+  addBubble('user', a);
+  $('answer').value=''; autoGrow($('answer'));
+  runChat();
+}
+
+function addBubble(role, text){
+  const d=document.createElement('div'); d.className='bubble '+(role==='user'?'user':'bot'); d.textContent=text;
+  $('msgs').appendChild(d); $('msgs').scrollTop=$('msgs').scrollHeight; return d;
+}
+function addQuestions(qs){
+  if(!qs||!qs.length) return;
+  const wrap=document.createElement('div'); wrap.className='qchips';
+  qs.forEach(q=>{ const b=document.createElement('button'); b.className='qchip'; b.textContent='❓ '+q;
+    b.addEventListener('click', ()=>{ $('answer').value=q+'\n'; $('answer').focus(); autoGrow($('answer')); });
+    wrap.appendChild(b); });
+  $('msgs').appendChild(wrap); $('msgs').scrollTop=$('msgs').scrollHeight;
+}
+
+// ---------- SSE chat round ----------
+async function runChat(){
+  busy=true; $('sendBtn').disabled=true; $('analyzeStatus').textContent='';
+  $('stageLog').innerHTML='<span class="spin"></span> анализ…';
+  $('llmLog').textContent=''; let llmBuf='';
+  const thinking = addBubble('bot', '…');
+  try {
+    const res = await fetch('/api/tasks/chat/stream',{ method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ messages, images, files:files.map(f=>f.key), fileNames:files.map(f=>f.name), visionText: visionText||undefined }) });
+    if (!res.ok || !res.body){ const t=await res.text().catch(()=>''); thinking.textContent='⚠️ '+(t||'Ошибка анализа'); throw new Error('http'); }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    while(true){
+      const {value,done}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n'); buf=parts.pop()||'';
+      for(const block of parts){
+        const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m);
+        if(!ev||!dm) continue; let data; try{ data=JSON.parse(dm[1]); }catch(_){ continue; }
+        if(ev==='stage'){ $('stageLog').innerHTML='<span class="spin"></span> '+esc(data.msg||''); }
+        else if(ev==='delta'){ llmBuf+=data.text||''; $('llmLog').classList.remove('hidden'); $('llmLog').textContent=llmBuf; $('llmLog').scrollTop=$('llmLog').scrollHeight; }
+        else if(ev==='result'){ result=data; }
+        else if(ev==='error'){ thinking.textContent='⚠️ '+(data.message||'Ошибка'); }
+      }
+    }
+    if(result){
+      if(result.visionText) visionText=result.visionText;
+      thinking.textContent = result.reply || 'Готово.';
+      messages.push({role:'assistant', content: result.reply || ''});
+      addQuestions(result.questions);
+      renderSpec(result);
+    }
+  } catch(_){ if(thinking.textContent==='…') thinking.textContent='⚠️ Сеть недоступна'; }
+  finally { busy=false; $('sendBtn').disabled=false; $('stageLog').textContent=''; }
+}
+
+// ---------- right pane ----------
+function listHtml(arr, ordered){ if(!arr||!arr.length) return '<p class="muted">—</p>';
+  const items=arr.map(x=>`<li>${esc(x)}</li>`).join(''); return ordered?`<ol>${items}</ol>`:`<ul>${items}</ul>`; }
+function renderSpec(r){
+  if (!$('summary').value || !descEdited) $('summary').value = r.summary||$('summary').value;
+  const s=r.spec||{};
+  const dod = (s.dod||[]).map(x=>`<li>☐ ${esc(String(x).replace(/^\s*\[[ x]\]\s*/i,''))}</li>`).join('');
+  let html='';
+  html+=`<h2>Context</h2><p>${esc(s.context||'')||'<span class="muted">—</span>'}</p>`;
+  html+=`<h2>Idea</h2><p>${esc(s.idea||'')||'<span class="muted">—</span>'}</p>`;
+  html+=`<h2>In Scope</h2>${listHtml(s.inScope,true)}`;
+  html+=`<h2>Out of Scope</h2>${listHtml(s.outScope,false)}`;
+  html+=`<h2>Definition of Done (DoD)</h2><ul class="dod">${dod||'<li>☐ —</li>'}</ul>`;
+  if (s.references&&s.references.length) html+=`<h2>References</h2>${listHtml(s.references,false)}`;
+  if (s.details) html+=`<h2>Детали</h2><p>${esc(s.details)}</p>`;
+  $('specRender').innerHTML=html;
+  if (!descEdited) $('descWiki').value = r.descriptionWiki||'';
+  $('readyBadge').innerHTML = r.ready ? '<span class="badge ready">✓ готово к заведению</span>' : '<span class="badge">черновик</span>';
+}
+$('descWiki').addEventListener('input', ()=>{ descEdited=true; });
+
+// ---------- create ----------
+$('createBtn').addEventListener('click', async ()=>{
+  $('prErr').textContent='';
+  if (!cfgEnabled){ $('prErr').textContent='Jira не настроена'; return; }
+  const summary=$('summary').value.trim();
+  const descriptionWiki=$('descWiki').value.trim();
+  if (summary.length<3){ $('prErr').textContent='Заполните заголовок'; return; }
+  if (descriptionWiki.length<5){ $('prErr').textContent='Описание пустое — проведите диалог'; return; }
+  const body={ project:$('project').value, summary, descriptionWiki,
+    labels:$('labels').value.split(',').map(s=>s.trim()).filter(Boolean),
+    images, files:files.map(f=>f.key) };
+  const btn=$('createBtn'); btn.disabled=true; $('createStatus').innerHTML='<span class="spin"></span> создаю в Jira…';
+  try { const r=await fetch('/api/tasks/create',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json();
+    if(!r.ok){ $('prErr').textContent=(typeof d.error==='string'?d.error:'Не удалось создать'); return; }
+    $('createdOut').innerHTML=`<div class="created">✅ Задача создана (${esc(d.issueType||'Task')}): <a href="${esc(d.url)}" target="_blank"><b>${esc(d.key)}</b></a>${d.attached?` · приложено вложений: ${d.attached}`:''}</div>`;
+  } catch(_){ $('prErr').textContent='Сеть недоступна'; }
+  finally { btn.disabled=false; $('createStatus').textContent=''; }
+});
+
+boot();
+</script>
+</body>
+</html>

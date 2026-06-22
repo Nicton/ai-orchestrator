@@ -4,7 +4,7 @@
 (function () {
   var items = [
     ['/', '🔎 Поиск'], ['/graph', '🕸 Граф'], ['/quality', '📊 Качество'],
-    ['/ideas', '💡 Идеи'], ['/bugs', '🐞 БАГи'], ['/pre-planning', '🧭 Pre-planning'],
+    ['/ideas', '💡 Идеи'], ['/bugs', '🐞 БАГи'], ['/tasks', '🆕 Новые задачи'], ['/pre-planning', '🧭 Pre-planning'],
   ];
   function applyTheme(t) {
     if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);

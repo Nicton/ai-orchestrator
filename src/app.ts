@@ -18,6 +18,7 @@ import { registerIdeasApi } from './ideas.js';
 import { registerQualityApi } from './quality.js';
 import { registerBugsApi } from './bugs.js';
 import { registerPreplanningApi } from './preplanning.js';
+import { registerTasksApi } from './tasks.js';
 import { loadGraphIntoDb } from './graphLoader.js';
 import { ensureBucket } from './storage.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
@@ -47,6 +48,7 @@ await registerIdeasApi(app);
 await registerQualityApi(app);
 await registerBugsApi(app);
 await registerPreplanningApi(app);
+await registerTasksApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -842,6 +844,11 @@ app.get('/bugs', async (_, reply) => {
 // AI Pre-planning — grounded sprint pre-planning → Jira (human-gated).
 app.get('/pre-planning', async (_, reply) => {
   return reply.sendFile('pre-planning.html');
+});
+
+// New tasks — clarifying-dialogue → structured spec → Jira task.
+app.get('/tasks', async (_, reply) => {
+  return reply.sendFile('tasks.html');
 });
 
 // Legacy internal orchestrator dashboard (engineering use).
