@@ -1069,7 +1069,8 @@ async function grepRepos(terms: string[], repos: string[], limit: number): Promi
   if (!clean.length) return [];
   // longer/compound terms first — they're more distinctive
   clean.sort((a, b) => b.length - a.length);
-  const tryGrep = async (ts: string[]): Promise<string[]> => {
+  // gather candidate files (paths) matching ALL of the top-n terms
+  const gather = async (ts: string[]): Promise<string[]> => {
     if (!ts.length) return [];
     const eArgs = ts.map((t) => `-e "${t}"`).join(' ');
     const out: string[] = [];
@@ -1077,19 +1078,26 @@ async function grepRepos(terms: string[], repos: string[], limit: number): Promi
       const cwd = path.join(WORKSPACES_ROOT, repo);
       try { if (!(await fs.stat(path.join(cwd, '.git'))).isDirectory()) continue; } catch { continue; }
       const res = await gitSh(`git -c safe.directory='*' grep -lIiE --all-match ${eArgs} -- "*.js" "*.ts" "*.jsx" "*.tsx" "*.vue"`, cwd);
-      for (const rel of res.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 5)) {
-        out.push(path.join(cwd, rel));
-        if (out.length >= limit) return out;
-      }
+      for (const rel of res.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 40)) out.push(path.join(WORKSPACES_ROOT, repo, rel));
     }
     return out;
   };
-  // try the top 3 terms ANDed; relax progressively if nothing matches
-  for (const n of [3, 2, 1]) {
-    const r = await tryGrep(clean.slice(0, n));
-    if (r.length) return r;
-  }
-  return [];
+  let cands: string[] = [];
+  for (const n of [3, 2, 1]) { cands = await gather(clean.slice(0, n)); if (cands.length) break; }
+  if (!cands.length) return [];
+  // rank by path relevance (grep tree-order is meaningless; the right screen is
+  // usually under settings/account/self-admin/… and/or has a term in its path)
+  const lowTerms = clean.map((t) => t.toLowerCase());
+  const score = (abs: string) => {
+    const rel = abs.replace(WORKSPACES_ROOT + path.sep, '').split(path.sep).join('/').toLowerCase();
+    let s = 0;
+    if (/api[-_]?key|apikey/.test(rel)) s += 6;
+    if (/(settings|self-admin|account|profile|developer|integration|admin|token|security|credential)/.test(rel)) s += 3;
+    for (const t of lowTerms) if (t.length > 2 && rel.includes(t)) s += 2;
+    if (/route|router|menu|nav|page|view|screen/.test(rel)) s += 1;
+    return s;
+  };
+  return [...new Set(cands)].sort((a, b) => score(b) - score(a)).slice(0, limit);
 }
 function extractCodeHints(text: string): { paths: string[]; idents: string[] } {
   const paths = new Set<string>();
