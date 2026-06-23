@@ -150,6 +150,32 @@ async function branchDiff(repo: string, branch: string, onStage?: (m: string) =>
   };
 }
 
+// Find commits whose MESSAGE contains the Jira key (across all refs) and return
+// their diffs. Catches work that was already MERGED into develop and whose
+// feature branch was deleted — ls-remote on the branch name finds nothing, but
+// the commit (e.g. "fix: [TD-1205] …") is right there in the repo.
+async function commitDiffsForKey(key: string, onStage?: (m: string) => void) {
+  const out: Array<{ repo: string; branch: string; base: string; commits: string[]; stat: string; files: number; diff: string; truncated: boolean }> = [];
+  for (const repo of codeRepos()) {
+    if (out.length >= 4) break;
+    const cwd = path.join(WORKSPACES, repo);
+    const log = await shp(`git -c safe.directory='*' log --all -i --grep "${key}" --pretty=%H -n 3`, cwd, 30000);
+    if (!log.ok) continue;
+    const shas = log.out.split('\n').map((s) => s.trim()).filter(Boolean);
+    for (const sha of shas.slice(0, 2)) {
+      if (out.length >= 4) break;
+      const subj = (await shp(`git -c safe.directory='*' log -1 --pretty=%s ${sha}`, cwd, 15000)).out.trim();
+      const stat = (await shp(`git -c safe.directory='*' show --stat --format= ${sha}`, cwd, 30000)).out.trim();
+      let diff = (await shp(`git -c safe.directory='*' show ${sha} --no-color --format=`, cwd, 45000)).out || '';
+      let truncated = false;
+      if (diff.length > 16000) { diff = diff.slice(0, 16000); truncated = true; }
+      onStage?.(`🔎 коммит ${repo}@${sha.slice(0, 9)}: ${subj.slice(0, 60)}`);
+      out.push({ repo, branch: `commit ${sha.slice(0, 9)} (merged)`, base: '—', commits: [subj], stat, files: (stat.match(/^\s*\S+\s+\|/gm) || []).length, diff, truncated });
+    }
+  }
+  return out;
+}
+
 // --- GitLab REST API path (prod-friendly: no clones/.git needed, just a token).
 // Set GITLAB_TOKEN (a read_api PAT) in env. Project paths are stable. ---
 function gitlabCfg() {
@@ -292,6 +318,14 @@ async function gatherBranches(key: string, stage: (m: string) => void) {
       try { branches.push(await branchDiff(c.repo, c.branch, stage)); } catch { /* skip */ }
     }
   }
+  // Also include commits whose message references the key (merged + deleted
+  // branches won't show up by name). Crucial for already-merged fixes.
+  try {
+    for (const c of await commitDiffsForKey(key, stage)) {
+      if (branches.length >= 8) break;
+      if (!branches.some((b) => b.diff && b.diff === c.diff)) branches.push(c);
+    }
+  } catch { /* best-effort */ }
   return branches;
 }
 
