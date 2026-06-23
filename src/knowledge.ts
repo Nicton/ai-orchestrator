@@ -10,6 +10,7 @@ import { putImage, getImage, storageReady } from './storage.js';
 import { config } from './config.js';
 import { requireAuth, requireAdmin } from './auth.js';
 import { safeJsonParse } from './json.js';
+import { gatherCodeForKey, formatCodeRefs } from './codeintel.js';
 
 type SourceType = 'confluence' | 'jira' | 'web' | 'local';
 
@@ -1147,25 +1148,40 @@ async function codeDive(
     } catch { /* grep best-effort */ }
   }
 
-  if (!files.length) return null;
-  progress?.stage(`📂 Читаю исходный код: ${files.map((f) => f.path).join(', ')}`);
+  // If the question/evidence references a Jira ticket, pull the ADDED code for
+  // that ticket — feature branch AND already-merged commits — so we can explain
+  // how it works and what it touches even after merge.
+  let keyCodeBlock = '';
+  const keyHit = `${question}\n${sourceText}`.match(/\b[A-Z][A-Z0-9]+-\d+\b/);
+  if (keyHit) {
+    progress?.stage(`🧬 Ищу код задачи ${keyHit[0]} (ветка и/или влитые коммиты)…`);
+    try {
+      const refs = await gatherCodeForKey(keyHit[0], (m) => progress?.stage(m));
+      if (refs.length) keyCodeBlock = `\n\n=== ИЗМЕНЕНИЯ КОДА ПО ЗАДАЧЕ ${keyHit[0]} (ветка и/или влитые коммиты — что добавлено, как работает, на что влияет) ===\n${formatCodeRefs(refs, 14000)}`;
+    } catch { /* best-effort */ }
+  }
+
+  if (!files.length && !keyCodeBlock) return null;
+  if (files.length) progress?.stage(`📂 Читаю исходный код: ${files.map((f) => f.path).join(', ')}`);
   const terms = [...idents, ...tokenize(question)];
   const block = files.map((f) => {
     const body = f.text.length > 7000 ? buildEvidence(f.text, terms) : f.text;
     return `FILE: ${f.path}\n\`\`\`\n${body.slice(0, 7000)}\n\`\`\``;
   }).join('\n\n');
   const prompt = `You are a senior Shiptify engineer with access to the ACTUAL SOURCE CODE below (backend AND frontend repos). The documentation did not fully answer the question, so answer by READING THE CODE. Be concrete: state the exact behavior and cite file + function. Source code is authoritative — if it answers the question, give the definitive answer (do NOT punt with "look at the code").
-IMPORTANT: if the question is about WHERE or HOW to do something in the product (e.g. how to get/find something in the UI), the user needs a FRONT-END answer — name the screen/page, the navigation path (menu → section), and the route/URL if visible in the frontend code (e.g. router path in frontend-mono / back-office / admin-app). Backend logic alone is NOT a sufficient answer to a "where/how do I…" question. If the provided files genuinely do not contain the answer, say precisely what is missing and which file would hold it. Respond in language: ${lang}. End with a "Sources:" line listing the code files you used.
+If a "ИЗМЕНЕНИЯ КОДА ПО ЗАДАЧЕ" (ticket changes) section is present, use it to explain WHAT was added/changed, HOW it works, and WHAT it affects (modules/endpoints/screens) — this works even if the branch is already merged.
+IMPORTANT: if the question is about WHERE or HOW to do something in the product (e.g. how to get/find something in the UI), the user needs a FRONT-END answer — name the screen/page, the navigation path (menu → section), and the route/URL if visible in the frontend code (e.g. router path in frontend-mono / back-office / admin-app). Backend logic alone is NOT a sufficient answer to a "where/how do I…" question. If the provided code genuinely does not contain the answer, say precisely what is missing and which file would hold it. Respond in language: ${lang}. End with a "Sources:" line listing the code files/commits you used.
 
 Question:
 ${question}
 
 SOURCE CODE:
-${block}`;
+${block}${keyCodeBlock}`;
   const r = await runRolePrompt('engineer.code_answer', prompt, config.answerModel, progress?.delta);
   const ans = (r.text || '').trim();
   if (!ans || looksInsufficient(ans)) return null;
-  return { answer: ans, files: files.map((f) => f.path), result: r };
+  const used = [...files.map((f) => f.path), ...(keyCodeBlock && keyHit ? [`ticket:${keyHit[0]}`] : [])];
+  return { answer: ans, files: used, result: r };
 }
 
 async function composeAnswer(
@@ -1289,8 +1305,9 @@ ${evidence}`;
     // Идём в код, если ответ «упирается в код», ИЛИ это вопрос «где/как сделать в
     // продукте», а грунт-ответ не дал конкретного места в UI (нужна ссылка/экран).
     const navGap = needsUi(question) && answerUncertain(llmAnswer);
-    if (result?.engine === 'claude' && (needsCode(llmAnswer) || navGap)) {
-      progress?.stage(navGap ? '🖥 Нужно место в интерфейсе — ищу в коде фронта…' : '🧩 Ответ упирается в код — открываю исходники…');
+    const hasTicket = /\b[A-Z][A-Z0-9]+-\d+\b/.test(question); // question references a Jira ticket → pull its code
+    if (result?.engine === 'claude' && (needsCode(llmAnswer) || navGap || hasTicket)) {
+      progress?.stage(hasTicket ? '🧬 Вопрос про задачу — ищу её код (вкл. влитый)…' : navGap ? '🖥 Нужно место в интерфейсе — ищу в коде фронта…' : '🧩 Ответ упирается в код — открываю исходники…');
       try {
         const cd = await codeDive(question, `${llmAnswer}\n\n${evidence}`, lang, progress);
         if (cd) {

@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { runRolePrompt } from './llm.js';
 import { requireAuth } from './auth.js';
 import { logFeatureUsage } from './usage.js';
+import { gatherCodeForKey } from './codeintel.js';
 
 // ---------------------------------------------------------------------------
 // "Тестирование задач" (Task Testing). Given ONE Jira key, gather everything
@@ -307,26 +308,17 @@ ${code}`;
 // Gather feature-branch diffs for a key (GitLab API path or local git), shared
 // by the report and the "task for Claude" flows.
 async function gatherBranches(key: string, stage: (m: string) => void) {
-  const useApi = gitlabCfg().enabled;
-  const branches: any[] = [];
-  if (useApi) {
+  // GitLab-API path (only when a read_api token is configured).
+  if (gitlabCfg().enabled) {
+    const branches: any[] = [];
     for (const c of await discoverBranchesApi(key, stage)) {
       try { branches.push(await branchDiffApi(c.repo, c.proj, c.branch, stage)); } catch { /* skip */ }
     }
-  } else {
-    for (const c of await discoverBranches(key, stage)) {
-      try { branches.push(await branchDiff(c.repo, c.branch, stage)); } catch { /* skip */ }
-    }
+    if (branches.length) return branches;
   }
-  // Also include commits whose message references the key (merged + deleted
-  // branches won't show up by name). Crucial for already-merged fixes.
-  try {
-    for (const c of await commitDiffsForKey(key, stage)) {
-      if (branches.length >= 8) break;
-      if (!branches.some((b) => b.diff && b.diff === c.diff)) branches.push(c);
-    }
-  } catch { /* best-effort */ }
-  return branches;
+  // Shared local-git mechanism: feature branches (by name) + merged commits
+  // (by message) — finds added code even after a branch is merged & deleted.
+  return gatherCodeForKey(key, stage);
 }
 
 function branchBlock(branches: any[]): string {
