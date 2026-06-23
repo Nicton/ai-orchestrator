@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -1014,18 +1015,76 @@ async function graphContext(question: string, plan?: KnowledgeQueryPlan): Promis
 // source under workspaces/ (baked into the image) and answer from it. ──
 const CODE_EXT_RE = /\.(?:js|ts|jsx|tsx|mjs|cjs|vue|py)$/i;
 const WORKSPACES_ROOT = path.resolve(process.cwd(), 'workspaces');
+// All code repos a hint may live in. frontend-mono is the MAIN frontend (was
+// missing → frontend/UI answers were never found); keep them ahead of backend
+// so UI questions resolve to the frontend.
+const CODE_REPOS = ['frontend-mono', 'backend', 'public-api', 'back-office', 'admin-app', 'mini-apps', 'frontend', 'microservices', 'integrations', 'notifications', 'public-api-docs', 'generate'];
+// Repos that hold the user-facing UI (for "where/how in the system" answers).
+const FRONTEND_REPOS = ['frontend-mono', 'back-office', 'admin-app', 'mini-apps', 'frontend'];
+
+function gitSh(cmd: string, cwd: string, timeoutMs = 25000): Promise<string> {
+  return new Promise((resolve) => exec(cmd, { cwd, timeout: timeoutMs, maxBuffer: 12 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (err, stdout) => resolve(err ? '' : String(stdout))));
+}
 
 async function resolveCodePath(hint: string): Promise<string | null> {
   const clean = hint.replace(/[:#].*$/, '').replace(/^[`'"(]+|[`'")]+$/g, '').trim();
   if (!clean || !CODE_EXT_RE.test(clean) || clean.includes('..')) return null;
   const norm = clean.replace(/^workspaces\//, '').replace(/^\.\//, '');
-  const cands = [norm, `backend/${norm}`, `public-api/${norm}`, `frontend/${norm}`, `microservices/${norm}`];
+  const cands = [norm, ...CODE_REPOS.map((r) => `${r}/${norm}`)];
   for (const c of cands) {
     const p = path.join(WORKSPACES_ROOT, c);
     if (!p.startsWith(WORKSPACES_ROOT)) continue;
     try { if ((await fs.stat(p)).isFile()) return p; } catch { /* not here */ }
   }
   return null;
+}
+
+// Does the question ask WHERE/HOW to do something in the product (UI/link)?
+function needsUi(q: string): boolean {
+  return /\bгде\b|как (?:получить|найти|создать|выпустить|сгенерировать|открыть|настроить|включить)|откуда|ссылк|страниц|раздел|интерфейс|меню|кнопк|настройк|where|how (?:do i|to|can i)|which (?:page|screen|menu)|link|url|page|screen|button|settings|navigate/i.test(String(q));
+}
+// Distinctive English terms from grounded text → grep targets in code (the
+// question is usually RU but code/identifiers are EN).
+function englishGrepTerms(s: string): string[] {
+  const stop = new Set(['this', 'that', 'with', 'from', 'code', 'file', 'have', 'will', 'your', 'which', 'where', 'when', 'what', 'should', 'these', 'there', 'about', 'using', 'into', 'also', 'than', 'then', 'them', 'they', 'data', 'user', 'page', 'true', 'false', 'null', 'value', 'name', 'type', 'list', 'item']);
+  const freq = new Map<string, number>();
+  for (const w of String(s).match(/[A-Za-z][A-Za-z0-9]{2,}/g) || []) {
+    const lw = w.toLowerCase();
+    if (stop.has(lw)) continue;
+    freq.set(w, (freq.get(w) || 0) + 1);
+  }
+  return [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([w]) => w).slice(0, 6);
+}
+// git grep across given repos; returns absolute file paths (caps to `limit`).
+// Uses --all-match (files containing ALL top terms) for precision, falling back
+// to the 2 most distinctive terms, so common words ("api","key") don't match
+// everything.
+async function grepRepos(terms: string[], repos: string[], limit: number): Promise<string[]> {
+  const clean = [...new Set(terms.filter((t) => t && t.length > 2).map((t) => t.replace(/[^A-Za-z0-9]/g, '.')))];
+  if (!clean.length) return [];
+  // longer/compound terms first — they're more distinctive
+  clean.sort((a, b) => b.length - a.length);
+  const tryGrep = async (ts: string[]): Promise<string[]> => {
+    if (!ts.length) return [];
+    const eArgs = ts.map((t) => `-e "${t}"`).join(' ');
+    const out: string[] = [];
+    for (const repo of repos) {
+      const cwd = path.join(WORKSPACES_ROOT, repo);
+      try { if (!(await fs.stat(path.join(cwd, '.git'))).isDirectory()) continue; } catch { continue; }
+      const res = await gitSh(`git -c safe.directory='*' grep -lIiE --all-match ${eArgs} -- "*.js" "*.ts" "*.jsx" "*.tsx" "*.vue"`, cwd);
+      for (const rel of res.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 5)) {
+        out.push(path.join(cwd, rel));
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
+  };
+  // try the top 3 terms ANDed; relax progressively if nothing matches
+  for (const n of [3, 2, 1]) {
+    const r = await tryGrep(clean.slice(0, n));
+    if (r.length) return r;
+  }
+  return [];
 }
 function extractCodeHints(text: string): { paths: string[]; idents: string[] } {
   const paths = new Set<string>();
@@ -1047,16 +1106,34 @@ async function codeDive(
   const { paths, idents } = extractCodeHints(sourceText);
   const files: Array<{ path: string; text: string }> = [];
   const seen = new Set<string>();
-  for (const h of paths) {
-    if (files.length >= 4) break;
-    const real = await resolveCodePath(h);
-    if (!real || seen.has(real)) continue;
+  const CAP = 6;
+  const addFile = async (real: string | null) => {
+    if (!real || seen.has(real) || files.length >= CAP) return;
     seen.add(real);
     try {
       const txt = await fs.readFile(real, 'utf8');
       files.push({ path: path.relative(WORKSPACES_ROOT, real).split(path.sep).join('/'), text: txt });
     } catch { /* skip unreadable */ }
+  };
+  // For "where/how in the UI" questions, cap backend hints so the frontend
+  // search (below) always gets slots — the user needs the UI location.
+  const nav = needsUi(question);
+  const pathCap = nav ? 3 : CAP;
+  for (const h of paths) { if (files.length >= pathCap) break; await addFile(await resolveCodePath(h)); }
+
+  // Frontend-aware: for "where/how in the UI" questions — or whenever no
+  // frontend file was hinted — search the frontend repos so we can answer with
+  // the actual screen/route/link, not just backend logic.
+  const hasFrontend = files.some((f) => FRONTEND_REPOS.some((r) => f.path.startsWith(`${r}/`)));
+  if (nav || !hasFrontend) {
+    const terms = [...idents, ...englishGrepTerms(sourceText), ...englishGrepTerms(question)];
+    try {
+      const hits = await grepRepos(terms, FRONTEND_REPOS, 2);
+      if (hits.length) progress?.stage(`🖥 Ищу на фронте: ${hits.map((h) => path.relative(WORKSPACES_ROOT, h).split(path.sep).join('/')).join(', ')}`);
+      for (const real of hits) { if (files.length >= CAP) break; await addFile(real); }
+    } catch { /* grep best-effort */ }
   }
+
   if (!files.length) return null;
   progress?.stage(`📂 Читаю исходный код: ${files.map((f) => f.path).join(', ')}`);
   const terms = [...idents, ...tokenize(question)];
@@ -1064,7 +1141,8 @@ async function codeDive(
     const body = f.text.length > 7000 ? buildEvidence(f.text, terms) : f.text;
     return `FILE: ${f.path}\n\`\`\`\n${body.slice(0, 7000)}\n\`\`\``;
   }).join('\n\n');
-  const prompt = `You are a senior Shiptify engineer with access to the ACTUAL SOURCE CODE below. The documentation did not fully answer the question, so answer by READING THE CODE. Be concrete: state the exact behavior and cite file + function. Source code is authoritative — if it answers the question, give the definitive answer (do NOT punt with "look at the code"). If the provided files genuinely do not contain the answer, say precisely what is missing and which file would hold it. Respond in language: ${lang}. End with a "Sources:" line listing the code files you used.
+  const prompt = `You are a senior Shiptify engineer with access to the ACTUAL SOURCE CODE below (backend AND frontend repos). The documentation did not fully answer the question, so answer by READING THE CODE. Be concrete: state the exact behavior and cite file + function. Source code is authoritative — if it answers the question, give the definitive answer (do NOT punt with "look at the code").
+IMPORTANT: if the question is about WHERE or HOW to do something in the product (e.g. how to get/find something in the UI), the user needs a FRONT-END answer — name the screen/page, the navigation path (menu → section), and the route/URL if visible in the frontend code (e.g. router path in frontend-mono / back-office / admin-app). Backend logic alone is NOT a sufficient answer to a "where/how do I…" question. If the provided files genuinely do not contain the answer, say precisely what is missing and which file would hold it. Respond in language: ${lang}. End with a "Sources:" line listing the code files you used.
 
 Question:
 ${question}
