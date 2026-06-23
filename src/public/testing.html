@@ -113,6 +113,18 @@
     <div class="pad">
       <label class="fld" data-i18n="taskLbl"></label>
       <textarea id="taskText" rows="3" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:var(--panel);color:var(--ink);line-height:1.5"></textarea>
+      <details style="margin-top:10px">
+        <summary class="muted" style="cursor:pointer;font-size:13px" data-i18n="liveSummary"></summary>
+        <div style="margin-top:10px">
+          <label class="fld" data-i18n="liveLbl"></label>
+          <input type="text" id="baseUrl" placeholder="https://app.blu.shiptify.com" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:var(--panel);color:var(--ink)" />
+        </div>
+        <div style="margin-top:10px">
+          <label class="fld" data-i18n="credsLbl"></label>
+          <textarea id="creds" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:ui-monospace,Consolas,monospace;background:var(--panel);color:var(--ink)"></textarea>
+          <div class="muted" data-i18n="liveHint" style="font-size:12px;margin-top:4px"></div>
+        </div>
+      </details>
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button class="pri" id="taskBtn"></button>
         <span class="muted" id="taskStatus"></span>
@@ -166,7 +178,8 @@ const I18N = {
     copyLink:'🔗 Copier le lien', linkCopied:'Lien copié', contents:'Sommaire', expandAll:'Tout déplier', collapseAll:'Tout replier',
     history:'🕘 Historique', historyTitle:'Rapports sauvegardés', historyEmpty:'Aucun rapport sauvegardé.', untitled:'Sans titre', confirmDel:'Supprimer ce rapport ?',
     taskTitle:'🤖 Tâche pour Claude', taskLbl:'Décrivez la tâche — Claude l’exécute (contexte ticket + code) et publie le résultat en commentaire Jira', taskBtn:'▶ Exécuter et publier dans Jira', taskEmpty:'Décrivez la tâche', taskErr:'Échec', taskPosted:'Publié dans Jira',
-    taskDefault:'Effectue un test statique préliminaire de la tâche : vérifie les exigences, les branches liées et le code ; décris ce qui a été vérifié et les zones de risque.' },
+    taskDefault:'Effectue un test statique préliminaire de la tâche : vérifie les exigences, les branches liées et le code ; décris ce qui a été vérifié et les zones de risque.',
+    liveSummary:'🌐 Test dynamique en direct (optionnel) — Base URL + tokens', liveLbl:'Base URL (active l’exécution réelle des requêtes)', credsLbl:'Identifiants — une ligne LABEL=valeur Authorization', liveHint:'Si Base URL est renseignée, Claude exécute de VRAIES requêtes HTTP vers cet hôte uniquement. Les tokens ne sont ni stockés ni inclus dans le rapport/Jira. Ex. : A=Bearer eyJ… puis B=Bearer eyJ…' },
   en: { title:'Searchify — Task Testing', h1:'🧪 Task Testing',
     sub:'Enter a Jira task/subtask. Searchify gathers requirements, links, all comments and the linked GitLab branch code (pull + diff), then takes the tester role and produces a static-testing report (without running the code).',
     configWarn:'⚠️ Jira is not configured on the server. Analysis is unavailable.',
@@ -178,7 +191,8 @@ const I18N = {
     copyLink:'🔗 Copy link', linkCopied:'Link copied', contents:'Contents', expandAll:'Expand all', collapseAll:'Collapse all',
     history:'🕘 History', historyTitle:'Saved reports', historyEmpty:'No saved reports.', untitled:'Untitled', confirmDel:'Delete this report?',
     taskTitle:'🤖 Task for Claude', taskLbl:'Describe the task — Claude runs it (ticket + code context) and posts the result as a Jira comment', taskBtn:'▶ Run & post to Jira', taskEmpty:'Describe the task', taskErr:'Failed', taskPosted:'Posted to Jira',
-    taskDefault:'Run a preliminary static test of the task: check the requirements, linked branches and code; describe what was verified and the risk areas.' },
+    taskDefault:'Run a preliminary static test of the task: check the requirements, linked branches and code; describe what was verified and the risk areas.',
+    liveSummary:'🌐 Live dynamic test (optional) — Base URL + tokens', liveLbl:'Base URL (enables real request execution)', credsLbl:'Credentials — one line per LABEL=Authorization value', liveHint:'If Base URL is set, Claude executes REAL HTTP requests to that host only. Tokens are not stored and never included in the report/Jira. E.g.: A=Bearer eyJ… then B=Bearer eyJ…' },
   ru: { title:'Searchify — Тестирование задач', h1:'🧪 Тестирование задач',
     sub:'Укажите задачу/подзадачу Jira. Searchify соберёт требования, связи, все комментарии и код связанных GitLab-веток (пулл + дифф), затем возьмёт роль тестировщика и выдаст отчёт статического тестирования (без запуска кода).',
     configWarn:'⚠️ Jira не настроена на сервере. Анализ недоступен.',
@@ -190,7 +204,8 @@ const I18N = {
     copyLink:'🔗 Скопировать ссылку', linkCopied:'Ссылка скопирована', contents:'Содержание', expandAll:'Развернуть всё', collapseAll:'Свернуть всё',
     history:'🕘 История', historyTitle:'Сохранённые отчёты', historyEmpty:'Нет сохранённых отчётов.', untitled:'Без названия', confirmDel:'Удалить отчёт?',
     taskTitle:'🤖 Задача для Claude', taskLbl:'Опишите задачу — Claude выполнит её (контекст тикета + код веток) и добавит результат комментарием в Jira', taskBtn:'▶ Выполнить и добавить в Jira', taskEmpty:'Опишите задачу', taskErr:'Не удалось', taskPosted:'Добавлено в Jira',
-    taskDefault:'Проведи предварительное статическое тестирование задачи: проверь требования, связанные ветки и код; опиши, что проверено, и зоны риска.' },
+    taskDefault:'Проведи предварительное статическое тестирование задачи: проверь требования, связанные ветки и код; опиши, что проверено, и зоны риска.',
+    liveSummary:'🌐 Живое динамическое тестирование (опц.) — Base URL + токены', liveLbl:'Base URL (включает реальное выполнение запросов)', credsLbl:'Креды — по строке LABEL=значение Authorization', liveHint:'Если указать Base URL, Claude выполнит РЕАЛЬНЫЕ HTTP-запросы только к этому хосту. Токены не сохраняются и не попадают в отчёт/Jira. Напр.: A=Bearer eyJ… и со след. строки B=Bearer eyJ…' },
 };
 function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
 function applyLang(){
@@ -320,9 +335,12 @@ $('taskBtn').addEventListener('click', async ()=>{
   $('taskResult').innerHTML=''; $('taskLog').textContent=''; $('taskLog').classList.remove('hidden');
   $('taskStatus').innerHTML='<span class="spin"></span> …';
   const reportUrl = currentAnswerId ? `${location.origin}/testing?id=${currentAnswerId}` : undefined;
+  const baseUrl = $('baseUrl').value.trim() || undefined;
+  let creds; const credsRaw=$('creds').value.trim();
+  if(credsRaw){ creds={}; credsRaw.split(/\n+/).forEach(line=>{ const i=line.indexOf('='); if(i>0){ const k=line.slice(0,i).trim(); const v=line.slice(i+1).trim(); if(k&&v) creds[k]=v; } }); }
   let llm='';
   try{
-    const res=await fetch('/api/testing/task/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({key,task,lang:L,reportUrl})});
+    const res=await fetch('/api/testing/task/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({key,task,lang:L,reportUrl,baseUrl,creds})});
     if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('taskStatus').textContent='⚠️ '+(tx||t('taskErr')); return; }
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
     while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
@@ -337,7 +355,13 @@ $('taskBtn').addEventListener('click', async ()=>{
     if(result){
       $('taskStatus').textContent=''; $('taskLog').classList.add('hidden');
       $('taskResult').innerHTML = renderMarkdown(result.result||'');
-      if(result.commentUrl) $('taskOut').innerHTML=`<div class="chip">✅ ${esc(t('taskPosted'))}: <a href="${esc(result.commentUrl)}" target="_blank">${esc(result.key)}</a></div>`;
+      let out='';
+      if(result.httpResults && result.httpResults.length){
+        const rows=result.httpResults.map(x=>`<div class="feat" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px">${esc(x.name||'')} · ${esc(x.method)} ${esc(x.path)} → <b>HTTP ${x.status}</b></div>`).join('');
+        out+=`<details style="margin-bottom:8px" open><summary class="muted" style="cursor:pointer">🌐 Выполнено запросов: ${result.httpResults.length}</summary>${rows}</details>`;
+      }
+      if(result.commentUrl) out+=`<div class="chip">✅ ${esc(t('taskPosted'))}: <a href="${esc(result.commentUrl)}" target="_blank">${esc(result.key)}</a></div>`;
+      $('taskOut').innerHTML=out;
     }
   } catch(_){ $('taskStatus').textContent='⚠️ '+t('netErr'); }
   finally { btn.disabled=false; }

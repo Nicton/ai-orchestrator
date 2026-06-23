@@ -301,6 +301,36 @@ function branchBlock(branches: any[]): string {
     : '(no feature branches / code unavailable)';
 }
 
+// Live HTTP executor for dynamic testing. SSRF-guarded: every request MUST target
+// the same host as the user-provided baseUrl. Credentials (label → Authorization
+// header value) are injected per request and never echoed back in the results.
+type ExecResult = { name: string; method: string; path: string; auth: string | null; expect: string; status: number; body: string };
+async function httpExec(baseUrl: string, requests: any[], creds: Record<string, string>, onStage?: (m: string) => void): Promise<ExecResult[]> {
+  let base: URL;
+  try { base = new URL(baseUrl); } catch { return []; }
+  if (!/^https?:$/.test(base.protocol)) return [];
+  const out: ExecResult[] = [];
+  for (const r of (Array.isArray(requests) ? requests : []).slice(0, 12)) {
+    const method = String(r.method || 'GET').toUpperCase();
+    let url: URL;
+    try { url = new URL(String(r.path || '/'), base); } catch { continue; }
+    if (url.host !== base.host) { out.push({ name: r.name || '', method, path: String(r.path || ''), auth: r.auth || null, expect: r.expect || '', status: 0, body: 'skipped: host not allowed (SSRF guard)' }); continue; }
+    const headers: Record<string, string> = { accept: 'application/json', ...(r.headers && typeof r.headers === 'object' ? r.headers : {}) };
+    if (r.auth && creds[r.auth]) headers['Authorization'] = creds[r.auth];
+    const init: any = { method, headers };
+    if (r.body != null && method !== 'GET' && method !== 'HEAD') { headers['content-type'] = headers['content-type'] || 'application/json'; init.body = typeof r.body === 'string' ? r.body : JSON.stringify(r.body); }
+    onStage?.(`🌐 ${method} ${r.path}${r.auth ? ` [auth:${r.auth}]` : ''}`);
+    let status = 0; let bodyText = '';
+    try { const res = await fetch(url, { ...init, signal: AbortSignal.timeout(20000) }); status = res.status; bodyText = (await res.text()).slice(0, 2000); }
+    catch (e: any) { bodyText = `ERROR: ${String(e?.message || e).slice(0, 200)}`; }
+    out.push({ name: r.name || '', method, path: String(r.path || ''), auth: r.auth || null, expect: r.expect || '', status, body: bodyText });
+  }
+  return out;
+}
+function execBlock(results: ExecResult[]): string {
+  return results.map((x) => `- ${x.name || '(req)'} → ${x.method} ${x.path}${x.auth ? ` [auth:${x.auth}]` : ''}\n  expected: ${x.expect || '—'}\n  HTTP ${x.status}\n  body: ${x.body.replace(/\s+/g, ' ').slice(0, 700)}`).join('\n');
+}
+
 export async function registerTestingApi(app: FastifyInstance) {
   app.get('/api/testing/config', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
@@ -408,7 +438,11 @@ export async function registerTestingApi(app: FastifyInstance) {
 
   // "Task for Claude": run a free-form instruction on the ticket (grounded in
   // the issue + branch code), then post the result as a Jira comment. SSE.
-  const taskSchema = z.object({ key: z.string().min(3).max(30), task: z.string().min(3), lang: z.enum(['fr', 'en', 'ru']).optional(), reportUrl: z.string().max(400).optional() });
+  const taskSchema = z.object({
+    key: z.string().min(3).max(30), task: z.string().min(3), lang: z.enum(['fr', 'en', 'ru']).optional(), reportUrl: z.string().max(400).optional(),
+    baseUrl: z.string().max(300).optional(), // enables LIVE dynamic testing against this host
+    creds: z.record(z.string().max(8000)).optional(), // label → Authorization header value (e.g. {"A":"Bearer …"})
+  });
   app.post('/api/testing/task/stream', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
     if (!jiraConfig().enabled) return reply.code(503).send({ error: 'Jira is not configured' });
@@ -432,25 +466,69 @@ export async function registerTestingApi(app: FastifyInstance) {
       const issue = await fetchIssue(key);
       stage('🔎 связанные ветки / код…');
       const branches = await gatherBranches(key, stage);
-      stage(`🤖 Claude выполняет задачу (${config.answerModel})…`);
       const reportLang = LANG_NAME[lang] || 'Russian';
-      const prompt = `You are Claude, a senior engineer/QA working on Shiptify (TMS). Carry out the USER TASK for Jira ticket ${key}, grounded ONLY in the ticket context and the actual feature-branch code below. Be concrete and cite file:line where you rely on code. If something cannot be confirmed without running the app/DB, say so explicitly ("verify (needs run)"). Write the result in ${reportLang} as clean Markdown, suitable to post as a Jira comment.
-
-=== USER TASK ===
-${task}
-
-=== JIRA TICKET ${key} ===
+      const baseUrl = parsed.data.baseUrl?.trim() || '';
+      const creds = parsed.data.creds || {};
+      const credLabels = Object.keys(creds);
+      const ticketCtx = `=== JIRA TICKET ${key} ===
 Summary: ${issue.summary}
 Type: ${issue.issuetype} · Status: ${issue.status}
 Description:
 ${(issue.description || '(empty)').slice(0, 4000)}
 Recent comments:
-${issue.comments.slice(0, 6).map((c: any) => `- ${c.author}: ${String(c.body).slice(0, 300)}`).join('\n') || 'none'}
+${issue.comments.slice(0, 6).map((c: any) => `- ${c.author}: ${String(c.body).slice(0, 300)}`).join('\n') || 'none'}`;
 
+      let r: Awaited<ReturnType<typeof runRolePrompt>>;
+      let execResults: ExecResult[] = [];
+
+      if (baseUrl) {
+        // PHASE 1 — plan the HTTP requests (LLM → JSON, no execution yet)
+        stage('🧭 Планирую HTTP-запросы…');
+        const plannerPrompt = `You are planning a DYNAMIC test for Jira ticket ${key}. Output ONLY a JSON object (no prose, no code fences):
+{"requests":[{"name":"short name","method":"GET|POST|PUT|PATCH|DELETE","path":"/api/v1/... (relative to base)","auth":"<one of the credential labels, or omit for unauthenticated>","headers":{},"body":null,"expect":"what a CORRECT (fixed) response should be"}]}
+Base URL: ${baseUrl} — every path is relative to it (same host only).
+Credential labels available (put the LABEL in "auth"; the secret value is injected server-side and never shown): ${credLabels.join(', ') || '(none — only unauthenticated requests possible)'}.
+Plan up to 12 requests that actually verify this ticket end-to-end. For a security/IDOR ticket include: an unauthenticated request (expect 401), cross-account access in BOTH directions (use two different auth labels if available), a same-account positive/regression case (expect 200), invalid input, and the oracle-effect check. Use the concrete test emails/accounts named in the ticket. Ground every request in the ticket + code.
+
+=== USER TASK ===
+${task}
+${ticketCtx}
+=== FEATURE-BRANCH CODE ===
+${branchBlock(branches).slice(0, 8000)}`;
+        const planRes = await runRolePrompt('qa.http_planner', plannerPrompt, config.answerModel);
+        let plan: any = { requests: [] };
+        try { let s = (planRes.text || '').trim(); const f = s.match(/```(?:json)?\s*([\s\S]*?)```/i); if (f) s = f[1].trim(); const a = s.indexOf('{'); const b = s.lastIndexOf('}'); if (a >= 0 && b > a) s = s.slice(a, b + 1); plan = JSON.parse(s); } catch { /* keep empty */ }
+        // PHASE 2 — execute the requests for real (SSRF-guarded to baseUrl host)
+        const reqs = Array.isArray(plan.requests) ? plan.requests : [];
+        stage(`🌐 Выполняю ${reqs.length} запрос(ов) к ${baseUrl}…`);
+        execResults = await httpExec(baseUrl, reqs, creds, stage);
+        send('exec', { results: execResults });
+        // PHASE 3 — analyse the ACTUAL responses → report
+        stage(`🤖 Анализ фактических ответов (${config.answerModel})…`);
+        const analyzePrompt = `You are Claude, a senior QA engineer at Shiptify. You performed LIVE dynamic testing for Jira ticket ${key}: the HTTP requests below were ACTUALLY EXECUTED and these are the REAL responses. Judge each against its expectation and the ticket. Give a verdict per case (✅ PASS / ❌ FAIL / ⚠️ verify) and an overall conclusion (is the issue fixed?). Be concrete: cite the HTTP status and the relevant part of each body. Never print authorization tokens. Write in ${reportLang} as clean Markdown for a Jira comment; end with a result matrix.
+
+=== USER TASK ===
+${task}
+${ticketCtx}
+=== EXECUTED REQUESTS & REAL RESPONSES (base ${baseUrl}) ===
+${execBlock(execResults) || '(no requests were executed)'}
+
+=== FEATURE-BRANCH CODE (for cross-check) ===
+${branchBlock(branches).slice(0, 8000)}`;
+        r = await runRolePrompt('qa.task_runner', analyzePrompt, config.answerModel, (t) => send('delta', { text: t }));
+      } else {
+        // No base URL → static analysis only (no live requests).
+        stage(`🤖 Claude выполняет задачу — статически (${config.answerModel})…`);
+        const prompt = `You are Claude, a senior engineer/QA working on Shiptify (TMS). Carry out the USER TASK for Jira ticket ${key}, grounded ONLY in the ticket context and the actual feature-branch code below. Be concrete and cite file:line. If something cannot be confirmed without running the app/DB, say so ("verify (needs run)"). Note: no live API base URL was provided, so this is STATIC analysis. Write in ${reportLang} as clean Markdown for a Jira comment.
+
+=== USER TASK ===
+${task}
+${ticketCtx}
 === FEATURE-BRANCH CODE ===
 ${branchBlock(branches).slice(0, 16000)}`;
-      const r = await runRolePrompt('qa.task_runner', prompt, config.answerModel, (t) => send('delta', { text: t }));
-      await logFeatureUsage({ userId: user.id, userLabel: user.name, feature: 'testing', action: 'task', ref: `${key} — ${task.slice(0, 80)}`, model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, totalTokens: r.totalTokens, status: r.text && r.text.trim() ? 'ok' : 'error' });
+        r = await runRolePrompt('qa.task_runner', prompt, config.answerModel, (t) => send('delta', { text: t }));
+      }
+      await logFeatureUsage({ userId: user.id, userLabel: user.name, feature: 'testing', action: baseUrl ? 'task+http' : 'task', ref: `${key} — ${task.slice(0, 80)}`, model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, totalTokens: r.totalTokens, status: r.text && r.text.trim() ? 'ok' : 'error' });
       const result = (r.text || '').trim();
       if (!result) throw new Error('LLM returned empty result');
 
@@ -466,7 +544,7 @@ ${branchBlock(branches).slice(0, 16000)}`;
         commentUrl = `${baseUrl}/browse/${key}${created?.id ? `?focusedCommentId=${created.id}` : ''}`;
       } catch (e: any) { send('stage', { msg: `⚠️ Jira comment: ${String(e?.message || e).slice(0, 120)}` }); }
 
-      send('result', { key, result, commentUrl, tokens: r.totalTokens || null });
+      send('result', { key, result, commentUrl, tokens: r.totalTokens || null, httpResults: execResults, live: !!baseUrl });
       send('done', {});
     } catch (e: any) {
       send('error', { message: String(e?.message || e).slice(0, 250) });
