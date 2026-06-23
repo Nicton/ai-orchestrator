@@ -358,4 +358,28 @@ export async function registerTestingApi(app: FastifyInstance) {
       try { raw.end(); } catch { /* noop */ }
     }
   });
+
+  // Post a comment to the Jira task (e.g. "Claude ran the checks + preliminary
+  // static testing"). Stamps the author + optional link to the Searchify report.
+  const commentSchema = z.object({ key: z.string().min(3).max(30), comment: z.string().min(2).max(8000), reportUrl: z.string().max(400).optional() });
+  app.post('/api/testing/comment', async (req, reply) => {
+    const user = await requireAuth(req, reply); if (!user) return;
+    if (!jiraConfig().enabled) return reply.code(503).send({ error: 'Jira is not configured (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN)' });
+    const parsed = commentSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const km = parsed.data.key.toUpperCase().match(/([A-Z][A-Z0-9]+-\d+)/);
+    const key = km ? km[1] : '';
+    if (!KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid Jira key' });
+    const by = `${user.name}${user.email ? ` (${user.email})` : ''}`;
+    const stamp = `🤖 Searchify (Claude) · ${by} · ${new Date().toISOString().slice(0, 10)}`;
+    const body = `${parsed.data.comment.trim()}${parsed.data.reportUrl ? `\n\n[Отчёт статического тестирования|${parsed.data.reportUrl}]` : ''}\n\n----\n_${stamp}_`;
+    try {
+      const created = await jiraFetch('POST', `/rest/api/2/issue/${encodeURIComponent(key)}/comment`, { body });
+      const { baseUrl } = jiraConfig();
+      const url = `${baseUrl}/browse/${key}${created?.id ? `?focusedCommentId=${created.id}` : ''}`;
+      return reply.send({ ok: true, key, id: created?.id || null, url });
+    } catch (e: any) {
+      return reply.code(502).send({ error: `Jira comment failed: ${String(e?.message || e).slice(0, 200)}` });
+    }
+  });
 }
