@@ -108,6 +108,21 @@
     </div>
   </div>
 
+  <div class="panel">
+    <h3 data-i18n="taskTitle"></h3>
+    <div class="pad">
+      <label class="fld" data-i18n="taskLbl"></label>
+      <textarea id="taskText" rows="3" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:var(--panel);color:var(--ink);line-height:1.5"></textarea>
+      <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="pri" id="taskBtn"></button>
+        <span class="muted" id="taskStatus"></span>
+      </div>
+      <pre class="llmlog hidden" id="taskLog"></pre>
+      <div class="report" id="taskResult" style="margin-top:10px"></div>
+      <div id="taskOut" style="margin-top:8px"></div>
+    </div>
+  </div>
+
   <div class="panel hidden" id="resultPanel">
     <h3><span data-i18n="reportTitle"></span> <span class="muted" id="repTok" style="font-weight:400;font-size:12px"></span></h3>
     <div class="pad">
@@ -123,15 +138,6 @@
       </div>
       <div class="toc" id="toc" style="display:none"></div>
       <div class="report" id="report"></div>
-      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
-        <label class="fld" data-i18n="cmtLbl"></label>
-        <textarea id="cmtText" rows="3" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:var(--panel);color:var(--ink);line-height:1.5"></textarea>
-        <div style="margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="ghost" id="cmtBtn"></button>
-          <span class="muted" id="cmtStatus"></span>
-        </div>
-        <div id="cmtOut" style="margin-top:8px"></div>
-      </div>
     </div>
   </div>
 
@@ -159,8 +165,8 @@ const I18N = {
     reposNone:'Aucun dépôt git local — le code des branches ne sera pas tiré ici ; rapport basé sur Jira.',
     copyLink:'🔗 Copier le lien', linkCopied:'Lien copié', contents:'Sommaire', expandAll:'Tout déplier', collapseAll:'Tout replier',
     history:'🕘 Historique', historyTitle:'Rapports sauvegardés', historyEmpty:'Aucun rapport sauvegardé.', untitled:'Sans titre', confirmDel:'Supprimer ce rapport ?',
-    cmtLbl:'Commentaire sur la tâche Jira', cmtBtn:'💬 Ajouter le commentaire à Jira', cmtEmpty:'Saisissez un commentaire', cmtErr:'Échec de l’ajout',
-    cmtDefault:'Claude (Searchify) a réalisé la tâche : envoyé les requêtes nécessaires (Jira, branches GitLab liées) et effectué un test statique préliminaire. Détails dans le rapport.' },
+    taskTitle:'🤖 Tâche pour Claude', taskLbl:'Décrivez la tâche — Claude l’exécute (contexte ticket + code) et publie le résultat en commentaire Jira', taskBtn:'▶ Exécuter et publier dans Jira', taskEmpty:'Décrivez la tâche', taskErr:'Échec', taskPosted:'Publié dans Jira',
+    taskDefault:'Effectue un test statique préliminaire de la tâche : vérifie les exigences, les branches liées et le code ; décris ce qui a été vérifié et les zones de risque.' },
   en: { title:'Searchify — Task Testing', h1:'🧪 Task Testing',
     sub:'Enter a Jira task/subtask. Searchify gathers requirements, links, all comments and the linked GitLab branch code (pull + diff), then takes the tester role and produces a static-testing report (without running the code).',
     configWarn:'⚠️ Jira is not configured on the server. Analysis is unavailable.',
@@ -171,8 +177,8 @@ const I18N = {
     reposNone:'No local git repos — branch code will not be pulled here; report is Jira-based.',
     copyLink:'🔗 Copy link', linkCopied:'Link copied', contents:'Contents', expandAll:'Expand all', collapseAll:'Collapse all',
     history:'🕘 History', historyTitle:'Saved reports', historyEmpty:'No saved reports.', untitled:'Untitled', confirmDel:'Delete this report?',
-    cmtLbl:'Comment to the Jira task', cmtBtn:'💬 Add comment to Jira', cmtEmpty:'Enter a comment', cmtErr:'Failed to add',
-    cmtDefault:'Claude (Searchify) completed the task: sent the required requests (Jira, linked GitLab branches) and ran preliminary static testing. Details in the report.' },
+    taskTitle:'🤖 Task for Claude', taskLbl:'Describe the task — Claude runs it (ticket + code context) and posts the result as a Jira comment', taskBtn:'▶ Run & post to Jira', taskEmpty:'Describe the task', taskErr:'Failed', taskPosted:'Posted to Jira',
+    taskDefault:'Run a preliminary static test of the task: check the requirements, linked branches and code; describe what was verified and the risk areas.' },
   ru: { title:'Searchify — Тестирование задач', h1:'🧪 Тестирование задач',
     sub:'Укажите задачу/подзадачу Jira. Searchify соберёт требования, связи, все комментарии и код связанных GitLab-веток (пулл + дифф), затем возьмёт роль тестировщика и выдаст отчёт статического тестирования (без запуска кода).',
     configWarn:'⚠️ Jira не настроена на сервере. Анализ недоступен.',
@@ -183,8 +189,8 @@ const I18N = {
     reposNone:'Локальных git-репозиториев нет — код веток здесь не тянется; отчёт по Jira.',
     copyLink:'🔗 Скопировать ссылку', linkCopied:'Ссылка скопирована', contents:'Содержание', expandAll:'Развернуть всё', collapseAll:'Свернуть всё',
     history:'🕘 История', historyTitle:'Сохранённые отчёты', historyEmpty:'Нет сохранённых отчётов.', untitled:'Без названия', confirmDel:'Удалить отчёт?',
-    cmtLbl:'Комментарий в Jira-задачу', cmtBtn:'💬 Добавить комментарий в Jira', cmtEmpty:'Введите комментарий', cmtErr:'Не удалось добавить',
-    cmtDefault:'Claude (Searchify) выполнил задачу: отправил необходимые запросы (Jira, связанные ветки GitLab) и провёл предварительное статическое тестирование. Подробности — в отчёте.' },
+    taskTitle:'🤖 Задача для Claude', taskLbl:'Опишите задачу — Claude выполнит её (контекст тикета + код веток) и добавит результат комментарием в Jira', taskBtn:'▶ Выполнить и добавить в Jira', taskEmpty:'Опишите задачу', taskErr:'Не удалось', taskPosted:'Добавлено в Jira',
+    taskDefault:'Проведи предварительное статическое тестирование задачи: проверь требования, связанные ветки и код; опиши, что проверено, и зоны риска.' },
 };
 function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
 function applyLang(){
@@ -192,7 +198,8 @@ function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
   $('runBtn').textContent=t('run'); $('copyBtn').textContent=t('copy');
   $('copyLinkBtn').textContent=t('copyLink'); $('expandAllBtn').textContent=t('expandAll'); $('collapseAllBtn').textContent=t('collapseAll');
-  $('historyBtn').textContent=t('history'); $('cmtBtn').textContent=t('cmtBtn');
+  $('historyBtn').textContent=t('history'); $('taskBtn').textContent=t('taskBtn');
+  if(!taskEdited && !$('taskText').value) $('taskText').value=t('taskDefault');
 }
 
 // ---------- minimal markdown renderer (headings, lists, tables, fenced code, inline) ----------
@@ -297,25 +304,42 @@ function displayReport(report, meta, key, answerId){
   renderReport(reportText);
   $('reportTools').style.display='';
   $('copyLinkBtn').style.display = currentAnswerId ? '' : 'none';
-  // prefill the Jira-comment field (unless the user already edited it)
-  if(!cmtEdited) $('cmtText').value = t('cmtDefault');
-  $('cmtStatus').textContent=''; $('cmtOut').innerHTML='';
   $('resultPanel').classList.remove('hidden');
 }
-let cmtEdited=false;
-$('cmtText').addEventListener('input', ()=>{ cmtEdited=true; });
-$('cmtBtn').addEventListener('click', async ()=>{
-  const comment=$('cmtText').value.trim();
-  if(!reportKey){ return; }
-  if(comment.length<2){ $('cmtStatus').textContent=t('cmtEmpty'); return; }
-  const btn=$('cmtBtn'); btn.disabled=true; $('cmtStatus').innerHTML='<span class="spin"></span> …';
+
+// ---------- Task for Claude (execute instruction → post result to Jira) ----------
+let taskEdited=false;
+$('taskText').addEventListener('input', ()=>{ taskEdited=true; });
+$('taskBtn').addEventListener('click', async ()=>{
+  const km=$('key').value.toUpperCase().match(/([A-Z][A-Z0-9]+-\d+)/);
+  const key=km?km[1]:'';
+  if(!key){ $('taskStatus').textContent=t('repoErr'); return; }
+  const task=$('taskText').value.trim();
+  if(task.length<3){ $('taskStatus').textContent=t('taskEmpty'); return; }
+  const btn=$('taskBtn'); btn.disabled=true; $('taskOut').innerHTML='';
+  $('taskResult').innerHTML=''; $('taskLog').textContent=''; $('taskLog').classList.remove('hidden');
+  $('taskStatus').innerHTML='<span class="spin"></span> …';
   const reportUrl = currentAnswerId ? `${location.origin}/testing?id=${currentAnswerId}` : undefined;
+  let llm='';
   try{
-    const r=await fetch('/api/testing/comment',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({key:reportKey,comment,reportUrl})});
-    const d=await r.json();
-    if(!r.ok){ $('cmtStatus').textContent='⚠️ '+(typeof d.error==='string'?d.error:t('cmtErr')); return; }
-    $('cmtStatus').textContent=''; $('cmtOut').innerHTML=`<div class="chip">✅ <a href="${esc(d.url)}" target="_blank">${esc(d.key)}</a></div>`;
-  } catch(_){ $('cmtStatus').textContent='⚠️ '+t('netErr'); }
+    const res=await fetch('/api/testing/task/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({key,task,lang:L,reportUrl})});
+    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('taskStatus').textContent='⚠️ '+(tx||t('taskErr')); return; }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n'); buf=parts.pop()||'';
+      for(const block of parts){ const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m); if(!ev||!dm) continue; let d; try{d=JSON.parse(dm[1]);}catch(_){continue;}
+        if(ev==='stage'){ $('taskStatus').innerHTML='<span class="spin"></span> '+esc(d.msg||''); }
+        else if(ev==='delta'){ llm+=d.text||''; $('taskLog').textContent=llm; $('taskLog').scrollTop=$('taskLog').scrollHeight; }
+        else if(ev==='result'){ result=d; }
+        else if(ev==='error'){ $('taskStatus').textContent='⚠️ '+(d.message||t('taskErr')); }
+      }
+    }
+    if(result){
+      $('taskStatus').textContent=''; $('taskLog').classList.add('hidden');
+      $('taskResult').innerHTML = renderMarkdown(result.result||'');
+      if(result.commentUrl) $('taskOut').innerHTML=`<div class="chip">✅ ${esc(t('taskPosted'))}: <a href="${esc(result.commentUrl)}" target="_blank">${esc(result.key)}</a></div>`;
+    }
+  } catch(_){ $('taskStatus').textContent='⚠️ '+t('netErr'); }
   finally { btn.disabled=false; }
 });
 

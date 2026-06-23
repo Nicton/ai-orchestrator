@@ -278,6 +278,29 @@ ${comments}
 ${code}`;
 }
 
+// Gather feature-branch diffs for a key (GitLab API path or local git), shared
+// by the report and the "task for Claude" flows.
+async function gatherBranches(key: string, stage: (m: string) => void) {
+  const useApi = gitlabCfg().enabled;
+  const branches: any[] = [];
+  if (useApi) {
+    for (const c of await discoverBranchesApi(key, stage)) {
+      try { branches.push(await branchDiffApi(c.repo, c.proj, c.branch, stage)); } catch { /* skip */ }
+    }
+  } else {
+    for (const c of await discoverBranches(key, stage)) {
+      try { branches.push(await branchDiff(c.repo, c.branch, stage)); } catch { /* skip */ }
+    }
+  }
+  return branches;
+}
+
+function branchBlock(branches: any[]): string {
+  return branches.length
+    ? branches.map((b: any) => `### repo ${b.repo} · branch ${b.branch} (base ${b.base})\nchanged files:\n${b.stat || '(n/a)'}\ndiff:\n\`\`\`diff\n${b.diff || '(empty)'}\n\`\`\``).join('\n\n')
+    : '(no feature branches / code unavailable)';
+}
+
 export async function registerTestingApi(app: FastifyInstance) {
   app.get('/api/testing/config', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
@@ -380,6 +403,76 @@ export async function registerTestingApi(app: FastifyInstance) {
       return reply.send({ ok: true, key, id: created?.id || null, url });
     } catch (e: any) {
       return reply.code(502).send({ error: `Jira comment failed: ${String(e?.message || e).slice(0, 200)}` });
+    }
+  });
+
+  // "Task for Claude": run a free-form instruction on the ticket (grounded in
+  // the issue + branch code), then post the result as a Jira comment. SSE.
+  const taskSchema = z.object({ key: z.string().min(3).max(30), task: z.string().min(3).max(4000), lang: z.enum(['fr', 'en', 'ru']).optional(), reportUrl: z.string().max(400).optional() });
+  app.post('/api/testing/task/stream', async (req, reply) => {
+    const user = await requireAuth(req, reply); if (!user) return;
+    if (!jiraConfig().enabled) return reply.code(503).send({ error: 'Jira is not configured' });
+    const parsed = taskSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const km = parsed.data.key.toUpperCase().match(/([A-Z][A-Z0-9]+-\d+)/);
+    const key = km ? km[1] : '';
+    const lang = parsed.data.lang || 'ru';
+    const task = parsed.data.task.trim();
+    if (!KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid Jira key' });
+
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    const send = (event: string, data: any) => { try { raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* gone */ } };
+    const ping = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* noop */ } }, 15000);
+    const stage = (m: string) => send('stage', { msg: m });
+
+    try {
+      stage(`📥 Jira ${key}…`);
+      const issue = await fetchIssue(key);
+      stage('🔎 связанные ветки / код…');
+      const branches = await gatherBranches(key, stage);
+      stage(`🤖 Claude выполняет задачу (${config.answerModel})…`);
+      const reportLang = LANG_NAME[lang] || 'Russian';
+      const prompt = `You are Claude, a senior engineer/QA working on Shiptify (TMS). Carry out the USER TASK for Jira ticket ${key}, grounded ONLY in the ticket context and the actual feature-branch code below. Be concrete and cite file:line where you rely on code. If something cannot be confirmed without running the app/DB, say so explicitly ("verify (needs run)"). Write the result in ${reportLang} as clean Markdown, suitable to post as a Jira comment.
+
+=== USER TASK ===
+${task}
+
+=== JIRA TICKET ${key} ===
+Summary: ${issue.summary}
+Type: ${issue.issuetype} · Status: ${issue.status}
+Description:
+${(issue.description || '(empty)').slice(0, 4000)}
+Recent comments:
+${issue.comments.slice(0, 6).map((c: any) => `- ${c.author}: ${String(c.body).slice(0, 300)}`).join('\n') || 'none'}
+
+=== FEATURE-BRANCH CODE ===
+${branchBlock(branches).slice(0, 16000)}`;
+      const r = await runRolePrompt('qa.task_runner', prompt, config.answerModel, (t) => send('delta', { text: t }));
+      await logFeatureUsage({ userId: user.id, userLabel: user.name, feature: 'testing', action: 'task', ref: `${key} — ${task.slice(0, 80)}`, model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, totalTokens: r.totalTokens, status: r.text && r.text.trim() ? 'ok' : 'error' });
+      const result = (r.text || '').trim();
+      if (!result) throw new Error('LLM returned empty result');
+
+      // post the result as a Jira comment (this whole action is user-initiated)
+      stage('💬 Добавляю комментарий в Jira…');
+      const by = `${user.name}${user.email ? ` (${user.email})` : ''}`;
+      const stamp = `🤖 Searchify (Claude) · задача: «${task.slice(0, 140)}» · ${by} · ${new Date().toISOString().slice(0, 10)}`;
+      const body = `${result}${parsed.data.reportUrl ? `\n\n[Отчёт в Searchify|${parsed.data.reportUrl}]` : ''}\n\n----\n_${stamp}_`;
+      let commentUrl = '';
+      try {
+        const created = await jiraFetch('POST', `/rest/api/2/issue/${encodeURIComponent(key)}/comment`, { body });
+        const { baseUrl } = jiraConfig();
+        commentUrl = `${baseUrl}/browse/${key}${created?.id ? `?focusedCommentId=${created.id}` : ''}`;
+      } catch (e: any) { send('stage', { msg: `⚠️ Jira comment: ${String(e?.message || e).slice(0, 120)}` }); }
+
+      send('result', { key, result, commentUrl, tokens: r.totalTokens || null });
+      send('done', {});
+    } catch (e: any) {
+      send('error', { message: String(e?.message || e).slice(0, 250) });
+    } finally {
+      clearInterval(ping);
+      try { raw.end(); } catch { /* noop */ }
     }
   });
 }
