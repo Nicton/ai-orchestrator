@@ -399,24 +399,9 @@ export async function registerTestingApi(app: FastifyInstance) {
       const issue = await fetchIssue(key);
       stage(`🧩 связей: ${issue.links.length + issue.subtasks.length + (issue.parent ? 1 : 0)} · комментариев: ${issue.comments.length}`);
 
-      const useApi = gitlabCfg().enabled;
-      stage(`🔎 поиск связанных веток в GitLab (${useApi ? 'API' : 'локальный git'})…`);
-      const branches: any[] = [];
-      if (useApi) {
-        const candidates = await discoverBranchesApi(key, stage);
-        for (const c of candidates) {
-          try { branches.push(await branchDiffApi(c.repo, c.proj, c.branch, stage)); }
-          catch (e: any) { stage(`⚠️ ${c.repo}:${c.branch} — ${String(e?.message || e).slice(0, 120)}`); }
-        }
-        if (!candidates.length) stage('ℹ️ ветки по ключу не найдены в GitLab — отчёт по Jira');
-      } else {
-        const candidates = await discoverBranches(key, stage);
-        for (const c of candidates) {
-          try { branches.push(await branchDiff(c.repo, c.branch, stage)); }
-          catch (e: any) { stage(`⚠️ ${c.repo}:${c.branch} — ${String(e?.message || e).slice(0, 120)}`); }
-        }
-        if (!candidates.length) stage('ℹ️ ветки по ключу не найдены (нет локальных git-репозиториев/доступа) — отчёт по Jira');
-      }
+      stage('🔎 поиск связанных веток и коммитов…');
+      const branches = await gatherBranches(key, stage);
+      if (!branches.length) stage('ℹ️ ни веток, ни коммитов по ключу не найдено — отчёт по Jira');
 
       stage(`🧪 статическое тестирование (роль QA, ${config.answerModel})…`);
       const prompt = buildPrompt(issue, branches, lang);
