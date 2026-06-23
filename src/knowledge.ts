@@ -1043,6 +1043,11 @@ async function resolveCodePath(hint: string): Promise<string | null> {
 function needsUi(q: string): boolean {
   return /\bгде\b|как (?:получить|найти|создать|выпустить|сгенерировать|открыть|настроить|включить)|откуда|ссылк|страниц|раздел|интерфейс|меню|кнопк|настройк|where|how (?:do i|to|can i)|which (?:page|screen|menu)|link|url|page|screen|button|settings|navigate/i.test(String(q));
 }
+// Grounded answer admits it's missing the concrete location/steps → worth a
+// code dive (esp. for "where/how" questions that need a UI link).
+function answerUncertain(a: string): boolean {
+  return /неясно|не\s*(?:ясно|указан|понятн|нашл|найден|описан)|отсутству|нет\s+(?:информации|данных|инструкц)|должн[аы]?\s+содержать|уточнит|to be confirmed|unclear|not\s+(?:clear|specified|documented|covered)|couldn'?t find|insufficient|недостаточно|не\s+приведен/i.test(String(a));
+}
 // Distinctive English terms from grounded text → grep targets in code (the
 // question is usually RU but code/identifiers are EN).
 function englishGrepTerms(s: string): string[] {
@@ -1273,9 +1278,11 @@ ${evidence}`;
 
   // Грунтованный ответ от LLM (по документации) — основной путь. Граф добавляем дополнением.
   if (llmAnswer && !looksInsufficient(llmAnswer)) {
-    // Если ответ «упирается в код» — сами идём читать исходники и доотвечаем (код авторитетнее).
-    if (result?.engine === 'claude' && needsCode(llmAnswer)) {
-      progress?.stage('🧩 Ответ упирается в код — открываю исходники…');
+    // Идём в код, если ответ «упирается в код», ИЛИ это вопрос «где/как сделать в
+    // продукте», а грунт-ответ не дал конкретного места в UI (нужна ссылка/экран).
+    const navGap = needsUi(question) && answerUncertain(llmAnswer);
+    if (result?.engine === 'claude' && (needsCode(llmAnswer) || navGap)) {
+      progress?.stage(navGap ? '🖥 Нужно место в интерфейсе — ищу в коде фронта…' : '🧩 Ответ упирается в код — открываю исходники…');
       try {
         const cd = await codeDive(question, `${llmAnswer}\n\n${evidence}`, lang, progress);
         if (cd) {
