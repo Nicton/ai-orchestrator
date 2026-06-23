@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — Doc Sync</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button,input,select,textarea { font-family:inherit; }
+  .wrap { max-width:1040px; margin:22px auto; padding:0 18px 80px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 18px; }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .panel > h3 { margin:0; padding:13px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; }
+  .pad { padding:16px 18px; }
+  label.fld { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:0 0 5px; }
+  input[type=text],input[type=date],textarea { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:var(--panel); color:var(--ink); }
+  textarea { resize:vertical; line-height:1.5; }
+  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  button.pri { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; }
+  button.pri:hover { background:var(--blue-dark); } button.pri:disabled { opacity:.55; cursor:default; }
+  button.go { background:var(--green,#1f9d57); }
+  button.ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; }
+  button.ghost:hover { background:var(--bg-soft); }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--red); font-size:13px; margin-top:10px; min-height:16px; }
+  .stagelog { font-size:12px; color:var(--muted); padding:6px 0; min-height:16px; }
+  .llmlog { white-space:pre-wrap; background:#0d1117; color:#c9d1d9; border-radius:8px; padding:10px; font-size:11px; line-height:1.45; max-height:200px; overflow:auto; margin:8px 0; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { display:inline-block; padding:3px 10px; border-radius:9px; font-size:12px; background:var(--bg-soft); border:1px solid var(--line); }
+  .feat { font-size:13px; padding:4px 0; border-bottom:1px solid var(--line); }
+  .prop { border:1px solid var(--line); border-radius:10px; margin-bottom:12px; overflow:hidden; }
+  .prop-h { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:11px 14px; background:var(--bg-soft); cursor:pointer; user-select:none; }
+  .prop-h .t { font-weight:600; font-size:14px; } .prop-h .m { font-size:12px; color:var(--muted); }
+  .prop.collapsed .prop-body { display:none; }
+  .prop-body { padding:6px 16px 14px; }
+  .prop-body pre { white-space:pre-wrap; background:#0d1117; color:#c9d1d9; border-radius:8px; padding:12px; font-size:12.5px; line-height:1.5; max-height:340px; overflow:auto; }
+  .applied { color:var(--green,#1f9d57); font-size:12px; font-weight:600; }
+  .hidden { display:none !important; }
+  .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:60; display:none; } .drawer-mask.open { display:block; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:min(440px,92vw); background:var(--panel); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.18); z-index:61; transform:translateX(100%); transition:transform .2s; display:flex; flex-direction:column; } .drawer.open { transform:translateX(0); }
+  .drawer h3 { margin:0; padding:14px 18px; border-bottom:1px solid var(--line); font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .drawer .list { flex:1; overflow:auto; padding:12px 14px; }
+  .hist-item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; cursor:pointer; } .hist-item:hover { background:var(--bg-soft); }
+  .hist-title { font-size:14px; font-weight:500; } .hist-meta { color:var(--muted); font-size:12px; margin-top:4px; }
+  .st { font-size:11px; padding:1px 8px; border-radius:9px; font-weight:600; } .st.draft { background:var(--bg-soft); border:1px solid var(--line); color:var(--muted); } .st.published { background:#e9f6ec; color:var(--green,#1f9d57); border:1px solid #bfe6cb; }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1 data-i18n="h1">🔄 Doc Sync</h1>
+      <p class="sub" data-i18n="sub"></p>
+    </div>
+    <button class="ghost" id="historyBtn" style="white-space:nowrap"></button>
+  </div>
+
+  <div class="panel" id="cfgWarn" style="display:none"><div class="pad muted" data-i18n="cfgWarn"></div></div>
+
+  <div class="panel">
+    <h3 data-i18n="runTitle"></h3>
+    <div class="pad">
+      <div class="row">
+        <div style="flex:0 0 220px">
+          <label class="fld" data-i18n="fromLbl"></label>
+          <input type="date" id="fromDate" />
+        </div>
+        <button class="pri" id="runBtn"></button>
+      </div>
+      <div class="muted" id="lastNote" style="margin-top:8px;font-size:12px"></div>
+      <div style="margin-top:12px">
+        <label class="fld" data-i18n="agentLbl"></label>
+        <textarea id="agentNotes" rows="3" data-i18n-ph="agentPh"></textarea>
+      </div>
+      <div class="err" id="runErr"></div>
+      <div class="stagelog" id="stageLog"></div>
+      <pre class="llmlog hidden" id="llmLog"></pre>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="resultPanel">
+    <h3><span data-i18n="resultTitle"></span> <span class="muted" id="winMeta" style="font-weight:400;font-size:12px"></span></h3>
+    <div class="pad">
+      <div id="summary" class="muted" style="margin-bottom:12px"></div>
+      <div style="margin-bottom:10px"><label class="fld" data-i18n="modsLbl"></label><div class="chips" id="modules"></div></div>
+      <div style="margin-bottom:14px"><label class="fld" data-i18n="featsLbl"></label><div id="features"></div></div>
+      <label class="fld" data-i18n="propsLbl"></label>
+      <div id="proposals"></div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="pri go" id="applyAllBtn"></button>
+        <span class="muted" id="applyStatus"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-mask" id="histMask"></div>
+  <div class="drawer" id="histDrawer">
+    <h3><span data-i18n="historyTitle"></span><button class="ghost" id="histClose" style="border:none;background:none;font-size:16px">✕</button></h3>
+    <div class="list" id="histList"></div>
+  </div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const L = (window.SearchifyI18N && window.SearchifyI18N.getLang()) || 'fr';
+document.documentElement.lang = L;
+
+const I18N = {
+  fr: { title:'Searchify — Doc Sync', h1:'🔄 Doc Sync',
+    sub:"Mise à jour incrémentale de la doc sur une fenêtre [date → aujourd'hui]. Le code+Jira de la fenêtre → nouveaux modules/fonctionnalités → propositions de NOUVELLES pages doc (validation manuelle).",
+    cfgWarn:'⚠️ Pas de dépôts git / Jira non configuré — la synchro peut être limitée.',
+    runTitle:'Lancer une synchro', fromLbl:'Depuis la date (1er run : manuel)', run:'🔄 Lancer la synchro',
+    agentLbl:'Notes agent (Drive / Fathom / Slack) — optionnel', agentPh:'Collez ici le contexte produit récupéré via Drive/Fathom/Slack (décisions, specs)…',
+    resultTitle:'Résultat', modsLbl:'Nouveaux / modules touchés', featsLbl:'Nouvelles fonctionnalités', propsLbl:'Propositions de doc (nouvelles pages)',
+    applyAll:'✅ Tout publier', apply:'Publier', applied:'publié', historyTitle:'Historique des synchros', historyEmpty:'Aucune synchro.',
+    lastNone:'Première synchro — indiquez la date du dernier analyse manuellement.', lastDone:(d)=>`Dernière synchro jusqu'au ${d}.`,
+    netErr:'Réseau indisponible', runErr:'Erreur', dateErr:'Indiquez une date' },
+  en: { title:'Searchify — Doc Sync', h1:'🔄 Doc Sync',
+    sub:'Incremental doc update over a window [date → today]. Window code+Jira → new modules/features → proposed NEW doc pages (human-gated).',
+    cfgWarn:'⚠️ No git repos / Jira not configured — sync may be limited.',
+    runTitle:'Run a sync', fromLbl:'From date (first run: manual)', run:'🔄 Run sync',
+    agentLbl:'Agent notes (Drive / Fathom / Slack) — optional', agentPh:'Paste product context gathered via Drive/Fathom/Slack (decisions, specs)…',
+    resultTitle:'Result', modsLbl:'New / touched modules', featsLbl:'New features', propsLbl:'Doc proposals (new pages)',
+    applyAll:'✅ Publish all', apply:'Publish', applied:'published', historyTitle:'Sync history', historyEmpty:'No syncs yet.',
+    lastNone:'First sync — enter the last-analysis date manually.', lastDone:(d)=>`Last sync up to ${d}.`,
+    netErr:'Network unavailable', runErr:'Error', dateErr:'Enter a date' },
+  ru: { title:'Searchify — Doc Sync', h1:'🔄 Doc Sync',
+    sub:'Инкрементальное обновление доки по окну [дата → сегодня]. Код+Jira из окна → новые модули/фичи → предложения НОВЫХ страниц доки (с ручным подтверждением).',
+    cfgWarn:'⚠️ Нет git-репозиториев / Jira не настроена — синк может быть ограничен.',
+    runTitle:'Запустить синк', fromLbl:'С даты (1-й запуск — вручную)', run:'🔄 Запустить синк',
+    agentLbl:'Заметки агента (Drive / Fathom / Slack) — опционально', agentPh:'Вставьте сюда продуктовый контекст из Drive/Fathom/Slack (решения, спеки)…',
+    resultTitle:'Результат', modsLbl:'Новые / затронутые модули', featsLbl:'Новые фичи', propsLbl:'Предложения по доке (новые страницы)',
+    applyAll:'✅ Опубликовать всё', apply:'Опубликовать', applied:'опубликовано', historyTitle:'История синков', historyEmpty:'Синков ещё нет.',
+    lastNone:'Первый синк — укажите дату последнего анализа вручную.', lastDone:(d)=>`Последний синк до ${d}.`,
+    netErr:'Сеть недоступна', runErr:'Ошибка', dateErr:'Укажите дату' },
+};
+function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
+function applyLang(){
+  document.title=t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder=t(el.getAttribute('data-i18n-ph')); });
+  $('runBtn').textContent=t('run'); $('applyAllBtn').textContent=t('applyAll'); $('historyBtn').textContent=t('history');
+}
+
+let currentRun=null;
+
+async function boot(){
+  applyLang();
+  const r=await fetch('/api/auth/me'); if(!r.ok){ location.href='/login'; return; }
+  const cfg=await fetch('/api/docsync/config').then(r=>r.json()).catch(()=>({repos:[]}));
+  if(!cfg.repos||!cfg.repos.length){ $('cfgWarn').style.display=''; }
+  const today=new Date().toISOString().slice(0,10);
+  if(cfg.lastSyncDate){ $('fromDate').value=cfg.lastSyncDate; $('lastNote').textContent=t('lastDone')(cfg.lastSyncDate); }
+  else { $('lastNote').textContent=t('lastNone'); }
+  $('fromDate').max=today;
+}
+
+$('runBtn').addEventListener('click', run);
+async function run(){
+  $('runErr').textContent='';
+  const from=$('fromDate').value.trim();
+  if(!from){ $('runErr').textContent=t('dateErr'); return; }
+  const btn=$('runBtn'); btn.disabled=true;
+  $('resultPanel').classList.add('hidden'); $('stageLog').innerHTML='<span class="spin"></span> …'; $('llmLog').textContent=''; $('llmLog').classList.remove('hidden');
+  let llm='';
+  try{
+    const res=await fetch('/api/docsync/run/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from,agentNotes:$('agentNotes').value.trim()||undefined})});
+    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('stageLog').textContent='⚠️ '+(tx||t('runErr')); return; }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n'); buf=parts.pop()||'';
+      for(const block of parts){ const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m); if(!ev||!dm) continue; let d; try{d=JSON.parse(dm[1]);}catch(_){continue;}
+        if(ev==='stage'){ $('stageLog').innerHTML='<span class="spin"></span> '+esc(d.msg||''); }
+        else if(ev==='delta'){ llm+=d.text||''; $('llmLog').textContent=llm; $('llmLog').scrollTop=$('llmLog').scrollHeight; }
+        else if(ev==='result'){ result=d; }
+        else if(ev==='error'){ $('stageLog').textContent='⚠️ '+(d.message||t('runErr')); }
+      }
+    }
+    if(result){ renderRun(result); }
+  } catch(_){ $('stageLog').textContent='⚠️ '+t('netErr'); }
+  finally { btn.disabled=false; $('llmLog').classList.add('hidden'); $('stageLog').textContent=''; }
+}
+
+function renderRun(d){
+  currentRun=d;
+  $('resultPanel').classList.remove('hidden');
+  $('winMeta').textContent=`${d.from} → ${d.to}`;
+  $('summary').textContent=d.summary||'';
+  $('modules').innerHTML=(d.addedModules||[]).map(m=>`<span class="chip">${esc(m)}</span>`).join('')||'<span class="muted">—</span>';
+  $('features').innerHTML=(d.addedFeatures||[]).map(f=>`<div class="feat">${f.key?`<a href="https://shiptify.atlassian.net/browse/${esc(f.key)}" target="_blank">${esc(f.key)}</a> · `:''}${esc(f.title||'')}${f.module?` <span class="muted">[${esc(f.module)}]</span>`:''}</div>`).join('')||'<span class="muted">—</span>';
+  renderProposals(d.proposals||[]);
+  $('applyStatus').textContent='';
+  $('resultPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderProposals(props){
+  $('proposals').innerHTML = props.length ? props.map((p,i)=>`
+    <div class="prop collapsed" data-i="${i}">
+      <div class="prop-h"><span><span class="t">${esc(p.title||p.path)}</span> ${p.module?`<span class="m">${esc(p.module)}</span>`:''}</span>
+        <span>${p.applied?`<span class="applied">✓ ${esc(t('applied'))}</span>`:`<button class="ghost" data-apply="${esc(p.path)}">${esc(t('apply'))}</button>`}</span></div>
+      <div class="prop-body"><div class="muted" style="font-size:12px;margin-bottom:6px">${esc(p.path)}</div><pre>${esc(p.bodyMd||'')}</pre></div>
+    </div>`).join('') : '<span class="muted">—</span>';
+  $('proposals').querySelectorAll('.prop-h').forEach(h=> h.addEventListener('click', e=>{ if(e.target.closest('[data-apply]'))return; h.parentElement.classList.toggle('collapsed'); }));
+  $('proposals').querySelectorAll('[data-apply]').forEach(b=> b.addEventListener('click', ()=> publish([b.getAttribute('data-apply')])));
+}
+
+$('applyAllBtn').addEventListener('click', ()=> publish(null));
+async function publish(paths){
+  if(!currentRun) return;
+  $('applyStatus').innerHTML='<span class="spin"></span> …';
+  try{
+    const r=await fetch('/api/docsync/'+currentRun.id+'/publish',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(paths?{paths}:{})});
+    const d=await r.json();
+    if(!r.ok){ $('applyStatus').textContent='⚠️ '+(d.error||t('runErr')); return; }
+    // mark applied locally
+    (currentRun.proposals||[]).forEach(p=>{ if(d.publishedPaths&&d.publishedPaths.includes(p.path)) p.applied=true; });
+    renderProposals(currentRun.proposals||[]);
+    $('applyStatus').textContent = `${(d.written||[]).length} ${t('applied')}`;
+  } catch(_){ $('applyStatus').textContent='⚠️ '+t('netErr'); }
+}
+
+// history
+$('historyBtn').addEventListener('click', openHistory);
+$('histClose').addEventListener('click', closeHistory);
+$('histMask').addEventListener('click', closeHistory);
+function openHistory(){ $('histMask').classList.add('open'); $('histDrawer').classList.add('open'); loadHistory(); }
+function closeHistory(){ $('histMask').classList.remove('open'); $('histDrawer').classList.remove('open'); }
+async function loadHistory(){
+  $('histList').innerHTML='<p class="muted">…</p>';
+  try{ const d=await fetch('/api/docsync').then(r=>r.json());
+    if(!d.items||!d.items.length){ $('histList').innerHTML=`<p class="muted">${esc(t('historyEmpty'))}</p>`; return; }
+    $('histList').innerHTML=d.items.map(it=>`<div class="hist-item" data-id="${esc(it.id)}">
+      <div class="hist-title">${esc(it.fromDate)} → ${esc(it.toDate)} <span class="st ${it.status}">${esc(it.status)}</span></div>
+      <div class="hist-meta">${it.modules} мод · ${it.features} фич · ${esc(it.createdBy||'')} · ${new Date(it.createdAt).toLocaleString()}</div></div>`).join('');
+    $('histList').querySelectorAll('.hist-item').forEach(el=> el.addEventListener('click', ()=>{ loadRun(el.getAttribute('data-id')); closeHistory(); }));
+  }catch(_){ $('histList').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
+}
+async function loadRun(id){
+  try{ const d=await fetch('/api/docsync/'+id).then(r=>r.json()); if(!d.run) return; const r=d.run;
+    renderRun({ id:r.id, from:r.fromDate, to:r.toDate, summary:'', addedModules:r.addedModules||[], addedFeatures:r.addedFeatures||[], proposals:r.proposals||[] });
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(_){}
+}
+
+boot();
+</script>
+</body>
+</html>

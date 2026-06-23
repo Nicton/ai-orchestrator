@@ -733,6 +733,28 @@ model ReleaseReportTranslation {
   @@unique([reportId, lang])
 }
 
+// DocSync — инкрементальное обновление документации по окну [fromDate→toDate].
+// Агент-исполняемый воркфлоу; приложение хранит прогоны (окно, источники, что
+// нового добавлено, предложения по доке, лог) + human-gate публикации.
+// См. docs/specs / memory project-doc-update-arch.
+model DocSyncRun {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  createdBy      String?
+  createdById    String?
+  fromDate       String                 // окно: начало (YYYY-MM-DD), 1-й раз вручную
+  toDate         String                 // окно: конец (= сегодня на момент запуска)
+  status         String   @default("draft") // draft | published
+  sources        Json?                  // счётчики: commits/jiraKeys/repos/agentNotes
+  addedModules   Json?                  // string[] — новые/затронутые модули
+  addedFeatures  Json?                  // [{key,title,module}] — новые фичи в окне
+  proposals      Json?                  // [{path,title,module,bodyMd,applied}]
+  publishedPaths Json?                  // string[] — что записано в доку
+  log            String?                // полный лог прогона
+
+  @@index([createdAt])
+}
+
 // Снапшот состояния качества (Quality Coverage Analytics) — для анализа динамики.
 model QualitySnapshot {
   id        String   @id @default(cuid())

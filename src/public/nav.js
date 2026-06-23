@@ -31,6 +31,7 @@
     ['/tasks', '🆕', { fr: 'Nouvelles tâches', en: 'New tasks', ru: 'Новые задачи' }],
     ['/testing', '🧪', { fr: 'Test de tâches', en: 'Task testing', ru: 'Тестирование задач' }],
     ['/releases', '🚀', { fr: 'Release Notes', en: 'Release Notes', ru: 'Релиз-ноты' }],
+    ['/doc-sync', '🔄', { fr: 'Doc Sync', en: 'Doc Sync', ru: 'Doc Sync' }],
     ['/pre-planning', '🧭', { fr: 'Pré-planning', en: 'Pre-planning', ru: 'Pre-planning' }],
   ];
   var T = {

@@ -24,6 +24,7 @@ import { registerUsageApi } from './usage.js';
 import { registerAnswersApi } from './answers.js';
 import { registerVersionApi } from './version.js';
 import { registerReleasesApi } from './releases.js';
+import { registerDocSyncApi } from './docsync.js';
 import { loadGraphIntoDb } from './graphLoader.js';
 import { ensureBucket } from './storage.js';
 import { registerAuthApi, seedDefaultAdmin } from './auth.js';
@@ -59,6 +60,7 @@ await registerUsageApi(app);
 await registerAnswersApi(app);
 await registerVersionApi(app);
 await registerReleasesApi(app);
+await registerDocSyncApi(app);
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -869,6 +871,11 @@ app.get('/testing', async (_, reply) => {
 // Release notes — 3-audience reports from the release delta.
 app.get('/releases', async (_, reply) => {
   return reply.sendFile('releases.html');
+});
+
+// Doc Sync — incremental documentation update over a date window.
+app.get('/doc-sync', async (_, reply) => {
+  return reply.sendFile('doc-sync.html');
 });
 
 // Legacy internal orchestrator dashboard (engineering use).
