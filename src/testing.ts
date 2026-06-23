@@ -327,6 +327,51 @@ function branchBlock(branches: any[]): string {
     : '(no feature branches / code unavailable)';
 }
 
+// Pipeline step — COVERAGE CROSS-CHECK between the ticket and the actual code.
+// Two directions: (A) each requirement/acceptance-criterion/agreed-in-comments
+// point → is it implemented in the branch code? and (B) each code change → is it
+// described/justified in the ticket? Direction B surfaces UNDOCUMENTED changes
+// (the tester's "where did this come from?" question). Runs as its own LLM pass
+// so the matrix is focused and reliable; its block is prepended to the report.
+async function coverageCheck(issue: any, branches: any[], lang: string, onDelta?: (t: string) => void) {
+  const reportLang = LANG_NAME[lang] || 'Russian';
+  const reqSrc = `Summary: ${issue.summary}
+Acceptance / description:
+${(issue.description || '(empty)').slice(0, 5000)}
+Comments (clarifications & agreements with the customer — also a source of requirements):
+${issue.comments.slice(0, 14).map((c: any) => `[${c.created}] ${c.author}: ${String(c.body).slice(0, 900)}`).join('\n---\n') || '(none)'}`;
+  const codeSrc = branchBlock(branches).slice(0, 14000);
+  const prompt = `You are a senior QA engineer doing a COVERAGE CROSS-CHECK between Jira ticket ${issue.key} and its ACTUAL code changes. Do BOTH directions — both are mandatory:
+(A) Requirements → code: take every requirement / acceptance criterion / point agreed in the description or comments, and decide whether it is implemented in the branch diffs. Cite file:line as evidence when implemented.
+(B) Code → requirements: take every change in the branch diffs and decide whether it is described or justified anywhere in the ticket (description or comments). Explicitly flag changes that are NOT described anywhere as "⚠️ НЕ описано" — these tell the tester where unexplained changes came from and must be clarified with the developer.
+Ground strictly in the provided diffs (cite file:line). Do not invent requirements or code. If no branch code is available, say so and assess direction A only, marking items "❓ нельзя подтвердить (нет кода)".
+
+Write in ${reportLang} as clean Markdown, EXACTLY this structure (and nothing before it):
+
+## 0. Coverage-чек: требования ↔ код
+**Итог:** N из M требований подтверждены в коде · K изменений в коде вне описания задачи.
+
+### A. Требования → реализация
+| # | Требование (из тикета / AC / комментариев) | Статус | Где в коде / почему нет |
+|---|---|---|---|
+Status MUST be one of: ✅ реализовано · 🟡 частично · ❌ не найдено в коде · ❓ нельзя подтвердить (needs run).
+
+### B. Изменения в коде → описание в задаче
+| Изменение (file:line / модуль) | Описано в задаче? | Комментарий |
+|---|---|---|
+Status MUST be one of: 📄 описано · ⚠️ НЕ описано.
+After the table, list the ⚠️ undocumented changes as bullets — these are the priority items for the tester to clarify with the developer.
+
+Keep cells short; no pipe characters inside table cells.
+
+=== JIRA TICKET ${issue.key} — REQUIREMENTS SOURCE ===
+${reqSrc}
+
+=== BRANCH CODE (diffs — source of truth) ===
+${codeSrc}`;
+  return runRolePrompt('qa.coverage_check', prompt, config.answerModel, onDelta);
+}
+
 // Live HTTP executor for dynamic testing. SSRF-guarded: every request MUST target
 // the same host as the user-provided baseUrl. Credentials (label → Authorization
 // header value) are injected per request and never echoed back in the results.
@@ -395,6 +440,16 @@ export async function registerTestingApi(app: FastifyInstance) {
       const branches = await gatherBranches(key, stage);
       if (!branches.length) stage('ℹ️ ни веток, ни коммитов по ключу не найдено — отчёт по Jira');
 
+      // STEP — coverage cross-check (requirements ↔ code, both directions).
+      stage(`🧮 Coverage-чек: требования ↔ изменения в коде (${config.answerModel})…`);
+      const cov = await coverageCheck(issue, branches, lang, (t) => send('delta', { text: t }));
+      await logFeatureUsage({
+        userId: user.id, userLabel: user.name, feature: 'testing', action: 'coverage', ref: `${key} — ${issue.summary}`,
+        model: cov.model, promptTokens: cov.promptTokens, completionTokens: cov.completionTokens, totalTokens: cov.totalTokens,
+        status: cov.text && cov.text.trim() ? 'ok' : 'error',
+      });
+      send('delta', { text: '\n\n---\n\n' });
+
       stage(`🧪 статическое тестирование (роль QA, ${config.answerModel})…`);
       const prompt = buildPrompt(issue, branches, lang);
       const r = await runRolePrompt('qa.static_tester', prompt, config.answerModel, (t) => send('delta', { text: t }));
@@ -404,14 +459,16 @@ export async function registerTestingApi(app: FastifyInstance) {
         status: r.text && r.text.trim() ? 'ok' : 'error',
       });
       if (!r.text || !r.text.trim()) throw new Error('LLM returned no report');
+      const coverageText = (cov.text || '').trim();
+      const report = coverageText ? `${coverageText}\n\n---\n\n${r.text}` : r.text;
 
       send('result', {
-        key, report: r.text,
+        key, report, coverage: coverageText,
         meta: {
           issue: { summary: issue.summary, type: issue.issuetype, status: issue.status },
           related: [...(issue.parent ? [{ key: issue.parent.key, rel: 'parent' }] : []), ...issue.subtasks.map((s: any) => ({ key: s.key, rel: 'subtask' })), ...issue.links.map((l: any) => ({ key: l.key, rel: l.rel }))],
           branches: branches.map((b) => ({ repo: b.repo, branch: b.branch, files: b.files, base: b.base })),
-          tokens: r.totalTokens || null,
+          tokens: ((r.totalTokens || 0) + (cov.totalTokens || 0)) || null,
         },
       });
       send('done', {});
