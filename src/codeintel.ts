@@ -113,11 +113,87 @@ async function commitRefs(key: string, onStage?: (m: string) => void, limit = 4)
   return out;
 }
 
-// THE mechanism: all code for a Jira key — live feature branches (by name) AND
-// already-merged commits (by message). Deduped by diff.
+// --- Jira Development panel (dev-status) — authoritative branch/commit/MR links,
+// independent of branch naming. Reads JIRA_* env directly. ---
+function jiraCfg() {
+  return { baseUrl: String(process.env.JIRA_BASE_URL || 'https://shiptify.atlassian.net').replace(/\/$/, ''), email: String(process.env.JIRA_EMAIL || '').trim(), token: String(process.env.JIRA_API_TOKEN || '').trim() };
+}
+async function jiraGet(apiPath: string): Promise<any> {
+  const { baseUrl, email, token } = jiraCfg();
+  if (!email || !token) return null;
+  try {
+    const res = await fetch(`${baseUrl}${apiPath}`, { headers: { Authorization: 'Basic ' + Buffer.from(`${email}:${token}`).toString('base64'), Accept: 'application/json' } });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+// What the Jira "Development" section knows: linked branches, commits, PRs.
+async function devStatus(issueId: string): Promise<{ branches: string[]; commits: string[]; prs: Array<{ name: string; url: string; branch?: string }> }> {
+  const out = { branches: [] as string[], commits: [] as string[], prs: [] as Array<{ name: string; url: string; branch?: string }> };
+  const summary = await jiraGet(`/rest/dev-status/1.0/issue/summary?issueId=${issueId}`);
+  const types = new Set<string>();
+  for (const k of ['repository', 'branch', 'pullrequest']) for (const t of Object.keys(summary?.summary?.[k]?.byInstanceType || {})) types.add(t);
+  for (const at of (types.size ? [...types] : ['gitlab'])) {
+    const br = await jiraGet(`/rest/dev-status/latest/issue/detail?issueId=${issueId}&applicationType=${at}&dataType=branch`);
+    for (const d of br?.detail || []) for (const b of d.branches || []) out.branches.push(b.name);
+    const rp = await jiraGet(`/rest/dev-status/latest/issue/detail?issueId=${issueId}&applicationType=${at}&dataType=repository`);
+    for (const d of rp?.detail || []) for (const repo of d.repositories || []) for (const c of repo.commits || []) out.commits.push(String(c.id || c.displayId || '').trim());
+    const pr = await jiraGet(`/rest/dev-status/latest/issue/detail?issueId=${issueId}&applicationType=${at}&dataType=pullrequest`);
+    for (const d of pr?.detail || []) for (const p of d.pullRequests || []) out.prs.push({ name: p.name, url: p.url, branch: p.source?.branch });
+  }
+  out.branches = [...new Set(out.branches)]; out.commits = [...new Set(out.commits.filter(Boolean))];
+  return out;
+}
+// Diff one commit by SHA — locate the repo that has it, show its diff.
+async function showCommit(sha: string, label: string, onStage?: (m: string) => void): Promise<CodeRef | null> {
+  for (const repo of codeRepos()) {
+    const cwd = path.join(WORKSPACES_ROOT, repo);
+    if ((await gitSh(`${GIT} cat-file -t ${sha}`, cwd, 15000)).trim() !== 'commit') continue;
+    const subj = (await gitSh(`${GIT} log -1 --pretty=%s ${sha}`, cwd, 15000)).trim();
+    const stat = (await gitSh(`${GIT} show --stat --format= ${sha}`, cwd, 30000)).trim();
+    let diff = await gitSh(`${GIT} show ${sha} --no-color --format=`, cwd, 45000);
+    const truncated = diff.length > DIFF_CAP; if (truncated) diff = diff.slice(0, DIFF_CAP);
+    const sf = statFiles(stat);
+    onStage?.(`🔧 ${repo}@${sha.slice(0, 9)} (${label}): ${subj.slice(0, 50)}`);
+    return { repo, branch: `commit ${sha.slice(0, 9)} (${label})`, kind: 'commit', base: '—', commits: [subj], stat, files: sf.length, modules: [...new Set(sf.map((f) => moduleOf(repo, f)))], diff, truncated };
+  }
+  return null;
+}
+// Code from the Jira Development panel: exact commits linked to the ticket
+// (works even if the branch is named after a DIFFERENT key, e.g. feature/TD-1202).
+export async function devRefsForKey(key: string, onStage?: (m: string) => void): Promise<CodeRef[]> {
+  const idData = await jiraGet(`/rest/api/2/issue/${encodeURIComponent(key)}?fields=id`);
+  const id = idData?.id; if (!id) return [];
+  const dev = await devStatus(id);
+  if (dev.branches.length || dev.commits.length || dev.prs.length) onStage?.(`🧭 Development: ветки [${dev.branches.join(', ') || '—'}], коммитов ${dev.commits.length}, MR ${dev.prs.length}`);
+  const refs: CodeRef[] = [];
+  // 1) exact linked commits
+  for (const sha of dev.commits.slice(0, 4)) { if (refs.length >= 4) break; try { const cr = await showCommit(sha, 'Development', onStage); if (cr) refs.push(cr); } catch { /* skip */ } }
+  // 2) if no commit objects locally, fetch the linked branch and take its key-commits
+  if (!refs.length) {
+    for (const br of dev.branches.slice(0, 2)) {
+      if (refs.length) break;
+      for (const repo of codeRepos()) {
+        const cwd = path.join(WORKSPACES_ROOT, repo);
+        if (!(await gitSh(`${GIT} ls-remote --heads origin "${br}"`, cwd, 30000)).trim()) continue;
+        await gitSh(`${GIT} fetch origin "${br}" --quiet`, cwd, 120000);
+        const shas = (await gitSh(`${GIT} log -i --grep "${key}" --pretty=%H "origin/${br}" -n 3`, cwd, 30000)).split('\n').map((s) => s.trim()).filter(Boolean);
+        for (const sha of shas.slice(0, 2)) { const cr = await showCommit(sha, `${br}`, onStage); if (cr) refs.push(cr); }
+        if (refs.length) break;
+      }
+    }
+  }
+  return refs;
+}
+
+// THE mechanism: all code for a Jira key — Jira Development panel (authoritative
+// branch/commit links) + live feature branches (by name) + already-merged
+// commits (by message). Deduped by diff.
 export async function gatherCodeForKey(key: string, onStage?: (m: string) => void): Promise<CodeRef[]> {
   const refs: CodeRef[] = [];
   const repos = codeRepos();
+  // 0) Jira Development panel — exact branch/commit even if branch named differently
+  try { for (const cr of await devRefsForKey(key, onStage)) { if (refs.length >= 8) break; if (!refs.some((b) => b.diff && b.diff === cr.diff)) refs.push(cr); } } catch { /* best-effort */ }
   // 1) feature branches whose name contains the key
   await Promise.all(repos.map(async (repo) => {
     const r = await gitSh(`${GIT} ls-remote --heads origin "*${key}*"`, path.join(WORKSPACES_ROOT, repo), 45000);
