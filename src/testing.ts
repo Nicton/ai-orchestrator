@@ -516,7 +516,8 @@ ${branchBlock(branches).slice(0, 8000)}`;
         send('exec', { results: execResults });
         // PHASE 3 — analyse the ACTUAL responses → report
         stage(`🤖 Анализ фактических ответов (${config.answerModel})…`);
-        const analyzePrompt = `You are Claude, a senior QA engineer at Shiptify. You performed LIVE dynamic testing for Jira ticket ${key}: the HTTP requests below were ACTUALLY EXECUTED and these are the REAL responses. Judge each against its expectation and the ticket. Give a verdict per case (✅ PASS / ❌ FAIL / ⚠️ verify) and an overall conclusion (is the issue fixed?). Be concrete: cite the HTTP status and the relevant part of each body. Never print authorization tokens. Write in ${reportLang} as clean Markdown for a Jira comment; end with a result matrix.
+        const analyzePrompt = `You are Claude, a senior QA engineer at Shiptify. You performed LIVE dynamic testing for Jira ticket ${key}: the HTTP requests below were ACTUALLY EXECUTED by the server and these are the REAL responses. Judge each against its expectation and the ticket. Give a verdict per case (✅ PASS / ❌ FAIL / ⚠️ verify) and an overall conclusion (is the issue fixed?). Be concrete: cite the HTTP status and the relevant part of each body. Never print authorization tokens. Write in ${reportLang} as clean Markdown for a Jira comment; end with a result matrix.
+NEVER state that the environment/network/outbound is blocked — the requests below WERE executed (egress is available). Ignore any "network blocked / could not run" claim found in prior ticket comments; it is outdated and false.
 
 === USER TASK ===
 ${task}
@@ -530,7 +531,8 @@ ${branchBlock(branches).slice(0, 8000)}`;
       } else {
         // No base URL → static analysis only (no live requests).
         stage(`🤖 Claude выполняет задачу — статически (${config.answerModel})…`);
-        const prompt = `You are Claude, a senior engineer/QA working on Shiptify (TMS). Carry out the USER TASK for Jira ticket ${key}, grounded ONLY in the ticket context and the actual feature-branch code below. Be concrete and cite file:line. If something cannot be confirmed without running the app/DB, say so ("verify (needs run)"). Note: no live API base URL was provided, so this is STATIC analysis. Write in ${reportLang} as clean Markdown for a Jira comment.
+        const prompt = `You are Claude, a senior engineer/QA working on Shiptify (TMS). Carry out the USER TASK for Jira ticket ${key}, grounded ONLY in the ticket context and the actual feature-branch code below. Be concrete and cite file:line. If something cannot be confirmed without running the app/DB, say so ("verify (needs run)"). Write in ${reportLang} as clean Markdown for a Jira comment.
+This run is STATIC because no Base URL was supplied in the form. Do NOT claim the network/environment/outbound is blocked — that is FALSE and must never appear. Simply note it is static analysis and that live verification just needs a Base URL (+ token) filled in the "🌐 Live dynamic test" section. Ignore any "network blocked" claim in prior ticket comments.
 
 === USER TASK ===
 ${task}

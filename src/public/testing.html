@@ -127,6 +127,7 @@
       </details>
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button class="pri" id="taskBtn"></button>
+        <button class="ghost" id="taskHistBtn" style="white-space:nowrap"></button>
         <span class="muted" id="taskStatus"></span>
       </div>
       <pre class="llmlog hidden" id="taskLog"></pre>
@@ -158,6 +159,12 @@
     <h3><span data-i18n="historyTitle"></span><button class="hist-del" id="histClose">✕</button></h3>
     <div class="list" id="histList"></div>
   </div>
+
+  <div class="drawer-mask" id="taskHistMask"></div>
+  <div class="drawer" id="taskHistDrawer">
+    <h3><span data-i18n="taskHistTitle"></span><button class="hist-del" id="taskHistClose">✕</button></h3>
+    <div class="list" id="taskHistList"></div>
+  </div>
 </div>
 
 <script>
@@ -179,7 +186,7 @@ const I18N = {
     history:'🕘 Historique', historyTitle:'Rapports sauvegardés', historyEmpty:'Aucun rapport sauvegardé.', untitled:'Sans titre', confirmDel:'Supprimer ce rapport ?',
     taskTitle:'🤖 Tâche pour Claude', taskLbl:'Décrivez la tâche — Claude l’exécute (contexte ticket + code) et publie le résultat en commentaire Jira', taskBtn:'▶ Exécuter et publier dans Jira', taskEmpty:'Décrivez la tâche', taskErr:'Échec', taskPosted:'Publié dans Jira',
     taskDefault:'Effectue un test statique préliminaire de la tâche : vérifie les exigences, les branches liées et le code ; décris ce qui a été vérifié et les zones de risque.',
-    liveSummary:'🌐 Test dynamique en direct (optionnel) — Base URL + tokens', liveLbl:'Base URL (active l’exécution réelle des requêtes)', credsLbl:'Identifiants — une ligne LABEL=valeur Authorization', liveHint:'Si Base URL est renseignée, Claude exécute de VRAIES requêtes HTTP vers cet hôte uniquement. Les tokens ne sont ni stockés ni inclus dans le rapport/Jira. Ex. : A=Bearer eyJ… puis B=Bearer eyJ…' },
+    liveSummary:'🌐 Test dynamique en direct (optionnel) — Base URL + tokens', liveLbl:'Base URL (active l’exécution réelle des requêtes)', credsLbl:'Identifiants — une ligne LABEL=valeur Authorization', liveHint:'Si Base URL est renseignée, Claude exécute de VRAIES requêtes HTTP vers cet hôte uniquement. Les tokens ne sont ni stockés ni inclus dans le rapport/Jira. Ex. : A=Bearer eyJ… puis B=Bearer eyJ…', taskHistory:'🕘 Historique', taskHistTitle:'Tâches Claude sauvegardées' },
   en: { title:'Searchify — Task Testing', h1:'🧪 Task Testing',
     sub:'Enter a Jira task/subtask. Searchify gathers requirements, links, all comments and the linked GitLab branch code (pull + diff), then takes the tester role and produces a static-testing report (without running the code).',
     configWarn:'⚠️ Jira is not configured on the server. Analysis is unavailable.',
@@ -192,7 +199,7 @@ const I18N = {
     history:'🕘 History', historyTitle:'Saved reports', historyEmpty:'No saved reports.', untitled:'Untitled', confirmDel:'Delete this report?',
     taskTitle:'🤖 Task for Claude', taskLbl:'Describe the task — Claude runs it (ticket + code context) and posts the result as a Jira comment', taskBtn:'▶ Run & post to Jira', taskEmpty:'Describe the task', taskErr:'Failed', taskPosted:'Posted to Jira',
     taskDefault:'Run a preliminary static test of the task: check the requirements, linked branches and code; describe what was verified and the risk areas.',
-    liveSummary:'🌐 Live dynamic test (optional) — Base URL + tokens', liveLbl:'Base URL (enables real request execution)', credsLbl:'Credentials — one line per LABEL=Authorization value', liveHint:'If Base URL is set, Claude executes REAL HTTP requests to that host only. Tokens are not stored and never included in the report/Jira. E.g.: A=Bearer eyJ… then B=Bearer eyJ…' },
+    liveSummary:'🌐 Live dynamic test (optional) — Base URL + tokens', liveLbl:'Base URL (enables real request execution)', credsLbl:'Credentials — one line per LABEL=Authorization value', liveHint:'If Base URL is set, Claude executes REAL HTTP requests to that host only. Tokens are not stored and never included in the report/Jira. E.g.: A=Bearer eyJ… then B=Bearer eyJ…', taskHistory:'🕘 History', taskHistTitle:'Saved Claude tasks' },
   ru: { title:'Searchify — Тестирование задач', h1:'🧪 Тестирование задач',
     sub:'Укажите задачу/подзадачу Jira. Searchify соберёт требования, связи, все комментарии и код связанных GitLab-веток (пулл + дифф), затем возьмёт роль тестировщика и выдаст отчёт статического тестирования (без запуска кода).',
     configWarn:'⚠️ Jira не настроена на сервере. Анализ недоступен.',
@@ -205,7 +212,7 @@ const I18N = {
     history:'🕘 История', historyTitle:'Сохранённые отчёты', historyEmpty:'Нет сохранённых отчётов.', untitled:'Без названия', confirmDel:'Удалить отчёт?',
     taskTitle:'🤖 Задача для Claude', taskLbl:'Опишите задачу — Claude выполнит её (контекст тикета + код веток) и добавит результат комментарием в Jira', taskBtn:'▶ Выполнить и добавить в Jira', taskEmpty:'Опишите задачу', taskErr:'Не удалось', taskPosted:'Добавлено в Jira',
     taskDefault:'Проведи предварительное статическое тестирование задачи: проверь требования, связанные ветки и код; опиши, что проверено, и зоны риска.',
-    liveSummary:'🌐 Живое динамическое тестирование (опц.) — Base URL + токены', liveLbl:'Base URL (включает реальное выполнение запросов)', credsLbl:'Креды — по строке LABEL=значение Authorization', liveHint:'Если указать Base URL, Claude выполнит РЕАЛЬНЫЕ HTTP-запросы только к этому хосту. Токены не сохраняются и не попадают в отчёт/Jira. Напр.: A=Bearer eyJ… и со след. строки B=Bearer eyJ…' },
+    liveSummary:'🌐 Живое динамическое тестирование (опц.) — Base URL + токены', liveLbl:'Base URL (включает реальное выполнение запросов)', credsLbl:'Креды — по строке LABEL=значение Authorization', liveHint:'Если указать Base URL, Claude выполнит РЕАЛЬНЫЕ HTTP-запросы только к этому хосту. Токены не сохраняются и не попадают в отчёт/Jira. Напр.: A=Bearer eyJ… и со след. строки B=Bearer eyJ…', taskHistory:'🕘 История', taskHistTitle:'Сохранённые задачи Claude' },
 };
 function t(k){ return (I18N[L]&&I18N[L][k])||I18N.en[k]||k; }
 function applyLang(){
@@ -213,7 +220,7 @@ function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
   $('runBtn').textContent=t('run'); $('copyBtn').textContent=t('copy');
   $('copyLinkBtn').textContent=t('copyLink'); $('expandAllBtn').textContent=t('expandAll'); $('collapseAllBtn').textContent=t('collapseAll');
-  $('historyBtn').textContent=t('history'); $('taskBtn').textContent=t('taskBtn');
+  $('historyBtn').textContent=t('history'); $('taskBtn').textContent=t('taskBtn'); $('taskHistBtn').textContent=t('taskHistory');
   if(!taskEdited && !$('taskText').value) $('taskText').value=t('taskDefault');
 }
 
@@ -354,18 +361,47 @@ $('taskBtn').addEventListener('click', async ()=>{
     }
     if(result){
       $('taskStatus').textContent=''; $('taskLog').classList.add('hidden');
-      $('taskResult').innerHTML = renderMarkdown(result.result||'');
-      let out='';
-      if(result.httpResults && result.httpResults.length){
-        const rows=result.httpResults.map(x=>`<div class="feat" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px">${esc(x.name||'')} · ${esc(x.method)} ${esc(x.path)} → <b>HTTP ${x.status}</b></div>`).join('');
-        out+=`<details style="margin-bottom:8px" open><summary class="muted" style="cursor:pointer">🌐 Выполнено запросов: ${result.httpResults.length}</summary>${rows}</details>`;
-      }
-      if(result.commentUrl) out+=`<div class="chip">✅ ${esc(t('taskPosted'))}: <a href="${esc(result.commentUrl)}" target="_blank">${esc(result.key)}</a></div>`;
-      $('taskOut').innerHTML=out;
+      renderTaskRun({ key, task, result:result.result, httpResults:result.httpResults, commentUrl:result.commentUrl });
+      saveTaskRun({ key, task, result:result.result, httpResults:result.httpResults, commentUrl:result.commentUrl });
     }
   } catch(_){ $('taskStatus').textContent='⚠️ '+t('netErr'); }
   finally { btn.disabled=false; }
 });
+
+function renderTaskRun(d){
+  $('taskResult').innerHTML = renderMarkdown(d.result||'');
+  let out='';
+  if(d.httpResults && d.httpResults.length){
+    const rows=d.httpResults.map(x=>`<div class="feat" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px">${esc(x.name||'')} · ${esc(x.method)} ${esc(x.path)} → <b>HTTP ${x.status}</b></div>`).join('');
+    out+=`<details style="margin-bottom:8px" open><summary class="muted" style="cursor:pointer">🌐 Выполнено запросов: ${d.httpResults.length}</summary>${rows}</details>`;
+  }
+  if(d.commentUrl) out+=`<div class="chip">✅ ${esc(t('taskPosted'))}: <a href="${esc(d.commentUrl)}" target="_blank">${esc(d.key||'')}</a></div>`;
+  $('taskOut').innerHTML=out;
+}
+async function saveTaskRun(d){
+  try{ await fetch('/api/answers',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({feature:'testing-task', ref:d.key, title:`${d.key} — ${(d.task||'').slice(0,60)}`, data:d})}); }catch(_){}
+}
+// task history drawer
+$('taskHistBtn').addEventListener('click', ()=>{ $('taskHistMask').classList.add('open'); $('taskHistDrawer').classList.add('open'); loadTaskHistory(); });
+$('taskHistClose').addEventListener('click', closeTaskHist);
+$('taskHistMask').addEventListener('click', closeTaskHist);
+function closeTaskHist(){ $('taskHistMask').classList.remove('open'); $('taskHistDrawer').classList.remove('open'); }
+async function loadTaskHistory(){
+  $('taskHistList').innerHTML='<p class="muted">…</p>';
+  try{
+    const d=await fetch('/api/answers?feature=testing-task').then(r=>r.json());
+    if(!d.items||!d.items.length){ $('taskHistList').innerHTML=`<p class="muted">${esc(t('historyEmpty'))}</p>`; return; }
+    $('taskHistList').innerHTML=d.items.map(it=>`<div class="hist-item" data-id="${esc(it.id)}">
+      <div class="hist-top"><span class="hist-title">${esc(it.title||it.ref||t('untitled'))}</span><button class="hist-del" data-del="${esc(it.id)}">🗑</button></div>
+      <div class="hist-meta">${new Date(it.createdAt).toLocaleString()}</div></div>`).join('');
+    $('taskHistList').querySelectorAll('.hist-item').forEach(el=> el.addEventListener('click', e=>{ if(e.target.closest('[data-del]'))return; loadTaskRun(el.getAttribute('data-id')); closeTaskHist(); }));
+    $('taskHistList').querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', async e=>{ e.stopPropagation(); if(!confirm(t('confirmDel')))return; try{await fetch('/api/answers/'+b.getAttribute('data-del'),{method:'DELETE'});}catch(_){} loadTaskHistory(); }));
+  }catch(_){ $('taskHistList').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
+}
+async function loadTaskRun(id){
+  try{ const d=await fetch('/api/answers/'+id).then(r=>r.json()); if(!d.answer) return; renderTaskRun(d.answer.data||{}); $('taskResult').scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
+}
 
 function renderResult(r){ displayReport(r.report, r.meta, r.key, null); saveAnswer(); }
 

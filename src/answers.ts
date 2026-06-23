@@ -9,7 +9,7 @@ import { requireAuth } from './auth.js';
 // An answer is owned by its author, but any authenticated user can open it by
 // id (so a link can be sent to a colleague). Tasks use TaskDraft instead.
 // ---------------------------------------------------------------------------
-const FEATURES = ['testing', 'bugs'] as const;
+const FEATURES = ['testing', 'bugs', 'testing-task'] as const;
 
 export async function registerAnswersApi(app: FastifyInstance) {
   const saveSchema = z.object({
