@@ -408,7 +408,7 @@ export async function registerTestingApi(app: FastifyInstance) {
 
   // "Task for Claude": run a free-form instruction on the ticket (grounded in
   // the issue + branch code), then post the result as a Jira comment. SSE.
-  const taskSchema = z.object({ key: z.string().min(3).max(30), task: z.string().min(3).max(4000), lang: z.enum(['fr', 'en', 'ru']).optional(), reportUrl: z.string().max(400).optional() });
+  const taskSchema = z.object({ key: z.string().min(3).max(30), task: z.string().min(3), lang: z.enum(['fr', 'en', 'ru']).optional(), reportUrl: z.string().max(400).optional() });
   app.post('/api/testing/task/stream', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
     if (!jiraConfig().enabled) return reply.code(503).send({ error: 'Jira is not configured' });
