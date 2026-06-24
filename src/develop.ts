@@ -171,21 +171,117 @@ ${transcript}`;
   };
 }
 
-// --- the actual pipeline (git + agent + MR) ---
+// --- disk-safe workspace management (git worktrees, shared .git + node_modules) ---
+const MIN_FREE_MB = parseInt(process.env.DEV_MIN_FREE_MB || '6000', 10);     // refuse a run if free space below this
+const WT_TTL_MS = parseInt(process.env.DEV_WT_TTL_MIN || '120', 10) * 60000; // remove stale worktrees older than this
+function repoList(): string[] {
+  const all = codeRepos();
+  const allow = String(process.env.DEVELOP_REPOS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return allow.length ? all.filter((r) => allow.includes(r)) : all;
+}
+async function dfFreeMB(p: string): Promise<number> {
+  const r = await sh(`df -Pm "${p}"`, process.cwd(), 15000);
+  const last = r.out.trim().split('\n').pop() || '';
+  const avail = parseInt(last.split(/\s+/)[3] || '0', 10);
+  return isNaN(avail) ? 0 : avail;
+}
+// Remove worktree dirs older than the TTL and prune dangling registrations — keeps /var from filling.
+async function cleanupWorktrees(onStage?: (m: string) => void) {
+  const root = devWorkRoot(); if (!fs.existsSync(root)) return;
+  let ents: fs.Dirent[] = []; try { ents = fs.readdirSync(root, { withFileTypes: true }); } catch { return; }
+  const now = Date.now();
+  for (const e of ents) {
+    if (!e.isDirectory() || !e.name.startsWith('wt-')) continue;
+    const full = path.join(root, e.name);
+    let m = 0; try { m = fs.statSync(full).mtimeMs; } catch { /* */ }
+    if (now - m > WT_TTL_MS) { await sh(`rm -rf "${full}"`, root, 60000); onStage?.(`🧹 удалён устаревший воркдир ${e.name}`); }
+  }
+  for (const repo of repoList()) { try { await sh('git worktree prune', path.join(WORKSPACES, repo), 30000); } catch { /* */ } }
+}
+// Shared node_modules per base repo (symlinked into each worktree). Disabled by default
+// (DEV_INSTALL_DEPS=1 to enable) to protect the 37GB /var; if absent, the build gate runs static-only.
+const DEPS_LOCK = '.searchify-deps.lock';
+async function ensureBaseDeps(repoPath: string, repo: string, freeMB: number, onStage: (m: string) => void): Promise<'ready' | 'none' | 'skip'> {
+  const nm = path.join(repoPath, 'node_modules');
+  try { if (fs.existsSync(nm) && fs.readdirSync(nm).length > 0) return 'ready'; } catch { /* */ }
+  if (process.env.DEV_INSTALL_DEPS !== '1') return 'none';
+  if (!fs.existsSync(path.join(repoPath, 'package.json'))) return 'none';
+  if (freeMB < parseInt(process.env.DEV_DEPS_MIN_FREE_MB || '9000', 10)) { onStage('⚠️ мало места — пропускаю установку зависимостей (build-gate будет статический)'); return 'skip'; }
+  const lock = path.join(repoPath, DEPS_LOCK); let got = false;
+  for (let i = 0; i < 120; i++) { try { fs.mkdirSync(lock); got = true; break; } catch { if (fs.existsSync(nm)) return 'ready'; await new Promise((r) => setTimeout(r, 2000)); } }
+  if (!got) return 'skip';
+  try {
+    onStage(`📦 ставлю зависимости ${repo} (один раз, общий node_modules)…`);
+    const cmd = fs.existsSync(path.join(repoPath, 'package-lock.json')) ? 'npm ci --no-audit --no-fund'
+      : fs.existsSync(path.join(repoPath, 'pnpm-lock.yaml')) ? 'corepack pnpm install --frozen-lockfile'
+        : fs.existsSync(path.join(repoPath, 'yarn.lock')) ? 'corepack yarn install --frozen-lockfile' : 'npm install --no-audit --no-fund';
+    await sh(cmd, repoPath, 600000);
+    return fs.existsSync(nm) ? 'ready' : 'skip';
+  } finally { try { fs.rmSync(lock, { recursive: true, force: true }); } catch { /* */ } }
+}
+
+// Mandatory build gate: run the repo's lint / typecheck / tests. Depth depends on deps.
+async function buildGate(workdir: string, onStage: (m: string) => void): Promise<{ ran: boolean; ok: boolean; summary: string }> {
+  const hasNM = fs.existsSync(path.join(workdir, 'node_modules'));
+  let pkg: any = null; try { pkg = JSON.parse(fs.readFileSync(path.join(workdir, 'package.json'), 'utf8')); } catch { /* */ }
+  const scripts = pkg?.scripts || {};
+  const out: string[] = []; let ok = true; let ran = false;
+  const check = async (label: string, cmd: string, timeout = 300000) => {
+    onStage(`🔎 build-gate: ${label}…`); const r = await sh(cmd, workdir, timeout); ran = true;
+    if (!r.ok) { ok = false; out.push(`❌ ${label}`); out.push('   ' + (r.err || r.out).split('\n').slice(-8).join(' ').slice(0, 600)); }
+    else out.push(`✅ ${label}`);
+  };
+  if (hasNM) {
+    if (scripts.lint) await check('lint', 'npm run -s lint');
+    if (scripts.typecheck) await check('typecheck', 'npm run -s typecheck');
+    else if (fs.existsSync(path.join(workdir, 'tsconfig.json'))) await check('tsc --noEmit', 'npx -y tsc --noEmit');
+    if (scripts.test) await check('unit tests', 'CI=true npm test -- --watchAll=false --passWithNoTests', 480000);
+  } else {
+    out.push('⚠️ build-gate: node_modules недоступны на сервере — выполнена только статическая проверка. Установите зависимости (DEV_INSTALL_DEPS=1 или вручную в workspaces/<repo>) для полного gate.');
+  }
+  return { ran, ok, summary: out.join('\n') || '(no checks ran)' };
+}
+
+// Mandatory self-review: a strict reviewer pass over the diff vs the plan.
+async function selfReview(workdir: string, run: { title: string; plan: string }, onStage: (m: string) => void): Promise<{ approved: boolean; text: string; tokens: number }> {
+  onStage('🔍 само-ревью изменений…');
+  const diff = ((await sh('git --no-pager diff', workdir, 60000)).out || '').slice(0, 24000);
+  const prompt = `You are a STRICT senior code reviewer at Shiptify. Review the unified DIFF against the task and plan. Check: correctness; the plan/acceptance is actually met; no scope creep or unrelated edits; no secrets/keys; error handling and edge cases; and that NEW/changed logic is covered by UNIT TESTS in the diff. Reply with ONLY a JSON object: {"approved": true|false, "issues": ["specific blocking issue", "..."], "notes": "1-3 sentence summary"}. Set approved=false ONLY for blocking problems (a real bug, plan not met, or missing tests for new logic).
+Title: ${run.title}
+=== PLAN ===
+${(run.plan || '(none)').slice(0, 4000)}
+=== DIFF ===
+${diff || '(empty)'}`;
+  const r = await runRolePrompt('engineer.reviewer', prompt, config.answerModel);
+  let approved = true; let issues: string[] = []; let notes = '';
+  try { const j = parseJsonLoose(r.text); approved = !!j.approved; issues = Array.isArray(j.issues) ? j.issues.filter((x: any) => String(x ?? '').trim()) : []; notes = String(j.notes || ''); }
+  catch { notes = (r.text || '').slice(0, 400); }
+  const text = `${approved ? '✅ approved' : '❌ changes requested'}${issues.length ? '\n- ' + issues.join('\n- ') : ''}${notes ? `\n${notes}` : ''}`;
+  return { approved, text, tokens: r.totalTokens || 0 };
+}
+
+// --- the actual pipeline (worktree → agent → self-review → build gate → MR) ---
 type StepLog = { step: string; msg: string; at: string };
 async function runPipeline(
-  run: { id: string; keys: string[]; title: string; repo: string; plan: string; messages: ChatMsg[]; workdir?: string | null; branch?: string | null; visionText?: string | null },
+  run: { id: string; keys: string[]; title: string; repo: string; plan: string; messages: ChatMsg[]; branch?: string | null; visionText?: string | null },
   followupInstruction: string,
   onStage: (m: string) => void,
-): Promise<{ branch: string; workdir: string; mrUrl: string | null; summary: string; tokens: number | null; log: StepLog[]; note?: string }> {
+): Promise<{ branch: string; mrUrl: string | null; summary: string; tokens: number | null; log: StepLog[]; note?: string; reviewText?: string; gateOk?: boolean }> {
   const log: StepLog[] = [];
   const step = (s: string, m: string) => { log.push({ step: s, msg: m, at: new Date().toISOString() }); onStage(m); };
   const repo = run.repo;
   const repoPath = path.join(WORKSPACES, repo);
   if (!fs.existsSync(path.join(repoPath, '.git'))) throw new Error(`Репозиторий "${repo}" не найден в workspaces/ на сервере`);
+  fs.mkdirSync(devWorkRoot(), { recursive: true });
 
-  // 1) pull latest from the source clone, learn origin + default branch.
-  step('pull', `⬇️ git fetch ${repo} (актуальный main)…`);
+  // 0) disk hygiene — prune stale worktrees, then refuse if space is tight.
+  await cleanupWorktrees(onStage);
+  const freeMB = await dfFreeMB(devWorkRoot());
+  step('disk', `💽 свободно ~${(freeMB / 1024).toFixed(1)} ГБ`);
+  if (freeMB < MIN_FREE_MB) throw new Error(`Мало места на диске (${(freeMB / 1024).toFixed(1)} ГБ < ${(MIN_FREE_MB / 1024).toFixed(1)} ГБ). Запуск отменён, чтобы не забить /var. Подождите завершения других задач.`);
+
+  // 1) fetch base + resolve origin / default branch.
+  step('pull', `⬇️ git fetch ${repo}…`);
   await sh('git fetch origin --prune --quiet', repoPath, 180000);
   const originUrl = (await sh('git config --get remote.origin.url', repoPath)).out.trim();
   const gl = parseGitlab(originUrl);
@@ -193,29 +289,29 @@ async function runPipeline(
   for (const b of ['develop', 'main', 'master']) { const v = await sh(`git rev-parse --verify --quiet origin/${b}`, repoPath); if (v.ok && v.out.trim()) { base = b; break; } }
   if (gl) { try { const pj = await glProject(gl); if (pj?.default_branch) base = pj.default_branch; } catch { /* keep */ } }
 
-  // 2) per-task working copy (named after the task) so devs run in parallel.
-  const branch = run.branch || `feature/${safeName(run.keys[0] || run.title)}`;
-  const workdir = run.workdir || path.join(devWorkRoot(), `${safeName(run.keys[0] || run.title)}-${repo}`);
-  fs.mkdirSync(devWorkRoot(), { recursive: true });
-  const fresh = !fs.existsSync(path.join(workdir, '.git'));
-  if (fresh) {
-    step('copy', `🗂 копия репозитория → ${path.basename(workdir)}…`);
-    const cp = await sh(`cp -a "${repoPath}" "${workdir}"`, devWorkRoot(), 300000);
-    if (!cp.ok) throw new Error(`Не удалось скопировать репозиторий: ${cp.err.slice(0, 200)}`);
-    await sh('git fetch origin --prune --quiet', workdir, 180000);
-    step('branch', `🌿 ветка ${branch} от origin/${base}…`);
-    const co = await sh(`git checkout -B "${branch}" "origin/${base}"`, workdir, 60000);
-    if (!co.ok) throw new Error(`Не удалось создать ветку: ${co.err.slice(0, 200)}`);
-  } else {
-    step('branch', `🌿 продолжаю на ветке ${branch} (фоллоу-ап)…`);
-    await sh(`git checkout "${branch}"`, workdir, 60000);
-  }
+  // 2) worktree per run (keyed by run id → safe for many concurrent devs/tabs).
+  const continuing = !!run.branch; // a branch already exists from a previous run → follow-up
+  const branch = run.branch || `searchify/${safeName(run.keys[0] || run.title).slice(0, 40)}-${run.id.slice(-6)}`;
+  const workdir = path.join(devWorkRoot(), `wt-${run.id}`);
+  await sh('git worktree prune', repoPath, 30000);
+  if (fs.existsSync(workdir)) { await sh(`git worktree remove --force "${workdir}"`, repoPath, 60000); await sh(`rm -rf "${workdir}"`, devWorkRoot(), 60000); }
+  const startRef = continuing ? `origin/${branch}` : `origin/${base}`;
+  step('worktree', `🌿 worktree + ветка ${branch} (от ${startRef})…`);
+  let add = await sh(`git worktree add --force -B "${branch}" "${workdir}" "${startRef}"`, repoPath, 120000);
+  if (!add.ok && continuing) add = await sh(`git worktree add --force -B "${branch}" "${workdir}" "origin/${base}"`, repoPath, 120000);
+  if (!add.ok) throw new Error(`worktree add failed: ${add.err.slice(0, 200)}`);
+  // share node_modules (cheap symlink) when available, so the build gate can run.
+  const deps = await ensureBaseDeps(repoPath, repo, freeMB, onStage);
+  if (deps === 'ready') { try { if (!fs.existsSync(path.join(workdir, 'node_modules'))) fs.symlinkSync(path.join(repoPath, 'node_modules'), path.join(workdir, 'node_modules'), 'dir'); } catch { /* */ } }
 
-  // 3) run the agent to implement (file edits only — git is handled here).
-  const isFollow = !fresh;
-  const agentPrompt = `You are a senior engineer implementing a task in the Shiptify repository "${repo}". You are INSIDE the repo working tree. Make focused, production-quality changes that match the existing code style. Edit files directly. DO NOT run git (no commit/branch/push) — version control is handled by the system. Do not touch unrelated files and never commit secrets.
+  let tokens = 0;
+  try {
+    // 3) implement (file edits only — git handled here; must include unit tests).
+    const agentPrompt = `You are a senior engineer implementing a task in the Shiptify repository "${repo}". You are INSIDE the repo working tree. Make focused, production-quality changes that match the existing code style and conventions. Edit files directly. DO NOT run git (no commit/branch/push) — version control is handled by the system. Do not touch unrelated files and never commit secrets.
 
-${isFollow ? `This is a FOLLOW-UP. Apply ONLY this fix/change on top of the existing branch:\n${followupInstruction}\n` : `Implement the task per the approved plan below.`}
+${continuing ? `This is a FOLLOW-UP / FIX on the existing branch. Apply ONLY this:\n${followupInstruction}\n` : 'Implement the task per the approved plan below.'}
+
+MANDATORY: add or extend UNIT TESTS for the new/changed logic, using the repository's existing test framework and file conventions. Code without tests is incomplete. If the repo has lint/typecheck/test scripts, run them and fix what you broke.
 
 Related Jira: ${run.keys.join(', ') || '(none)'}
 Title: ${run.title}
@@ -227,45 +323,64 @@ ${run.plan || '(no explicit plan — infer from the title and context)'}
 ${run.messages.map((m) => `${m.role === 'user' ? 'DEV' : 'ASSISTANT'}: ${m.content}`).join('\n\n').slice(0, 6000)}
 ${run.visionText ? `\n=== ATTACHED SCREENSHOTS (vision) ===\n${run.visionText.slice(0, 2000)}` : ''}
 
-After editing, if the repo has a quick lint/typecheck/test you can run, run it and fix obvious breakages. Finish with a concise summary (Markdown) of WHAT you changed and WHY, listing changed files. Keep the summary under 250 words.`;
+Finish with a concise Markdown summary of WHAT changed and WHY, listing changed files and the tests you added. Under 250 words.`;
+    step('implement', `🛠 Claude реализует + пишет тесты (${config.answerModel})…`);
+    const agent = await runClaudeAgent(workdir, agentPrompt, { model: config.answerModel, onTool: (t) => onStage(`   ↳ ${t}`), timeoutMs: 25 * 60 * 1000 });
+    tokens += agent.totalTokens || 0;
+    let summary = (agent.text || '').trim() || '(агент не вернул сводку)';
 
-  step('implement', `🛠 Claude реализует (${config.answerModel})… это может занять несколько минут`);
-  const agent = await runClaudeAgent(workdir, agentPrompt, {
-    model: config.answerModel,
-    onTool: (t) => onStage(`   ↳ ${t}`),
-    timeoutMs: 25 * 60 * 1000,
-  });
-  const summary = (agent.text || '').trim() || '(агент не вернул сводку)';
+    if (!(await sh('git status --porcelain', workdir)).out.trim()) {
+      step('done', '⚠️ агент не внёс изменений в файлы');
+      return { branch: continuing ? branch : '', mrUrl: null, summary, tokens, log, note: 'no-changes' };
+    }
 
-  // 4) commit
-  const changed = (await sh('git status --porcelain', workdir)).out.trim();
-  if (!changed) { step('commit', '⚠️ агент не внёс изменений в файлы'); return { branch, workdir, mrUrl: null, summary, tokens: agent.totalTokens || null, log, note: 'no-changes' }; }
-  await sh('git add -A', workdir, 60000);
-  const commitMsg = `${run.keys[0] ? `[${run.keys[0]}] ` : ''}${run.title}${isFollow ? ' (follow-up)' : ''}`.replace(/"/g, "'");
-  step('commit', `📝 commit: ${commitMsg}`);
-  const commit = await sh(`git -c user.name="Searchify" -c user.email="searchify@shiptify.com" commit -m "${commitMsg}"`, workdir, 60000);
-  if (!commit.ok && !/nothing to commit/.test(commit.out + commit.err)) throw new Error(`commit failed: ${(commit.err || commit.out).slice(0, 200)}`);
+    // 4) self-review (mandatory) — one auto-fix loop if blocking issues.
+    let review = await selfReview(workdir, run, onStage);
+    tokens += review.tokens;
+    step('review', review.approved ? '✅ само-ревью: одобрено' : '🔁 само-ревью: есть замечания — исправляю');
+    if (!review.approved) {
+      const fixPrompt = `You are fixing your own implementation in repo "${repo}" before commit. Address ONLY these blocking review issues; keep changes minimal and update/extend unit tests accordingly. Do NOT run git.\n\n=== REVIEW ISSUES ===\n${review.text}\n\n=== TASK ===\n${run.title}\n${(run.plan || '').slice(0, 2000)}`;
+      const fix = await runClaudeAgent(workdir, fixPrompt, { model: config.answerModel, onTool: (t) => onStage(`   ↳ ${t}`), timeoutMs: 15 * 60 * 1000 });
+      tokens += fix.totalTokens || 0;
+      summary += `\n\n**Доработка после ревью:** ${(fix.text || '').slice(0, 600)}`;
+      review = await selfReview(workdir, run, onStage); tokens += review.tokens;
+      step('review', review.approved ? '✅ повторное ревью: одобрено' : '⚠️ повторное ревью: остались замечания (см. MR)');
+    }
 
-  // 5) push (needs a write token)
-  const token = gitlabWriteToken();
-  if (!token || !gl) {
-    step('push', '🛑 Пуш пропущен: нет GITLAB_WRITE_TOKEN (или origin не GitLab). Изменения закоммичены локально.');
-    return { branch, workdir, mrUrl: null, summary, tokens: agent.totalTokens || null, log, note: 'no-write-token' };
+    // 5) build gate (mandatory).
+    const gate = await buildGate(workdir, onStage);
+    step('gate', gate.ran ? (gate.ok ? '✅ build-gate пройден' : '❌ build-gate провален — MR будет помечен') : '⚠️ build-gate: ограниченная проверка (нет зависимостей)');
+
+    // 6) commit
+    await sh('git add -A', workdir, 60000);
+    const buildFailed = gate.ran && !gate.ok;
+    const commitMsg = `${run.keys[0] ? `[${run.keys[0]}] ` : ''}${run.title}${continuing ? ' (follow-up)' : ''}`.replace(/"/g, "'");
+    step('commit', `📝 commit: ${commitMsg}`);
+    const commit = await sh(`git -c user.name="Searchify" -c user.email="searchify@shiptify.com" commit -m "${commitMsg}"`, workdir, 60000);
+    if (!commit.ok && !/nothing to commit/.test(commit.out + commit.err)) throw new Error(`commit failed: ${(commit.err || commit.out).slice(0, 200)}`);
+
+    // 7) push (write token from /run/gl_token or env)
+    const token = gitlabWriteToken();
+    if (!token || !gl) { step('push', '🛑 Пуш пропущен: нет токена записи / origin не GitLab. Закоммичено локально.'); return { branch: continuing ? branch : '', mrUrl: null, summary, tokens, log, note: 'no-write-token', reviewText: review.text, gateOk: gate.ok }; }
+    const pushUrl = `https://oauth2:${token}@${gl.host}/${gl.projectPath}.git`;
+    step('push', `⬆️ push ${branch}…`);
+    const push = await sh(`git push "${pushUrl}" "HEAD:${branch}" --force-with-lease`, workdir, 180000);
+    if (!push.ok) { const masked = (push.err || '').replace(token, '***'); throw new Error(/403|denied|insufficient|write_repository/i.test(masked) ? `Push отклонён — токен без write_repository: ${masked.slice(0, 140)}` : `push failed: ${masked.slice(0, 200)}`); }
+
+    // 8) open / update the Draft MR (carries review verdict + build-gate result).
+    step('mr', '🔀 открываю merge request (Draft)…');
+    const extra = `\n\n**Self-review:** ${review.text}\n\n**Build gate:** ${gate.ran ? (gate.ok ? '✅ passed' : '❌ FAILED') : '⚠️ limited (deps unavailable)'}\n\n\`\`\`\n${gate.summary.slice(0, 1200)}\n\`\`\``;
+    const mrUrl = await openMergeRequest(gl, token, branch, base, run, summary, extra, buildFailed);
+    step('mr', mrUrl ? `✅ MR: ${mrUrl}` : '⚠️ MR не создан (см. лог)');
+    return { branch, mrUrl, summary, tokens, log, note: buildFailed ? 'build-failed' : undefined, reviewText: review.text, gateOk: gate.ok };
+  } finally {
+    // 9) always free the worktree (disk-safe). The branch lives on the remote; a
+    // follow-up recreates a fresh worktree from origin/<branch>.
+    step('cleanup', '🧹 убираю рабочую копию (worktree)');
+    await sh(`git worktree remove --force "${workdir}"`, repoPath, 60000);
+    await sh(`rm -rf "${workdir}"`, devWorkRoot(), 60000);
+    await sh('git worktree prune', repoPath, 30000);
   }
-  const pushUrl = `https://oauth2:${token}@${gl.host}/${gl.projectPath}.git`;
-  step('push', `⬆️ push origin ${branch}…`);
-  const push = await sh(`git push "${pushUrl}" "HEAD:${branch}" --force-with-lease`, workdir, 180000);
-  if (!push.ok) {
-    const masked = (push.err || '').replace(token, '***');
-    if (/403|denied|insufficient|write_repository/i.test(masked)) throw new Error(`Push отклонён — токен без прав записи (нужен write_repository): ${masked.slice(0, 160)}`);
-    throw new Error(`push failed: ${masked.slice(0, 200)}`);
-  }
-
-  // 6) open / find the Draft MR
-  step('mr', '🔀 открываю merge request (Draft)…');
-  const mrUrl = await openMergeRequest(gl, token, branch, base, run, summary);
-  step('mr', mrUrl ? `✅ MR: ${mrUrl}` : '⚠️ MR не создан (см. лог)');
-  return { branch, workdir, mrUrl, summary, tokens: agent.totalTokens || null, log };
 }
 
 async function glProject(gl: { apiBase: string; projectPath: string }) {
@@ -273,11 +388,11 @@ async function glProject(gl: { apiBase: string; projectPath: string }) {
   const res = await fetch(`${gl.apiBase}/projects/${encodeURIComponent(gl.projectPath)}`, { headers: { 'PRIVATE-TOKEN': token } });
   if (!res.ok) return null; return res.json();
 }
-async function openMergeRequest(gl: { apiBase: string; projectPath: string; host: string }, token: string, branch: string, base: string, run: { keys: string[]; title: string; plan: string }, summary: string): Promise<string | null> {
+async function openMergeRequest(gl: { apiBase: string; projectPath: string; host: string }, token: string, branch: string, base: string, run: { keys: string[]; title: string; plan: string }, summary: string, extra = '', buildFailed = false): Promise<string | null> {
   const proj = encodeURIComponent(gl.projectPath);
   const jiraLinks = run.keys.map((k) => `[${k}](https://shiptify.atlassian.net/browse/${k})`).join(', ');
-  const description = `### ${run.title}\n${jiraLinks ? `Jira: ${jiraLinks}\n` : ''}\n**Что сделано (агент):**\n${summary}\n\n<details><summary>План реализации</summary>\n\n${run.plan || '—'}\n\n</details>\n\n----\n🤖 Сгенерировано Searchify (Разработать). Требует ревью человеком перед мержем.`;
-  const title = `Draft: ${run.keys[0] ? `[${run.keys[0]}] ` : ''}${run.title}`;
+  const description = `### ${run.title}\n${jiraLinks ? `Jira: ${jiraLinks}\n` : ''}\n**Что сделано (агент):**\n${summary}${extra}\n\n<details><summary>План реализации</summary>\n\n${run.plan || '—'}\n\n</details>\n\n----\n🤖 Сгенерировано Searchify (Разработать). Требует ревью человеком перед мержем.`;
+  const title = `Draft: ${buildFailed ? '[BUILD FAILED] ' : ''}${run.keys[0] ? `[${run.keys[0]}] ` : ''}${run.title}`;
   // try to create
   const res = await fetch(`${gl.apiBase}/projects/${proj}/merge_requests`, {
     method: 'POST', headers: { 'PRIVATE-TOKEN': token, 'Content-Type': 'application/json' },
@@ -300,7 +415,7 @@ async function postMrToJira(keys: string[], mrUrl: string, title: string, by: st
 export async function registerDevelopApi(app: FastifyInstance) {
   app.get('/api/develop/config', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
-    return reply.send({ jiraEnabled: jiraConfig().enabled, storage: storageReady(), repos: codeRepos(), canPush: !!gitlabWriteToken() });
+    return reply.send({ jiraEnabled: jiraConfig().enabled, storage: storageReady(), repos: repoList(), canPush: !!gitlabWriteToken() });
   });
 
   // Voice → text.
@@ -469,10 +584,10 @@ export async function registerDevelopApi(app: FastifyInstance) {
 
     try {
       if (!row.repo) throw new Error('Не указан репозиторий для реализации');
-      if (!codeRepos().includes(row.repo)) throw new Error(`Репозиторий "${row.repo}" недоступен на сервере`);
+      if (!repoList().includes(row.repo)) throw new Error(`Репозиторий "${row.repo}" недоступен / не в allowlist (DEVELOP_REPOS)`);
       await prisma.devRun.update({ where: { id: row.id }, data: { status: 'RUNNING' } });
       const res = await runPipeline(
-        { id: row.id, keys: row.keys || [], title: row.title, repo: row.repo, plan: row.plan || '', messages: (row.messages as any[]) || [], workdir: row.workdir, branch: row.branch, visionText: row.visionText },
+        { id: row.id, keys: row.keys || [], title: row.title, repo: row.repo, plan: row.plan || '', messages: (row.messages as any[]) || [], branch: row.branch, visionText: row.visionText },
         parsed.data.instruction || '',
         stage,
       );
@@ -480,10 +595,10 @@ export async function registerDevelopApi(app: FastifyInstance) {
       const newMessages = [...((row.messages as any[]) || [])];
       if (parsed.data.instruction) newMessages.push({ role: 'user', content: parsed.data.instruction });
       newMessages.push({ role: 'assistant', content: `${res.summary}${res.mrUrl ? `\n\n**MR:** ${res.mrUrl}` : ''}` });
-      await prisma.devRun.update({ where: { id: row.id }, data: { status, branch: res.branch, workdir: res.workdir, mrUrl: res.mrUrl ?? row.mrUrl, messages: newMessages, log: res.log as any } });
+      await prisma.devRun.update({ where: { id: row.id }, data: { status, branch: res.branch || row.branch, workdir: null, mrUrl: res.mrUrl ?? row.mrUrl, messages: newMessages, log: res.log as any } });
       await logFeatureUsage({ userId: user.id, userLabel: user.name, feature: 'develop', action: parsed.data.instruction ? 'fix' : 'implement', ref: `${(row.keys || []).join(',')} — ${row.title}`, model: config.answerModel, totalTokens: res.tokens, status: 'ok' });
       if (res.mrUrl) { try { await postMrToJira(row.keys || [], res.mrUrl, row.title, `${user.name}`); } catch { /* skip */ } }
-      send('result', { branch: res.branch, mrUrl: res.mrUrl, summary: res.summary, status, note: res.note || null, log: res.log });
+      send('result', { branch: res.branch, mrUrl: res.mrUrl, summary: res.summary, status, note: res.note || null, reviewText: res.reviewText || null, gateOk: res.gateOk ?? null, log: res.log });
       send('done', {});
     } catch (e: any) {
       try { await prisma.devRun.update({ where: { id: row.id }, data: { status: 'ERROR' } }); } catch { /* noop */ }
