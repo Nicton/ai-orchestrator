@@ -60,11 +60,11 @@ const KEY_RE = /([A-Z][A-Z0-9]+-\d+)/g;
 const LANG_NAME: Record<string, string> = { fr: 'French', en: 'English', ru: 'Russian' };
 
 // --- shell + git plumbing ---
-function sh(cmd: string, cwd: string, timeoutMs = 120000): Promise<{ ok: boolean; out: string; err: string }> {
+function sh(cmd: string, cwd: string, timeoutMs = 120000, extraEnv?: Record<string, string>): Promise<{ ok: boolean; out: string; err: string }> {
   // repos under workspaces/ are owned by root → git needs safe.directory to avoid "dubious ownership".
   const c = cmd.startsWith('git ') ? `git -c safe.directory='*' ${cmd.slice(4)}` : cmd;
   return new Promise((resolve) => {
-    exec(c, { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (error, stdout, stderr) => {
+    exec(c, { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', ...(extraEnv || {}) } }, (error, stdout, stderr) => {
       resolve({ ok: !error, out: String(stdout || ''), err: String(stderr || (error as any)?.message || '') });
     });
   });
@@ -212,10 +212,12 @@ async function ensureBaseDeps(repoPath: string, repo: string, freeMB: number, on
   if (!got) return 'skip';
   try {
     onStage(`📦 ставлю зависимости ${repo} (один раз, общий node_modules)…`);
-    const cmd = fs.existsSync(path.join(repoPath, 'package-lock.json')) ? 'npm ci --no-audit --no-fund'
-      : fs.existsSync(path.join(repoPath, 'pnpm-lock.yaml')) ? 'corepack pnpm install --frozen-lockfile'
-        : fs.existsSync(path.join(repoPath, 'yarn.lock')) ? 'corepack yarn install --frozen-lockfile' : 'npm install --no-audit --no-fund';
-    await sh(cmd, repoPath, 600000);
+    // --ignore-scripts: skip husky/prepare etc. CI_JOB_TOKEN: auth for private @shiptify GitLab npm registry.
+    const cmd = fs.existsSync(path.join(repoPath, 'package-lock.json')) ? 'npm ci --no-audit --no-fund --ignore-scripts'
+      : fs.existsSync(path.join(repoPath, 'pnpm-lock.yaml')) ? 'corepack pnpm install --frozen-lockfile --ignore-scripts'
+        : fs.existsSync(path.join(repoPath, 'yarn.lock')) ? 'corepack yarn install --frozen-lockfile --ignore-scripts' : 'npm install --no-audit --no-fund --ignore-scripts';
+    const token = gitlabWriteToken();
+    await sh(cmd, repoPath, 900000, token ? { CI_JOB_TOKEN: token } : undefined);
     return fs.existsSync(nm) ? 'ready' : 'skip';
   } finally { try { fs.rmSync(lock, { recursive: true, force: true }); } catch { /* */ } }
 }
