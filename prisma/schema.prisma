@@ -670,10 +670,41 @@ model FeatureUsage {
   completionTokens Int?
   totalTokens      Int?
   status           String   @default("ok") // ok | error
+  rating           Int?     // user satisfaction with the LLM result: +1 👍 / -1 👎 / null
+  ratingNote       String?  // optional free-text feedback
   createdAt        DateTime @default(now())
 
   @@index([feature, createdAt])
   @@index([createdAt])
+}
+
+// "Разработать" (Develop) — agentic dev runs. Holds the thread, the chosen repo/
+// branch, the merge-request URL, the per-run satisfaction rating and the pipeline
+// log so the History drawer can resume a run and the admin can audit who asked what.
+model DevRun {
+  id          String   @id @default(cuid())
+  userId      String
+  userLabel   String?
+  title       String   @default("")
+  keys        String[] // related Jira keys
+  repo        String?  // chosen repository
+  branch      String?
+  workdir     String?
+  mrUrl       String?
+  status      String   @default("DRAFT") // DRAFT | PLANNED | RUNNING | PUSHED | MR_OPEN | ERROR
+  messages    Json     // [{role,content}] thread
+  plan        String?  // latest implementation plan (markdown)
+  images      Json?    // [key]
+  files       Json?    // [{key,name}]
+  visionText  String?
+  log         Json?    // [{step,msg,at}] pipeline log
+  rating      Int?     // satisfaction with the result: +1 / -1 / null
+  ratingNote  String?
+  lang        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, updatedAt])
 }
 
 // Сохранённые ответы фич (Testing/Bugs) — для истории запросов и шаринга по

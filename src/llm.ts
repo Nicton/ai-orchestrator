@@ -87,6 +87,75 @@ export async function analyzeImages(
   });
 }
 
+// Agentic run: Claude works INSIDE a repo directory (cwd) with full tools
+// (Edit/Write/Bash) under bypassPermissions, so it can implement a feature and
+// run git. Streams assistant text via onDelta and tool activity via onTool.
+// Never used for answers — only for the "Разработать" pipeline.
+export async function runClaudeAgent(
+  cwd: string,
+  prompt: string,
+  opts?: { model?: string; onDelta?: (t: string) => void; onTool?: (label: string) => void; timeoutMs?: number },
+): Promise<LlmResult> {
+  const useModel = opts?.model || config.model;
+  const onDelta = opts?.onDelta;
+  const onTool = opts?.onTool;
+  const timeoutMs = opts?.timeoutMs ?? 20 * 60 * 1000;
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-p', prompt,
+      '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
+      '--model', useModel,
+      '--permission-mode', 'bypassPermissions',
+    ];
+    const proc = spawn('claude', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+    let stderr = '';
+    let buf = '';
+    let finalResult: any = null;
+    const killer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* noop */ } }, timeoutMs);
+
+    const handleLine = (line: string) => {
+      const s = line.trim();
+      if (!s) return;
+      let obj: any;
+      try { obj = JSON.parse(s); } catch { return; }
+      if (obj.type === 'stream_event' && obj.event?.type === 'content_block_delta' && obj.event.delta?.type === 'text_delta') {
+        const txt = obj.event.delta.text;
+        if (txt && onDelta) { try { onDelta(txt); } catch { /* ignore */ } }
+      } else if (obj.type === 'stream_event' && obj.event?.type === 'content_block_start' && obj.event.content_block?.type === 'tool_use') {
+        const name = obj.event.content_block.name || 'tool';
+        const inp = obj.event.content_block.input || {};
+        const hint = inp.file_path || inp.path || inp.command || inp.pattern || '';
+        if (onTool) { try { onTool(`${name}${hint ? ` · ${String(hint).slice(0, 80)}` : ''}`); } catch { /* ignore */ } }
+      } else if (obj.type === 'result') {
+        finalResult = obj;
+      }
+    };
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+      buf += chunk.toString();
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) >= 0) { handleLine(buf.slice(0, nl)); buf = buf.slice(nl + 1); }
+    });
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    proc.on('close', (code: number | null) => {
+      clearTimeout(killer);
+      if (buf.trim()) handleLine(buf);
+      if (code !== 0 && !finalResult) { reject(new Error(`claude agent exited ${code}: ${stderr.trim().slice(0, 300)}`)); return; }
+      if (finalResult?.is_error) { reject(new Error(`claude agent error: ${finalResult.result || stderr.trim()}`)); return; }
+      resolve({
+        text: finalResult?.result ?? '',
+        model: useModel,
+        promptTokens: finalResult?.usage?.input_tokens,
+        completionTokens: finalResult?.usage?.output_tokens,
+        totalTokens: (typeof finalResult?.usage?.input_tokens === 'number' && typeof finalResult?.usage?.output_tokens === 'number')
+          ? finalResult.usage.input_tokens + finalResult.usage.output_tokens : undefined,
+        engine: 'claude',
+      });
+    });
+    proc.on('error', (err: Error) => { clearTimeout(killer); reject(new Error(`spawn claude agent failed: ${err.message}`)); });
+  });
+}
+
 function runClaudeCli(role: string, prompt: string, model?: string, onDelta?: (text: string) => void): Promise<LlmResult> {
   const useModel = model || config.model;
   const streaming = typeof onDelta === 'function';

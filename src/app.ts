@@ -20,6 +20,7 @@ import { registerBugsApi } from './bugs.js';
 import { registerPreplanningApi } from './preplanning.js';
 import { registerTasksApi } from './tasks.js';
 import { registerTestingApi } from './testing.js';
+import { registerDevelopApi } from './develop.js';
 import { registerUsageApi } from './usage.js';
 import { registerAnswersApi } from './answers.js';
 import { registerVersionApi } from './version.js';
@@ -56,6 +57,7 @@ await registerBugsApi(app);
 await registerPreplanningApi(app);
 await registerTasksApi(app);
 await registerTestingApi(app);
+await registerDevelopApi(app);
 await registerUsageApi(app);
 await registerAnswersApi(app);
 await registerVersionApi(app);
@@ -866,6 +868,10 @@ app.get('/tasks', async (_, reply) => {
 // Task testing — Jira + GitLab branch code → static-testing report.
 app.get('/testing', async (_, reply) => {
   return reply.sendFile('testing.html');
+});
+
+app.get('/develop', async (_, reply) => {
+  return reply.sendFile('develop.html');
 });
 
 // Release notes — 3-audience reports from the release delta.

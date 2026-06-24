@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — Develop</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--blue); text-decoration:none; }
+  button,input,select,textarea { font-family:inherit; }
+  .wrap { max-width:1240px; margin:22px auto; padding:0 18px 80px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .panel > h3 { margin:0; padding:13px 18px; font-size:15px; border-bottom:1px solid var(--line); font-weight:600; display:flex; align-items:center; gap:8px; }
+  .pad { padding:16px 18px; }
+  label.fld { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:0 0 5px; }
+  textarea, input[type=text], select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:var(--panel); color:var(--ink); }
+  textarea { resize:vertical; line-height:1.5; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  button.pri { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; }
+  button.pri:hover { background:var(--blue-dark); } button.pri:disabled { opacity:.55; cursor:default; }
+  button.go { background:var(--green,#1f9d57); } button.go:hover { filter:brightness(1.05); }
+  button.ghost { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:10px 14px; font-size:14px; cursor:pointer; }
+  button.ghost:hover { background:var(--bg-soft); }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--red); font-size:13px; margin-top:10px; min-height:16px; }
+  .warn { color:#92560a; background:#fff3e0; border:1px solid #ffd9a8; border-radius:8px; padding:8px 12px; font-size:13px; margin-top:10px; }
+  .rec-on { background:var(--red) !important; color:#fff !important; border-color:var(--red) !important; }
+  .drop { border:2px dashed var(--line); border-radius:10px; padding:10px 14px; text-align:center; color:var(--muted); font-size:13px; cursor:pointer; }
+  .imgrow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .thumb { width:54px; height:54px; object-fit:cover; border-radius:6px; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; }
+  .filechip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; font-size:13px; background:var(--bg-soft); }
+  .hidden { display:none !important; }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width:900px){ .split { grid-template-columns:1fr; } }
+  .col { display:flex; flex-direction:column; }
+  .chat { display:flex; flex-direction:column; height:62vh; min-height:430px; }
+  .msgs { flex:1; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  .bubble { max-width:88%; padding:9px 12px; border-radius:12px; font-size:14px; line-height:1.5; white-space:pre-wrap; }
+  .bubble.user { align-self:flex-end; background:var(--blue); color:#fff; border-bottom-right-radius:4px; }
+  .bubble.bot { align-self:flex-start; background:var(--bg-soft); border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .qchips { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+  .qchip { text-align:left; border:1px dashed var(--line); background:var(--panel); color:var(--ink); border-radius:8px; padding:7px 10px; font-size:13px; cursor:pointer; }
+  .qchip:hover { background:var(--bg-soft); border-style:solid; }
+  .composer { border-top:1px solid var(--line); padding:10px 12px; display:flex; gap:8px; align-items:flex-end; }
+  .composer textarea { flex:1; min-height:42px; max-height:140px; }
+  .stagelog { font-size:12px; color:var(--muted); padding:0 16px 8px; min-height:16px; }
+  .llmlog { white-space:pre-wrap; background:#0d1117; color:#c9d1d9; border-radius:8px; padding:10px; font-size:11px; line-height:1.45; max-height:160px; overflow:auto; margin:0 16px 10px; }
+  .planbox { padding:16px 18px; max-height:48vh; overflow:auto; font-size:14px; line-height:1.55; }
+  .planbox h1,.planbox h2,.planbox h3 { font-size:14px; text-transform:uppercase; letter-spacing:.3px; color:var(--blue); margin:14px 0 6px; }
+  .planbox ul,.planbox ol { padding-left:22px; margin:6px 0; } .planbox li { margin:3px 0; }
+  .planbox code { background:var(--bg-soft); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:12.5px; }
+  .planbox pre { background:#0d1117; color:#c9d1d9; border-radius:8px; padding:10px; overflow:auto; font-size:12px; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:9px; font-size:11px; font-weight:600; background:var(--bg-soft); border:1px solid var(--line); }
+  .badge.ready { background:#e9f6ec; color:var(--green,#1f9d57); border-color:#bfe6cb; }
+  .pipelog { font-family:ui-monospace,Consolas,monospace; font-size:12px; white-space:pre-wrap; background:#0d1117; color:#c9d1d9; border-radius:8px; padding:10px; max-height:240px; overflow:auto; margin-top:10px; }
+  .mrbox { border:1px solid #ceead6; background:#e6f4ea; border-radius:10px; padding:14px 16px; font-size:14px; color:#14532d; margin-top:12px; }
+  .fb { display:inline-flex; gap:8px; align-items:center; margin-top:10px; }
+  .fb button { border:1px solid var(--line); background:var(--panel); border-radius:8px; padding:6px 12px; font-size:15px; cursor:pointer; }
+  .fb button.sel { border-color:var(--blue); background:color-mix(in srgb, var(--blue) 12%, transparent); }
+  .pillrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:60; display:none; } .drawer-mask.open { display:block; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:min(440px,92vw); background:var(--panel); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.18); z-index:61; transform:translateX(100%); transition:transform .2s ease; display:flex; flex-direction:column; }
+  .drawer.open { transform:translateX(0); }
+  .drawer h3 { margin:0; padding:14px 18px; border-bottom:1px solid var(--line); font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .drawer .list { flex:1; overflow:auto; padding:12px 14px; }
+  .hist-item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; cursor:pointer; }
+  .hist-item:hover { background:var(--bg-soft); }
+  .hist-top { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .hist-title { font-size:14px; font-weight:500; }
+  .hist-meta { color:var(--muted); font-size:12px; margin-top:4px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .st { display:inline-block; padding:1px 8px; border-radius:9px; font-size:11px; font-weight:600; background:var(--bg-soft); border:1px solid var(--line); color:var(--muted); }
+  .st.mr { background:#e9f6ec; color:var(--green,#1f9d57); border-color:#bfe6cb; }
+  .hist-del { border:none; background:none; color:var(--muted); cursor:pointer; font-size:13px; } .hist-del:hover { color:var(--red); }
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1 data-i18n="h1">🛠 Develop</h1>
+      <p class="sub" data-i18n="sub"></p>
+    </div>
+    <button class="ghost" id="historyBtn" style="white-space:nowrap"></button>
+  </div>
+
+  <div class="panel" id="pushWarn" style="display:none"><div class="pad"><span class="warn" data-i18n="pushWarn"></span></div></div>
+
+  <!-- ============ SCREEN 1: INPUT ============ -->
+  <div id="inputScreen">
+    <div class="panel">
+      <h3 data-i18n="step1"></h3>
+      <div class="pad">
+        <div class="row" style="margin-bottom:12px">
+          <div style="flex:1 1 240px">
+            <label class="fld" data-i18n="keysLbl"></label>
+            <input type="text" id="keys" placeholder="TD-1203, TD-1205" />
+          </div>
+          <div style="flex:0 0 240px">
+            <label class="fld" data-i18n="repoLbl"></label>
+            <select id="repo"></select>
+          </div>
+          <div style="flex:0 0 auto">
+            <label class="fld" data-i18n="voiceLbl"></label>
+            <button class="ghost" id="recBtn"></button>
+          </div>
+        </div>
+        <label class="fld" data-i18n="descLbl"></label>
+        <textarea id="desc" rows="6"></textarea>
+        <div class="row" style="margin-top:10px">
+          <div class="drop" id="imgDrop" style="flex:1" data-i18n="imgDrop"></div>
+          <div class="drop" id="fileDrop" style="flex:1" data-i18n="fileDrop"></div>
+        </div>
+        <input type="file" id="imgInput" accept="image/*" multiple class="hidden" />
+        <input type="file" id="fileInput" multiple class="hidden" />
+        <div class="imgrow" id="thumbs"></div>
+        <div class="imgrow" id="filechips"></div>
+        <div style="margin-top:16px"><button class="pri" id="analyzeBtn"></button> <span class="muted" id="analyzeStatus"></span></div>
+        <div class="err" id="inErr"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 2: WORK (chat | plan+run) ============ -->
+  <div id="workScreen" class="hidden">
+    <div style="margin-bottom:12px"><button class="ghost" id="backBtn"></button></div>
+    <div class="split">
+      <div class="panel col">
+        <h3 data-i18n="chatTitle"></h3>
+        <div class="chat">
+          <div class="msgs" id="msgs"></div>
+          <div class="stagelog" id="stageLog"></div>
+          <pre class="llmlog hidden" id="llmLog"></pre>
+          <div class="composer">
+            <button class="ghost" id="chatRecBtn" title="Voice" style="padding:9px 11px">🎙️</button>
+            <textarea id="answer" rows="1"></textarea>
+            <button class="pri" id="sendBtn"></button>
+          </div>
+        </div>
+      </div>
+      <div class="panel col">
+        <h3><span data-i18n="planTitle"></span> <span id="readyBadge"></span></h3>
+        <div class="planbox" id="planRender"><p class="muted" data-i18n="planPlaceholder"></p></div>
+        <div class="pad" style="border-top:1px solid var(--line)">
+          <div class="pillrow">
+            <button class="pri go" id="runBtn"></button>
+            <button class="ghost" id="copyLinkBtn" style="display:none"></button>
+            <span class="muted" id="runStatus"></span>
+          </div>
+          <div class="muted" style="margin-top:8px" id="authorNote"></div>
+          <pre class="pipelog hidden" id="pipeLog"></pre>
+          <div id="mrOut"></div>
+          <div class="fb hidden" id="fbBox">
+            <span class="muted" data-i18n="fbAsk"></span>
+            <button id="fbUp" title="👍">👍</button>
+            <button id="fbDown" title="👎">👎</button>
+          </div>
+          <div id="followBox" class="hidden" style="margin-top:12px">
+            <label class="fld" data-i18n="followLbl"></label>
+            <div class="row" style="align-items:stretch">
+              <textarea id="followInput" rows="2" style="flex:1"></textarea>
+              <button class="pri" id="followBtn" style="flex:0 0 auto"></button>
+            </div>
+          </div>
+          <div class="err" id="runErr"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-mask" id="histMask"></div>
+  <div class="drawer" id="histDrawer">
+    <h3><span data-i18n="historyTitle"></span><button class="hist-del" id="histClose">✕</button></h3>
+    <div class="list" id="histList"></div>
+  </div>
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// minimal markdown → html for the plan / summary
+function md(src){
+  let s = esc(String(src||''));
+  s = s.replace(/```([\s\S]*?)```/g, (m,c)=>`<pre>${c.replace(/^\n/,'')}</pre>`);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  const lines = s.split('\n'); let out=[], inUl=false, inOl=false;
+  const closeLists=()=>{ if(inUl){out.push('</ul>');inUl=false;} if(inOl){out.push('</ol>');inOl=false;} };
+  for(let ln of lines){
+    let m;
+    if(/^\s*###?\s+/.test(ln)){ closeLists(); out.push('<h3>'+ln.replace(/^\s*#+\s+/,'')+'</h3>'); }
+    else if((m=ln.match(/^\s*[-*]\s+(.*)/))){ if(!inUl){closeLists();out.push('<ul>');inUl=true;} out.push('<li>'+m[1]+'</li>'); }
+    else if((m=ln.match(/^\s*\d+[.)]\s+(.*)/))){ if(!inOl){closeLists();out.push('<ol>');inOl=true;} out.push('<li>'+m[1]+'</li>'); }
+    else if(ln.trim()===''){ closeLists(); }
+    else { closeLists(); out.push('<p style="margin:6px 0">'+ln+'</p>'); }
+  }
+  closeLists(); return out.join('');
+}
+
+const L = (window.SearchifyI18N && window.SearchifyI18N.getLang()) || 'ru';
+document.documentElement.lang = L;
+const I18N = {
+  ru: {
+    title:'Searchify — Разработать', h1:'🛠 Разработать',
+    sub:'Введите номер(а) связанных задач + комментарий к выполнению, при желании приложите файлы/скриншоты. Searchify проанализирует задачу, согласует план (с уточняющими вопросами), затем создаст копию репозитория и ветку, реализует фичу, запушит и откроет merge request. Тред можно продолжать — давать задачи на доработку и фиксы.',
+    pushWarn:'⚠️ Не задан GITLAB_WRITE_TOKEN (write_repository + api). Пайплайн дойдёт до локального коммита, но push и merge request будут пропущены. Добавьте токен на сервер, чтобы открывать MR.',
+    step1:'1. Что разрабатываем?', keysLbl:'Номера задач Jira (через запятую)', repoLbl:'Репозиторий', voiceLbl:'Голос',
+    recStart:'🎙️ Записать', recStop:'⏹ Остановить', descLbl:'Комментарий к выполнению / что нужно сделать',
+    descPh:'Что реализовать, как это должно работать, контекст, ограничения. Можно кратко — уточним в чате.',
+    imgDrop:'🖼 Скриншоты (клик или Ctrl+V)', fileDrop:'📎 Файлы (логи, спеки, до 20)',
+    analyze:'🔍 Анализ и план', back:'← Изменить ввод', chatTitle:'💬 Анализ задачи и уточнения',
+    answerPh:'Ответьте на вопросы или уточните…', send:'Отправить',
+    planTitle:'📋 План реализации', planPlaceholder:'План формируется по мере диалога…',
+    run:'🚀 Запустить реализацию', author:'Запуск от имени: ',
+    ready:'✓ готово к реализации', draft:'черновик',
+    fbAsk:'Доволен результатом?', followLbl:'🔧 Доработать / исправить (новая итерация на той же ветке)', follow:'Отправить фикс',
+    recognizing:'Распознаю речь…', analyzing:'анализ…', running:'выполняю пайплайн…',
+    descShort:'Опишите задачу подробнее', noRepo:'Выберите репозиторий', noMic:'Нет доступа к микрофону', netErr:'Сеть недоступна',
+    fileBig:'Файл больше 30 МБ', imgBig:'Изображение больше 10 МБ', uploadErr:'Не удалось загрузить',
+    analyzeErr:'Ошибка анализа', runErr:'Ошибка пайплайна', thinking:'…', done:'Готово.',
+    history:'🕘 История', historyTitle:'История разработок', historyEmpty:'Пока пусто.', untitled:'Без названия',
+    confirmDel:'Удалить запись?', turns:'реплик', copyLink:'🔗 Ссылка', linkCopied:'Скопировано', mrOpened:'Merge request открыт', noChanges:'Агент не внёс изменений', committedLocal:'Изменения закоммичены локально (push пропущен).', thanks:'Спасибо за оценку!',
+  },
+  en: {
+    title:'Searchify — Develop', h1:'🛠 Develop',
+    sub:'Enter the related Jira key(s) + an implementation comment, optionally attach files/screenshots. Searchify analyses the task, agrees a plan (with clarifying questions), then copies the repo, creates a branch, implements the feature, pushes and opens a merge request. Continue the thread to request fixes.',
+    pushWarn:'⚠️ GITLAB_WRITE_TOKEN (write_repository + api) is not set. The pipeline will reach a local commit but skip push and the merge request. Add the token on the server to open MRs.',
+    step1:'1. What are we building?', keysLbl:'Jira keys (comma-separated)', repoLbl:'Repository', voiceLbl:'Voice',
+    recStart:'🎙️ Record', recStop:'⏹ Stop', descLbl:'Implementation comment / what to do',
+    descPh:'What to implement, how it should work, context, constraints. Keep it short — we’ll clarify in chat.',
+    imgDrop:'🖼 Screenshots (click or Ctrl+V)', fileDrop:'📎 Files (logs, specs, up to 20)',
+    analyze:'🔍 Analyse & plan', back:'← Edit input', chatTitle:'💬 Task analysis & clarifications',
+    answerPh:'Answer the questions or add detail…', send:'Send',
+    planTitle:'📋 Implementation plan', planPlaceholder:'The plan builds up as the dialogue progresses…',
+    run:'🚀 Start implementation', author:'Run as: ',
+    ready:'✓ ready to implement', draft:'draft',
+    fbAsk:'Happy with the result?', followLbl:'🔧 Refine / fix (new iteration on the same branch)', follow:'Send fix',
+    recognizing:'Transcribing…', analyzing:'analysing…', running:'running pipeline…',
+    descShort:'Describe the task in more detail', noRepo:'Pick a repository', noMic:'No microphone access', netErr:'Network unavailable',
+    fileBig:'File larger than 30 MB', imgBig:'Image larger than 10 MB', uploadErr:'Upload failed',
+    analyzeErr:'Analysis error', runErr:'Pipeline error', thinking:'…', done:'Done.',
+    history:'🕘 History', historyTitle:'Develop history', historyEmpty:'Nothing yet.', untitled:'Untitled',
+    confirmDel:'Delete this run?', turns:'turns', copyLink:'🔗 Link', linkCopied:'Copied', mrOpened:'Merge request opened', noChanges:'Agent made no changes', committedLocal:'Changes committed locally (push skipped).', thanks:'Thanks for the feedback!',
+  },
+  fr: {
+    title:'Searchify — Développer', h1:'🛠 Développer',
+    sub:'Saisissez la/les clé(s) Jira liées + un commentaire d’implémentation, joignez éventuellement des fichiers/captures. Searchify analyse la tâche, valide un plan (questions de clarification), puis copie le dépôt, crée une branche, implémente la fonctionnalité, pousse et ouvre une merge request. Continuez le fil pour demander des corrections.',
+    pushWarn:'⚠️ GITLAB_WRITE_TOKEN (write_repository + api) absent. Le pipeline ira jusqu’au commit local mais sautera le push et la merge request. Ajoutez le token sur le serveur pour ouvrir des MR.',
+    step1:'1. Que développe-t-on ?', keysLbl:'Clés Jira (séparées par des virgules)', repoLbl:'Dépôt', voiceLbl:'Voix',
+    recStart:'🎙️ Enregistrer', recStop:'⏹ Arrêter', descLbl:'Commentaire d’implémentation / à faire',
+    descPh:'Quoi implémenter, comportement attendu, contexte, contraintes. Bref — on précisera dans le chat.',
+    imgDrop:'🖼 Captures (clic ou Ctrl+V)', fileDrop:'📎 Fichiers (logs, specs, jusqu’à 20)',
+    analyze:'🔍 Analyser & planifier', back:'← Modifier', chatTitle:'💬 Analyse & clarifications',
+    answerPh:'Répondez ou précisez…', send:'Envoyer',
+    planTitle:'📋 Plan d’implémentation', planPlaceholder:'Le plan se construit au fil du dialogue…',
+    run:'🚀 Lancer l’implémentation', author:'Lancé par : ',
+    ready:'✓ prêt à implémenter', draft:'brouillon',
+    fbAsk:'Satisfait du résultat ?', followLbl:'🔧 Corriger (nouvelle itération sur la même branche)', follow:'Envoyer',
+    recognizing:'Transcription…', analyzing:'analyse…', running:'pipeline en cours…',
+    descShort:'Décrivez la tâche plus en détail', noRepo:'Choisissez un dépôt', noMic:'Pas de micro', netErr:'Réseau indisponible',
+    fileBig:'Fichier > 30 Mo', imgBig:'Image > 10 Mo', uploadErr:'Échec du téléversement',
+    analyzeErr:'Erreur d’analyse', runErr:'Erreur de pipeline', thinking:'…', done:'Terminé.',
+    history:'🕘 Historique', historyTitle:'Historique', historyEmpty:'Rien pour le moment.', untitled:'Sans titre',
+    confirmDel:'Supprimer ?', turns:'échanges', copyLink:'🔗 Lien', linkCopied:'Copié', mrOpened:'Merge request ouverte', noChanges:'Aucun changement', committedLocal:'Changements commités localement (push sauté).', thanks:'Merci pour le retour !',
+  },
+};
+function t(k){ return (I18N[L]&&I18N[L][k]) || I18N.en[k] || k; }
+function applyLang(){
+  document.title=t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
+  $('desc').placeholder=t('descPh'); $('answer').placeholder=t('answerPh');
+  $('recBtn').textContent=t('recStart'); $('analyzeBtn').textContent=t('analyze'); $('backBtn').textContent=t('back');
+  $('sendBtn').textContent=t('send'); $('runBtn').textContent=t('run'); $('copyLinkBtn').textContent=t('copyLink');
+  $('historyBtn').textContent=t('history'); $('followBtn').textContent=t('follow');
+}
+
+let me=null, cfg={repos:[],canPush:false};
+let images=[], files=[], messages=[], visionText='';
+let runId=null, planText='', titleText='', keysArr=[], repoSel='', ready=false, phase='plan', busy=false;
+let mediaRec=null, recChunks=[], recTarget='desc';
+
+async function boot(){
+  applyLang();
+  const r = await fetch('/api/auth/me'); if(!r.ok){ location.href='/login'; return; }
+  me=(await r.json()).user;
+  $('authorNote').textContent=t('author')+(me.name||me.email||'');
+  cfg = await fetch('/api/develop/config').then(r=>r.json()).catch(()=>({repos:[],canPush:false}));
+  $('repo').innerHTML = '<option value="">—</option>' + (cfg.repos||[]).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  if(!cfg.canPush) $('pushWarn').style.display='';
+}
+
+// attachments
+$('imgDrop').addEventListener('click', ()=>$('imgInput').click());
+$('fileDrop').addEventListener('click', ()=>$('fileInput').click());
+$('imgInput').addEventListener('change', e=>{ for(const f of e.target.files) uploadImage(f); e.target.value=''; });
+$('fileInput').addEventListener('change', e=>{ for(const f of e.target.files) uploadFile(f); e.target.value=''; });
+window.addEventListener('paste', e=>{ for(const it of (e.clipboardData?.items||[])) if(it.type.startsWith('image/')){ const f=it.getAsFile(); if(f) uploadImage(f); } });
+async function uploadImage(file){
+  if(file.size>10*1024*1024){ $('inErr').textContent=t('imgBig'); return; }
+  const fd=new FormData(); fd.append('image',file);
+  try{ const r=await fetch('/api/knowledge/upload-image',{method:'POST',body:fd}); const d=await r.json();
+    if(!r.ok){ $('inErr').textContent=d.error||t('uploadErr'); return; }
+    images.push(d.key); $('thumbs').insertAdjacentHTML('beforeend',`<img class="thumb" src="${URL.createObjectURL(file)}" title="${esc(file.name)}" />`);
+  }catch(_){ $('inErr').textContent=t('netErr'); }
+}
+async function uploadFile(file){
+  if(file.size>30*1024*1024){ $('inErr').textContent=t('fileBig'); return; }
+  if(files.length>=20){ return; }
+  const fd=new FormData(); fd.append('file',file);
+  const chip=document.createElement('span'); chip.className='filechip'; chip.innerHTML=`<span class="spin"></span> ${esc(file.name)}`; $('filechips').appendChild(chip);
+  try{ const r=await fetch('/api/develop/upload-file',{method:'POST',body:fd}); const d=await r.json();
+    if(!r.ok){ chip.remove(); $('inErr').textContent=d.error||t('uploadErr'); return; }
+    files.push({key:d.key,name:d.name||file.name}); chip.innerHTML=`📎 ${esc(d.name||file.name)}`;
+  }catch(_){ chip.remove(); $('inErr').textContent=t('netErr'); }
+}
+
+// voice
+function wireVoice(btnId,target){
+  $(btnId).addEventListener('click', async ()=>{
+    if(mediaRec && mediaRec.state==='recording'){ mediaRec.stop(); return; }
+    try{ const stream=await navigator.mediaDevices.getUserMedia({audio:true}); recTarget=target; mediaRec=new MediaRecorder(stream); recChunks=[];
+      mediaRec.ondataavailable=e=>{ if(e.data.size) recChunks.push(e.data); };
+      mediaRec.onstop=async ()=>{ stream.getTracks().forEach(x=>x.stop()); $(btnId).classList.remove('rec-on'); $(btnId).textContent=btnId==='recBtn'?t('recStart'):'🎙️';
+        const statusEl=recTarget==='desc'?$('analyzeStatus'):$('stageLog'); statusEl.textContent=t('recognizing');
+        const blob=new Blob(recChunks,{type:'audio/webm'}); const fd=new FormData(); fd.append('audio',blob,'voice.webm');
+        try{ const r=await fetch('/api/develop/transcribe',{method:'POST',body:fd}); const d=await r.json(); statusEl.textContent='';
+          if(!r.ok){ ( recTarget==='desc'?$('inErr'):$('runErr') ).textContent=d.error||t('netErr'); return; }
+          const box=recTarget==='desc'?$('desc'):$('answer'); box.value=(box.value?box.value+'\n':'')+(d.text||''); if(recTarget==='answer') autoGrow(box);
+        }catch(_){ statusEl.textContent=''; }
+      };
+      mediaRec.start(); $(btnId).classList.add('rec-on'); $(btnId).textContent=btnId==='recBtn'?t('recStop'):'⏹';
+    }catch(_){ $('inErr').textContent=t('noMic'); }
+  });
+}
+wireVoice('recBtn','desc'); wireVoice('chatRecBtn','answer');
+
+// start
+$('analyzeBtn').addEventListener('click', ()=>{
+  $('inErr').textContent='';
+  const desc=$('desc').value.trim(); if(desc.length<5){ $('inErr').textContent=t('descShort'); return; }
+  keysArr = ($('keys').value.toUpperCase().match(/[A-Z][A-Z0-9]+-\d+/g)||[]);
+  repoSel = $('repo').value||'';
+  runId=null; planText=''; ready=false; phase='plan';
+  let brief = (keysArr.length?`Jira: ${keysArr.join(', ')}\n`:'') + desc + (files.length?`\n\n(Files: ${files.map(f=>f.name).join(', ')})`:'');
+  messages=[{role:'user',content:brief}];
+  $('inputScreen').classList.add('hidden'); $('workScreen').classList.remove('hidden');
+  $('msgs').innerHTML=''; $('mrOut').innerHTML=''; $('pipeLog').classList.add('hidden'); $('fbBox').classList.add('hidden'); $('followBox').classList.add('hidden');
+  addBubble('user', desc);
+  runChat();
+});
+$('backBtn').addEventListener('click', ()=>{ $('workScreen').classList.add('hidden'); $('inputScreen').classList.remove('hidden'); });
+
+function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,140)+'px'; }
+$('answer').addEventListener('input', e=>autoGrow(e.target));
+$('answer').addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendAnswer(); } });
+$('sendBtn').addEventListener('click', sendAnswer);
+function sendAnswer(){ if(busy) return; const a=$('answer').value.trim(); if(!a) return; messages.push({role:'user',content:a}); addBubble('user',a); $('answer').value=''; autoGrow($('answer')); runChat(); }
+
+function addBubble(role,text){ const d=document.createElement('div'); d.className='bubble '+(role==='user'?'user':'bot'); d.textContent=text; $('msgs').appendChild(d); $('msgs').scrollTop=$('msgs').scrollHeight; return d; }
+function addQuestions(qs){ if(!qs||!qs.length) return; const wrap=document.createElement('div'); wrap.className='qchips';
+  qs.forEach(q=>{ const b=document.createElement('button'); b.className='qchip'; b.textContent='❓ '+q; b.addEventListener('click',()=>{ $('answer').value=q+'\n'; $('answer').focus(); autoGrow($('answer')); }); wrap.appendChild(b); });
+  $('msgs').appendChild(wrap); $('msgs').scrollTop=$('msgs').scrollHeight; }
+
+async function runChat(){
+  busy=true; $('sendBtn').disabled=true; $('analyzeStatus').textContent='';
+  $('stageLog').innerHTML='<span class="spin"></span> '+t('analyzing'); $('llmLog').textContent=''; let llmBuf='';
+  const thinking=addBubble('bot', t('thinking'));
+  try{
+    const res=await fetch('/api/develop/chat/stream',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({ messages, keys:keysArr, repo:repoSel, images, files:files.map(f=>f.key), fileNames:files.map(f=>f.name), visionText:visionText||undefined, lang:L })});
+    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); thinking.textContent='⚠️ '+(tx||t('analyzeErr')); throw new Error('http'); }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n'); buf=parts.pop()||'';
+      for(const block of parts){ const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m); if(!ev||!dm) continue; let data; try{data=JSON.parse(dm[1]);}catch(_){continue;}
+        if(ev==='stage'){ $('stageLog').innerHTML='<span class="spin"></span> '+esc(data.msg||''); }
+        else if(ev==='delta'){ llmBuf+=data.text||''; $('llmLog').classList.remove('hidden'); $('llmLog').textContent=llmBuf; $('llmLog').scrollTop=$('llmLog').scrollHeight; }
+        else if(ev==='result'){ result=data; }
+        else if(ev==='error'){ thinking.textContent='⚠️ '+(data.message||t('analyzeErr')); }
+      }
+    }
+    if(result){
+      if(result.visionText) visionText=result.visionText;
+      thinking.textContent=result.reply||t('done');
+      messages.push({role:'assistant',content:result.reply||''});
+      addQuestions(result.questions);
+      planText=result.plan||planText; titleText=result.title||titleText; ready=!!result.ready;
+      if(result.repo && (cfg.repos||[]).includes(result.repo)){ repoSel=result.repo; $('repo').value=result.repo; }
+      if(Array.isArray(result.keys)&&result.keys.length) keysArr=result.keys;
+      renderPlan();
+      saveRun();
+    }
+  }catch(_){ if(thinking.textContent===t('thinking')) thinking.textContent='⚠️ '+t('netErr'); }
+  finally{ busy=false; $('sendBtn').disabled=false; $('stageLog').textContent=''; }
+}
+
+function renderPlan(){
+  $('planRender').innerHTML = planText ? md(planText) : `<p class="muted">${esc(t('planPlaceholder'))}</p>`;
+  $('readyBadge').innerHTML = ready ? `<span class="badge ready">${esc(t('ready'))}</span>` : `<span class="badge">${esc(t('draft'))}</span>`;
+}
+
+async function saveRun(){
+  try{ const body={ id:runId||undefined, title:titleText||'', keys:keysArr, repo:repoSel||undefined, plan:planText||undefined, messages, images, files:files.map(f=>({key:f.key,name:f.name})), visionText:visionText||undefined, lang:L };
+    const r=await fetch('/api/develop/save',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json();
+    if(r.ok&&d.id){ runId=d.id; $('copyLinkBtn').style.display=''; try{ history.replaceState(null,'',location.pathname+'?id='+encodeURIComponent(runId)); }catch(_){} }
+  }catch(_){}
+}
+$('copyLinkBtn').addEventListener('click', ()=>{ if(!runId) return; navigator.clipboard?.writeText(location.origin+'/develop?id='+runId); $('runStatus').textContent=t('linkCopied'); setTimeout(()=>$('runStatus').textContent='',1800); });
+
+// run pipeline
+$('runBtn').addEventListener('click', ()=>startRun(''));
+$('followBtn').addEventListener('click', ()=>{ const ins=$('followInput').value.trim(); if(!ins) return; $('followInput').value=''; startRun(ins); });
+async function startRun(instruction){
+  if(busy) return; $('runErr').textContent='';
+  if(!repoSel){ $('runErr').textContent=t('noRepo'); return; }
+  await saveRun(); if(!runId){ $('runErr').textContent=t('netErr'); return; }
+  busy=true; $('runBtn').disabled=true; $('followBtn').disabled=true; $('fbBox').classList.add('hidden');
+  $('runStatus').innerHTML='<span class="spin"></span> '+t('running');
+  $('pipeLog').classList.remove('hidden'); $('pipeLog').textContent=''; let plog='';
+  try{
+    const res=await fetch('/api/develop/run/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ id:runId, instruction:instruction||undefined })});
+    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('runErr').textContent=tx||t('runErr'); throw new Error('http'); }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n'); buf=parts.pop()||'';
+      for(const block of parts){ const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m); if(!ev||!dm) continue; let data; try{data=JSON.parse(dm[1]);}catch(_){continue;}
+        if(ev==='stage'){ plog+=(data.msg||'')+'\n'; $('pipeLog').textContent=plog; $('pipeLog').scrollTop=$('pipeLog').scrollHeight; }
+        else if(ev==='result'){ result=data; }
+        else if(ev==='error'){ $('runErr').textContent=data.message||t('runErr'); }
+      }
+    }
+    if(result){
+      phase='done';
+      let html='';
+      if(result.mrUrl){ html=`<div class="mrbox">✅ ${esc(t('mrOpened'))}: <a href="${esc(result.mrUrl)}" target="_blank"><b>${esc(result.mrUrl)}</b></a><br><span class="muted">${esc(result.branch||'')}</span></div>`; }
+      else if(result.note==='no-changes'){ html=`<div class="warn">${esc(t('noChanges'))}</div>`; }
+      else { html=`<div class="warn">${esc(t('committedLocal'))} (${esc(result.branch||'')})</div>`; }
+      html += `<div class="planbox" style="max-height:36vh">${md(result.summary||'')}</div>`;
+      $('mrOut').innerHTML=html;
+      $('fbBox').classList.remove('hidden'); $('followBox').classList.remove('hidden');
+      addBubble('bot', (result.summary||t('done')) + (result.mrUrl?`\n\nMR: ${result.mrUrl}`:''));
+    }
+  }catch(_){ if(!$('runErr').textContent) $('runErr').textContent=t('netErr'); }
+  finally{ busy=false; $('runBtn').disabled=false; $('followBtn').disabled=false; $('runStatus').textContent=''; }
+}
+
+// feedback
+function sendFb(rating, btn){ if(!runId) return; $('fbUp').classList.remove('sel'); $('fbDown').classList.remove('sel'); btn.classList.add('sel');
+  fetch('/api/develop/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ id:runId, rating })}).then(()=>{ $('runStatus').textContent=t('thanks'); setTimeout(()=>$('runStatus').textContent='',1800); }).catch(()=>{}); }
+$('fbUp').addEventListener('click', ()=>sendFb(1,$('fbUp')));
+$('fbDown').addEventListener('click', ()=>sendFb(-1,$('fbDown')));
+
+// history
+$('historyBtn').addEventListener('click', openHistory);
+$('histClose').addEventListener('click', closeHistory);
+$('histMask').addEventListener('click', closeHistory);
+function openHistory(){ $('histMask').classList.add('open'); $('histDrawer').classList.add('open'); loadHistory(); }
+function closeHistory(){ $('histMask').classList.remove('open'); $('histDrawer').classList.remove('open'); }
+async function loadHistory(){
+  $('histList').innerHTML='<p class="muted">…</p>';
+  try{ const d=await fetch('/api/develop/history').then(r=>r.json());
+    if(!d.items||!d.items.length){ $('histList').innerHTML=`<p class="muted">${esc(t('historyEmpty'))}</p>`; return; }
+    $('histList').innerHTML=d.items.map(it=>{
+      const when=new Date(it.updatedAt).toLocaleString();
+      const st = it.mrUrl?`<span class="st mr">MR</span>`:`<span class="st">${esc(it.status||'')}</span>`;
+      const rate = it.rating===1?'👍':(it.rating===-1?'👎':'');
+      return `<div class="hist-item" data-id="${esc(it.id)}"><div class="hist-top"><span class="hist-title">${esc(it.title||t('untitled'))}</span><button class="hist-del" data-del="${esc(it.id)}">🗑</button></div>
+        <div class="hist-meta">${st} · ${esc((it.keys||[]).join(', '))} · ${esc(it.repo||'')} · ${it.turns} ${esc(t('turns'))} ${rate} · ${esc(when)}</div></div>`;
+    }).join('');
+    $('histList').querySelectorAll('.hist-item').forEach(el=>{ el.addEventListener('click', e=>{ if(e.target.closest('[data-del]')) return; resumeRun(el.getAttribute('data-id')); }); });
+    $('histList').querySelectorAll('[data-del]').forEach(b=>{ b.addEventListener('click', async e=>{ e.stopPropagation(); if(!confirm(t('confirmDel'))) return; try{ await fetch('/api/develop/run/'+b.getAttribute('data-del'),{method:'DELETE'}); }catch(_){} loadHistory(); }); });
+  }catch(_){ $('histList').innerHTML=`<p class="muted">${esc(t('netErr'))}</p>`; }
+}
+async function resumeRun(id){
+  try{ const d=await fetch('/api/develop/run/'+id).then(r=>r.json()); if(!d.run) return; const r=d.run;
+    runId=r.id; $('copyLinkBtn').style.display='';
+    messages=Array.isArray(r.messages)?r.messages:[]; visionText=r.visionText||''; images=Array.isArray(r.images)?r.images:[]; files=Array.isArray(r.files)?r.files:[];
+    keysArr=r.keys||[]; repoSel=r.repo||''; planText=r.plan||''; titleText=r.title||''; ready=true;
+    $('keys').value=keysArr.join(', '); if(repoSel){ $('repo').value=repoSel; }
+    $('msgs').innerHTML=''; messages.forEach(m=>addBubble(m.role==='user'?'user':'bot', m.content));
+    $('filechips').innerHTML=files.map(f=>`<span class="filechip">📎 ${esc(f.name)}</span>`).join('');
+    $('thumbs').innerHTML=images.map(()=>`<div class="thumb">🖼</div>`).join('');
+    renderPlan();
+    $('mrOut').innerHTML = r.mrUrl?`<div class="mrbox">✅ ${esc(t('mrOpened'))}: <a href="${esc(r.mrUrl)}" target="_blank"><b>${esc(r.mrUrl)}</b></a> <span class="muted">${esc(r.branch||'')}</span></div>`:'';
+    if(r.mrUrl||r.status==='PUSHED'){ $('followBox').classList.remove('hidden'); $('fbBox').classList.remove('hidden'); }
+    $('runErr').textContent=''; $('pipeLog').classList.add('hidden');
+    closeHistory(); $('inputScreen').classList.add('hidden'); $('workScreen').classList.remove('hidden');
+  }catch(_){}
+}
+
+(async ()=>{ await boot(); const sid=new URLSearchParams(location.search).get('id'); if(sid) resumeRun(sid); })();
+</script>
+</body>
+</html>

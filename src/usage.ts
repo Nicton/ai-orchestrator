@@ -7,7 +7,7 @@ import { requireAdmin } from './auth.js';
 // records a row with token spend, so the admin panel can show requests + tokens
 // across all features (not just knowledge queries). Logging never throws.
 // ---------------------------------------------------------------------------
-export type FeatureName = 'bugs' | 'tasks' | 'testing' | 'preplanning';
+export type FeatureName = 'bugs' | 'tasks' | 'testing' | 'preplanning' | 'develop';
 
 export async function logFeatureUsage(rec: {
   userId?: string | null;
@@ -20,9 +20,11 @@ export async function logFeatureUsage(rec: {
   completionTokens?: number | null;
   totalTokens?: number | null;
   status?: 'ok' | 'error';
-}): Promise<void> {
+  rating?: number | null;
+  ratingNote?: string | null;
+}): Promise<string | null> {
   try {
-    await prisma.featureUsage.create({
+    const row = await prisma.featureUsage.create({
       data: {
         userId: rec.userId ?? null,
         userLabel: rec.userLabel ?? null,
@@ -34,9 +36,12 @@ export async function logFeatureUsage(rec: {
         completionTokens: rec.completionTokens ?? null,
         totalTokens: rec.totalTokens ?? null,
         status: rec.status ?? 'ok',
+        rating: rec.rating ?? null,
+        ratingNote: rec.ratingNote ? String(rec.ratingNote).slice(0, 500) : null,
       },
     });
-  } catch { /* never break a feature because logging failed */ }
+    return row.id;
+  } catch { return null; /* never break a feature because logging failed */ }
 }
 
 export async function registerUsageApi(app: FastifyInstance) {
@@ -89,7 +94,7 @@ export async function registerUsageApi(app: FastifyInstance) {
     const recentRows = await prisma.featureUsage.findMany({
       orderBy: { createdAt: 'desc' },
       take: 80,
-      select: { createdAt: true, userLabel: true, feature: true, action: true, ref: true, model: true, totalTokens: true, promptTokens: true, completionTokens: true, status: true },
+      select: { createdAt: true, userLabel: true, feature: true, action: true, ref: true, model: true, totalTokens: true, promptTokens: true, completionTokens: true, status: true, rating: true, ratingNote: true },
     });
 
     return reply.send({

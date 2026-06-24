@@ -21,19 +21,28 @@
   // Exposed so any page can read the active language and (optionally) react.
   window.SearchifyI18N = { getLang: getLang, setLang: setLang, langs: LANGS };
 
-  // Nav link labels per language. Each item: [href, emoji, {fr,en,ru}].
-  var NAV = [
-    ['/', '🔎', { fr: 'Recherche', en: 'Search', ru: 'Поиск' }],
-    ['/graph', '🕸', { fr: 'Graphe', en: 'Graph', ru: 'Граф' }],
-    ['/quality', '📊', { fr: 'Qualité', en: 'Quality', ru: 'Качество' }],
-    ['/ideas', '💡', { fr: 'Idées', en: 'Ideas', ru: 'Идеи' }],
-    ['/bugs', '🐞', { fr: 'Bugs', en: 'Bugs', ru: 'БАГи' }],
-    ['/tasks', '🆕', { fr: 'Nouvelles tâches', en: 'New tasks', ru: 'Новые задачи' }],
-    ['/testing', '🧪', { fr: 'Test de tâches', en: 'Task testing', ru: 'Тестирование задач' }],
-    ['/releases', '🚀', { fr: 'Release Notes', en: 'Release Notes', ru: 'Релиз-ноты' }],
-    ['/doc-sync', '🔄', { fr: 'Doc Sync', en: 'Doc Sync', ru: 'Doc Sync' }],
-    ['/pre-planning', '🧭', { fr: 'Pré-planning', en: 'Pre-planning', ru: 'Pre-planning' }],
+  // Canonical nav items: id -> [href, emoji, {fr,en,ru}].
+  var ITEM = {
+    search: ['/', '🔎', { fr: 'Recherche', en: 'Search', ru: 'Поиск' }],
+    quality: ['/quality', '📊', { fr: 'Qualité', en: 'Quality', ru: 'Качество' }],
+    bugs: ['/bugs', '🐞', { fr: 'Bugs', en: 'Bugs', ru: 'БАГи' }],
+    testing: ['/testing', '🧪', { fr: 'Test de tâches', en: 'Task testing', ru: 'Тестирование задач' }],
+    releases: ['/releases', '🚀', { fr: 'Release Notes', en: 'Release Notes', ru: 'Релиз-ноты' }],
+    preplanning: ['/pre-planning', '🧭', { fr: 'Pré-planning', en: 'Pre-planning', ru: 'Pre-planning' }],
+    tasks: ['/tasks', '🆕', { fr: 'Nouvelles tâches', en: 'New tasks', ru: 'Новые задачи' }],
+    develop: ['/develop', '🛠', { fr: 'Développer', en: 'Develop', ru: 'Разработать' }],
+    graph: ['/graph', '🕸', { fr: 'Graphe', en: 'Graph', ru: 'Граф' }],
+    ideas: ['/ideas', '💡', { fr: 'Idées', en: 'Ideas', ru: 'Идеи' }],
+    docsync: ['/doc-sync', '🔄', { fr: 'Doc Sync', en: 'Doc Sync', ru: 'Doc Sync' }],
+  };
+  // Role groups shown as dropdowns in the header.
+  var GROUPS = [
+    { id: 'qa', label: { fr: 'Pour QA', en: 'For QA', ru: 'Для QA' }, items: ['quality', 'bugs', 'testing', 'releases', 'preplanning'] },
+    { id: 'dev', label: { fr: 'Pour DEV', en: 'For DEV', ru: 'Для DEV' }, items: ['develop', 'releases', 'preplanning'] },
+    { id: 'biz', label: { fr: 'Pour Business', en: 'For Business', ru: 'Для Business' }, items: ['tasks', 'releases', 'preplanning'] },
   ];
+  // Standalone items shown after the groups (Search is first, before groups).
+  var STANDALONE = ['graph', 'ideas'];
   var T = {
     admin: { fr: 'Admin', en: 'Admin', ru: 'Админ' },
     logout: { fr: 'Déconnexion', en: 'Log out', ru: 'Выйти' },
@@ -100,11 +109,29 @@
     var here = location.pathname.replace(/\/$/, '') || '/';
     var authed = !!me;
     var lang = getLang();
-    var links = authed ? NAV.map(function (it) {
-      var active = (here === it[0] || (it[0] !== '/' && here.indexOf(it[0]) === 0)) ? ' active' : '';
-      return '<a class="navlink' + active + '" href="' + it[0] + '">' + it[1] + ' ' + esc(it[2][lang] || it[2].en) + '</a>';
-    }).join('') : '';
-    var admin = (authed && me.role === 'admin') ? '<a class="navlink' + (here === '/admin' ? ' active' : '') + '" href="/admin">⚙️ ' + esc(tr(T.admin)) + '</a>' : '';
+    var isAdmin = authed && me.role === 'admin';
+    function itemActive(id) { var h = ITEM[id][0]; return here === h || (h !== '/' && here.indexOf(h) === 0); }
+    function linkHtml(id, inMenu) {
+      var it = ITEM[id];
+      var active = itemActive(id) ? ' active' : '';
+      return '<a class="navlink' + (inMenu ? ' menu-item' : '') + active + '" href="' + it[0] + '">' + it[1] + ' ' + esc(it[2][lang] || it[2].en) + '</a>';
+    }
+    var links = '';
+    if (authed) {
+      links += linkHtml('search', false);
+      links += GROUPS.map(function (g) {
+        var groupActive = g.items.some(itemActive) ? ' active' : '';
+        var menu = g.items.map(function (id) { return linkHtml(id, true); }).join('');
+        return '<div class="nav-group" data-group="' + g.id + '">'
+          + '<button class="navlink nav-group-btn' + groupActive + '" type="button">' + esc(g.label[lang] || g.label.en) + ' <span class="caret">▾</span></button>'
+          + '<div class="nav-menu">' + menu + '</div></div>';
+      }).join('');
+      links += STANDALONE.map(function (id) { return linkHtml(id, false); }).join('');
+    }
+    // Doc Sync lives in the admin area now (not for regular users).
+    var docsync = isAdmin ? linkHtml('docsync', false) : '';
+    var admin = isAdmin ? '<a class="navlink' + (here === '/admin' ? ' active' : '') + '" href="/admin">⚙️ ' + esc(tr(T.admin)) + '</a>' : '';
+    links += docsync;
     var langSel = '<select class="lang-select" id="langSelect" title="' + esc(tr(T.langTitle)) + '" aria-label="' + esc(tr(T.langTitle)) + '">'
       + LANGS.map(function (l) { return '<option value="' + l + '"' + (l === lang ? ' selected' : '') + '>' + LANG_LABELS[l] + '</option>'; }).join('')
       + '</select>';
@@ -117,6 +144,14 @@
       '<span class="nav-right">' + right + verWrap + langSel + themeBtn + '</span>';
     setupVersionBadge();
     updateIcon();
+    // Dropdown groups: hover opens (CSS); click toggles (touch); outside click closes.
+    var groups = mount.querySelectorAll('.nav-group');
+    function closeGroups(except) { groups.forEach(function (g) { if (g !== except) g.classList.remove('open'); }); }
+    groups.forEach(function (g) {
+      var btn = g.querySelector('.nav-group-btn');
+      if (btn) btn.addEventListener('click', function (e) { e.stopPropagation(); var open = g.classList.contains('open'); closeGroups(g); g.classList.toggle('open', !open); });
+    });
+    document.addEventListener('click', function () { closeGroups(null); });
     var tg = document.getElementById('themeToggle');
     if (tg) tg.addEventListener('click', function () { setTheme(effectiveDark() ? 'light' : 'dark'); });
     var ls = document.getElementById('langSelect');

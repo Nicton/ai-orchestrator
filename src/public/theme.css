@@ -62,6 +62,18 @@ html[data-theme="light"] {
 .app-nav .navlink:hover { background: var(--bg-soft); color: var(--ink); }
 .app-nav .navlink.active { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue-dark); font-weight: 600; }
 .app-nav .spacer { flex: 1; }
+/* Role dropdown groups (For QA / For DEV / For Business) */
+.app-nav .nav-group { position: relative; display: inline-flex; }
+.app-nav .nav-group-btn { display: inline-flex; align-items: center; gap: 4px; }
+.app-nav .nav-group-btn .caret { font-size: 10px; opacity: .65; }
+.app-nav .nav-menu {
+  display: none; position: absolute; top: 40px; left: 0; z-index: 70;
+  min-width: 200px; padding: 6px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  flex-direction: column; gap: 2px;
+}
+.app-nav .nav-group:hover .nav-menu, .app-nav .nav-group.open .nav-menu { display: flex; }
+.app-nav .nav-menu .navlink.menu-item { display: block; width: 100%; }
 .app-nav .nav-right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 .app-nav .who { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .app-nav .theme-toggle {
