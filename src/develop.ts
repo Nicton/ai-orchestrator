@@ -61,15 +61,26 @@ const LANG_NAME: Record<string, string> = { fr: 'French', en: 'English', ru: 'Ru
 
 // --- shell + git plumbing ---
 function sh(cmd: string, cwd: string, timeoutMs = 120000): Promise<{ ok: boolean; out: string; err: string }> {
+  // repos under workspaces/ are owned by root → git needs safe.directory to avoid "dubious ownership".
+  const c = cmd.startsWith('git ') ? `git -c safe.directory='*' ${cmd.slice(4)}` : cmd;
   return new Promise((resolve) => {
-    exec(cmd, { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (error, stdout, stderr) => {
+    exec(c, { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (error, stdout, stderr) => {
       resolve({ ok: !error, out: String(stdout || ''), err: String(stderr || (error as any)?.message || '') });
     });
   });
 }
 const WORKSPACES = path.resolve(process.cwd(), 'workspaces');
 function devWorkRoot() { return path.resolve(process.env.DEV_WORKDIR || path.join(process.cwd(), 'dev-workspaces')); }
-function gitlabWriteToken() { return String(process.env.GITLAB_WRITE_TOKEN || process.env.GITLAB_TOKEN || '').trim(); }
+function gitlabWriteToken() {
+  const env = String(process.env.GITLAB_WRITE_TOKEN || process.env.GITLAB_TOKEN || '').trim();
+  if (env) return env;
+  // The PAT is mounted as a file (host ~/.gl_token → container /run/gl_token), same source the
+  // git credential helper uses. Read it so push/MR can use it without a separate env var.
+  for (const p of [process.env.GL_TOKEN_FILE, '/run/gl_token', path.join(os.homedir(), '.gl_token')]) {
+    try { if (p && fs.existsSync(p)) { const v = fs.readFileSync(p, 'utf8').trim(); if (v) return v; } } catch { /* skip */ }
+  }
+  return '';
+}
 function safeName(s: string) { return String(s || '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
 
 // Parse a GitLab https origin into { host, projectPath, apiBase } for push + MR API.
