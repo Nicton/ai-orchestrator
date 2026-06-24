@@ -237,7 +237,7 @@ async function buildGate(workdir: string, onStage: (m: string) => void): Promise
     if (scripts.lint) await check('lint', 'npm run -s lint');
     if (scripts.typecheck) await check('typecheck', 'npm run -s typecheck');
     else if (fs.existsSync(path.join(workdir, 'tsconfig.json'))) await check('tsc --noEmit', 'npx -y tsc --noEmit');
-    if (scripts.test) await check('unit tests', 'CI=true npm test -- --watchAll=false --passWithNoTests', 480000);
+    if (scripts.test) await check('unit tests', 'CI=true npm test', 900000);
   } else {
     out.push('⚠️ build-gate: node_modules недоступны на сервере — выполнена только статическая проверка. Установите зависимости (DEV_INSTALL_DEPS=1 или вручную в workspaces/<repo>) для полного gate.');
   }
