@@ -91,6 +91,18 @@ async function recomputeTestCase(tcId: string) {
   return cov;
 }
 
+// Recompute the stored coverage of any TestCase touched by a link change. A
+// step-level link references a TestStep → resolve its parent test case.
+async function recomputeTouched(pairs: Array<[string, string | null | undefined]>) {
+  const tcIds = new Set<string>();
+  for (const [t, id] of pairs) {
+    if (!id) continue;
+    if (t === 'TestCase') tcIds.add(id);
+    else if (t === 'TestStep') { const st = await prisma.qaTestStep.findUnique({ where: { id } }); if (st) tcIds.add(st.testCaseId); }
+  }
+  for (const id of tcIds) await recomputeTestCase(id);
+}
+
 async function linkedOfType(projectId: string, type: string, id: string, otherType: string) {
   const links = await prisma.qaEntityLink.findMany({ where: { projectId, isDeleted: false, OR: [{ sourceType: type, sourceId: id }, { targetType: type, targetId: id }] } });
   const ids = new Set<string>();
@@ -428,14 +440,13 @@ export async function registerQaApi(app: FastifyInstance) {
   // ===== Entity links =====
   const linkCreate = async (projectId: string, b: any, u: U) => {
     const row = await prisma.qaEntityLink.create({ data: { projectId, sourceType: b.sourceType, sourceId: b.sourceId, targetType: b.targetType, targetId: b.targetId, targetStepId: b.targetStepId || null, linkType: b.linkType || 'covers', coverageType: b.coverageType || null, coverageWeight: b.coverageWeight ?? null, createdBy: u.name } });
-    // recompute coverage of any TestCase touched
-    for (const [t, id] of [[b.sourceType, b.sourceId], [b.targetType, b.targetId]] as any[]) if (t === 'TestCase') await recomputeTestCase(id);
+    await recomputeTouched([[b.sourceType, b.sourceId], [b.targetType, b.targetId], ['TestStep', b.targetStepId]]);
     return row;
   };
   app.post('/api/qa/projects/:projectId/links', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.code(201).send(await linkCreate(req.params.projectId, req.body || {}, u)); });
   app.post('/api/qa/projects/:projectId/links/bulk', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await runBulk(req.body?.items || [], async (it) => { const r = await linkCreate(req.params.projectId, it, u); return { id: r.id }; })); });
   app.get('/api/qa/projects/:projectId/links', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const q = req.query || {}; const where: any = { projectId: req.params.projectId, isDeleted: false }; if (q.sourceType) where.sourceType = q.sourceType; if (q.sourceId) where.sourceId = q.sourceId; if (q.targetType) where.targetType = q.targetType; if (q.targetId) where.targetId = q.targetId; const rows = await prisma.qaEntityLink.findMany({ where, take: 2000 }); return reply.send({ items: rows }); });
-  app.delete('/api/qa/links/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const l = await prisma.qaEntityLink.findUnique({ where: { id: req.params.id } }); await prisma.qaEntityLink.update({ where: { id: req.params.id }, data: { isDeleted: true } }).catch(() => null); if (l) for (const [t, id] of [[l.sourceType, l.sourceId], [l.targetType, l.targetId]] as any[]) if (t === 'TestCase') await recomputeTestCase(id); return reply.send({ ok: true }); });
+  app.delete('/api/qa/links/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const l = await prisma.qaEntityLink.findUnique({ where: { id: req.params.id } }); await prisma.qaEntityLink.update({ where: { id: req.params.id }, data: { isDeleted: true } }).catch(() => null); if (l) await recomputeTouched([[l.sourceType, l.sourceId], [l.targetType, l.targetId], ['TestStep', l.targetStepId]]); return reply.send({ ok: true }); });
 
   // ===== Test plans =====
   app.post('/api/qa/projects/:projectId/test-plans', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const b = req.body || {}; const gid = await nextGlobalId(req.params.projectId, 'TP'); const tp = await prisma.qaTestPlan.create({ data: { globalId: gid, projectId: req.params.projectId, title: b.title || 'Test Plan', description: b.description || null, type: b.type || 'Custom', status: b.status || 'Draft', ...auth(u) } }); if (Array.isArray(b.items)) await addPlanItems(tp, b.items); await snapshot('TestPlan', tp, u.name, 'created'); return reply.code(201).send(tp); });
