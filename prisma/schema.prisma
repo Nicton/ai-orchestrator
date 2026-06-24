@@ -936,3 +936,384 @@ model KnowledgeGap {
   @@index([status, updatedAt])
   @@index([occurrences, updatedAt])
 }
+
+// =====================================================================
+// QA PLATFORM (TMS + RMS + Automation Coverage + Traceability)
+// Self-contained module. Entities carry globalId, projectId, audit, soft delete.
+// Versioning via generic QaVersion snapshots; globalId via QaIdCounter.
+// =====================================================================
+model QaProject {
+  id          String    @id @default(cuid())
+  globalId    String
+  key         String
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  deletedBy   String?
+  @@index([isDeleted])
+}
+
+model QaIdCounter {
+  id         String @id @default(cuid())
+  projectId  String
+  prefix     String
+  lastNumber Int    @default(0)
+  @@unique([projectId, prefix])
+}
+
+model QaVersion {
+  id            String   @id @default(cuid())
+  projectId     String
+  entityType    String
+  entityId      String
+  versionNumber Int
+  snapshotJson  Json
+  comment       String?
+  changeReason  String?
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  @@index([entityType, entityId, versionNumber])
+}
+
+model QaRequirementSection {
+  id          String   @id @default(cuid())
+  projectId   String
+  parentId    String?
+  name        String
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  isDeleted   Boolean  @default(false)
+  @@index([projectId, isDeleted])
+}
+
+model QaRequirement {
+  id                    String    @id @default(cuid())
+  globalId              String
+  projectId             String
+  sectionId             String?
+  title                 String
+  description           String?
+  priority              String    @default("Medium")
+  status                String    @default("Draft")
+  implementationStatus  String    @default("Unknown")
+  implementationPercent Int       @default(0)
+  implementationComment String?
+  type                  String    @default("Functional")
+  owner                 String?
+  currentVersionNumber  Int       @default(1)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  createdBy             String?
+  updatedBy             String?
+  isDeleted             Boolean   @default(false)
+  deletedAt             DateTime?
+  @@index([projectId, isDeleted])
+  @@index([globalId])
+}
+
+model QaRequirementSource {
+  id            String   @id @default(cuid())
+  projectId     String
+  requirementId String
+  type          String
+  title         String?
+  url           String?
+  externalId    String?
+  description   String?
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  isDeleted     Boolean  @default(false)
+  @@index([requirementId, isDeleted])
+}
+
+model QaAcceptanceCriterion {
+  id            String  @id @default(cuid())
+  projectId     String
+  requirementId String
+  text          String
+  order         Int     @default(0)
+  isDeleted     Boolean @default(false)
+  @@index([requirementId, isDeleted])
+}
+
+model QaTestSection {
+  id          String   @id @default(cuid())
+  projectId   String
+  parentId    String?
+  name        String
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  isDeleted   Boolean  @default(false)
+  @@index([projectId, isDeleted])
+}
+
+model QaTestCase {
+  id                        String    @id @default(cuid())
+  globalId                  String
+  projectId                 String
+  sectionId                 String?
+  title                     String
+  description               String?
+  preconditions             String?
+  priority                  String    @default("Medium")
+  type                      String    @default("Functional")
+  status                    String    @default("Draft")
+  automationStatus          String    @default("NotAutomated")
+  automationCoveragePercent Int       @default(0)
+  coveragePrecision         String    @default("Unknown")
+  currentVersionNumber      Int       @default(1)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  createdBy                 String?
+  updatedBy                 String?
+  isDeleted                 Boolean   @default(false)
+  deletedAt                 DateTime?
+  @@index([projectId, isDeleted])
+  @@index([globalId])
+}
+
+model QaTestStep {
+  id              String  @id @default(cuid())
+  projectId       String
+  testCaseId      String
+  order           Int     @default(0)
+  action          String
+  expectedResult  String?
+  sharedStepRefId String?
+  isShared        Boolean @default(false)
+  isDeleted       Boolean @default(false)
+  @@index([testCaseId, isDeleted])
+}
+
+model QaSharedStep {
+  id                   String   @id @default(cuid())
+  globalId             String
+  projectId            String
+  sectionId            String?
+  title                String
+  description          String?
+  currentVersionNumber Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  createdBy            String?
+  updatedBy            String?
+  isDeleted            Boolean  @default(false)
+  @@index([projectId, isDeleted])
+  @@index([globalId])
+}
+
+model QaSharedStepItem {
+  id             String  @id @default(cuid())
+  projectId      String
+  sharedStepId   String
+  order          Int     @default(0)
+  action         String
+  expectedResult String?
+  isDeleted      Boolean @default(false)
+  @@index([sharedStepId, isDeleted])
+}
+
+model QaChecklist {
+  id                        String   @id @default(cuid())
+  globalId                  String
+  projectId                 String
+  sectionId                 String?
+  title                     String
+  description               String?
+  type                      String   @default("Functional")
+  status                    String   @default("Draft")
+  automationStatus          String   @default("NotAutomated")
+  automationCoveragePercent Int      @default(0)
+  currentVersionNumber      Int      @default(1)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  createdBy                 String?
+  updatedBy                 String?
+  isDeleted                 Boolean  @default(false)
+  @@index([projectId, isDeleted])
+  @@index([globalId])
+}
+
+model QaChecklistItem {
+  id          String  @id @default(cuid())
+  projectId   String
+  checklistId String
+  order       Int     @default(0)
+  title       String
+  isDeleted   Boolean @default(false)
+  @@index([checklistId, isDeleted])
+}
+
+model QaAutomatedTest {
+  id                   String    @id @default(cuid())
+  globalId             String
+  projectId            String
+  externalId           String?
+  name                 String
+  description          String?
+  framework            String    @default("Other")
+  suiteName            String?
+  filePath             String?
+  testName             String?
+  fullName             String?
+  tags                 String[]  @default([])
+  status               String    @default("Active")
+  flakyScore           Float?
+  lastRunStatus        String?
+  lastRunAt            DateTime?
+  lastDurationMs       Int?
+  currentVersionNumber Int       @default(1)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String?
+  updatedBy            String?
+  isDeleted            Boolean   @default(false)
+  @@index([projectId, isDeleted])
+  @@index([projectId, externalId])
+  @@index([globalId])
+}
+
+model QaEntityLink {
+  id             String   @id @default(cuid())
+  projectId      String
+  sourceType     String
+  sourceId       String
+  targetType     String
+  targetId       String
+  targetStepId   String?
+  linkType       String   @default("covers")
+  coverageType   String?
+  coverageWeight Float?
+  createdAt      DateTime @default(now())
+  createdBy      String?
+  isDeleted      Boolean  @default(false)
+  @@index([projectId, sourceType, sourceId, isDeleted])
+  @@index([projectId, targetType, targetId, isDeleted])
+}
+
+model QaTestPlan {
+  id                   String   @id @default(cuid())
+  globalId             String
+  projectId            String
+  title                String
+  description          String?
+  type                 String   @default("Custom")
+  status               String   @default("Draft")
+  currentVersionNumber Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  createdBy            String?
+  updatedBy            String?
+  isDeleted            Boolean  @default(false)
+  @@index([projectId, isDeleted])
+  @@index([globalId])
+}
+
+model QaTestPlanItem {
+  id                  String  @id @default(cuid())
+  projectId           String
+  testPlanId          String
+  sourceType          String
+  sourceId            String
+  sourceVersionNumber Int?
+  sectionPathSnapshot String?
+  order               Int     @default(0)
+  isDeleted           Boolean @default(false)
+  @@index([testPlanId, isDeleted])
+}
+
+model QaTestRun {
+  id          String    @id @default(cuid())
+  globalId    String
+  projectId   String
+  testPlanId  String?
+  title       String
+  description String?
+  status      String    @default("Draft")
+  source      String    @default("Manual")
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  isDeleted   Boolean   @default(false)
+  @@index([projectId, isDeleted])
+  @@index([globalId])
+}
+
+model QaTestRunItem {
+  id                    String    @id @default(cuid())
+  globalId              String
+  projectId             String
+  testRunId             String
+  sourceType            String
+  sourceId              String
+  sourceVersionNumber   Int?
+  titleSnapshot         String?
+  stepsSnapshot         Json?
+  status                String    @default("NotRun")
+  resultSource          String?
+  assignedTo            String?
+  executedBy            String?
+  executedAt            DateTime?
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  durationMs            Int?
+  comment               String?
+  failureMessage        String?
+  stackTrace            String?
+  linkedAutomatedTestId String?
+  externalTestId        String?
+  retryNumber           Int       @default(0)
+  lastHeartbeatAt       DateTime?
+  timeoutMs             Int?
+  hangingStatus         String    @default("Normal")
+  isDeleted             Boolean   @default(false)
+  @@index([testRunId, status])
+  @@index([projectId, externalTestId])
+}
+
+model QaTestRunStepResult {
+  id             String    @id @default(cuid())
+  projectId      String
+  testRunItemId  String
+  stepId         String?
+  stepOrder      Int       @default(0)
+  title          String?
+  expectedResult String?
+  status         String    @default("NotRun")
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  durationMs     Int?
+  errorMessage   String?
+  resultSource   String?
+  externalStepId String?
+  @@index([testRunItemId])
+}
+
+model QaTestRunEvent {
+  id            String   @id @default(cuid())
+  projectId     String
+  testRunId     String
+  testRunItemId String?
+  eventType     String
+  payloadJson   Json?
+  eventId       String?
+  createdAt     DateTime @default(now())
+  @@index([testRunId, createdAt])
+  @@index([eventId])
+}
