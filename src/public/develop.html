@@ -36,6 +36,10 @@
   .thumb { width:54px; height:54px; object-fit:cover; border-radius:6px; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; }
   .filechip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; font-size:13px; background:var(--bg-soft); }
   .hidden { display:none !important; }
+  .repochecks { display:flex; flex-wrap:wrap; gap:6px 14px; padding:8px 0; }
+  .repochecks label { display:inline-flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; border:1px solid var(--line); border-radius:8px; padding:5px 10px; background:var(--panel); }
+  .repochecks label:hover { background:var(--bg-soft); }
+  .repochecks input { accent-color:var(--blue); }
   .split { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
   @media (max-width:900px){ .split { grid-template-columns:1fr; } }
   .col { display:flex; flex-direction:column; }
@@ -107,9 +111,9 @@
             <label class="fld" data-i18n="keysLbl"></label>
             <input type="text" id="keys" placeholder="TD-1203, TD-1205" />
           </div>
-          <div style="flex:0 0 240px">
+          <div style="flex:1 1 320px">
             <label class="fld" data-i18n="repoLbl"></label>
-            <select id="repo"></select>
+            <div id="repoBox" class="repochecks"></div>
           </div>
           <div style="flex:0 0 auto">
             <label class="fld" data-i18n="voiceLbl"></label>
@@ -219,7 +223,7 @@ const I18N = {
     title:'Searchify — Разработать', h1:'🛠 Разработать',
     sub:'Введите номер(а) связанных задач + комментарий к выполнению, при желании приложите файлы/скриншоты. Searchify проанализирует задачу, согласует план (с уточняющими вопросами), затем создаст копию репозитория и ветку, реализует фичу, запушит и откроет merge request. Тред можно продолжать — давать задачи на доработку и фиксы.',
     pushWarn:'⚠️ Не задан GITLAB_WRITE_TOKEN (write_repository + api). Пайплайн дойдёт до локального коммита, но push и merge request будут пропущены. Добавьте токен на сервер, чтобы открывать MR.',
-    step1:'1. Что разрабатываем?', keysLbl:'Номера задач Jira (через запятую)', repoLbl:'Репозиторий', voiceLbl:'Голос',
+    step1:'1. Что разрабатываем?', keysLbl:'Номера задач Jira (через запятую)', repoLbl:'Репозитории (один или несколько)', voiceLbl:'Голос',
     recStart:'🎙️ Записать', recStop:'⏹ Остановить', descLbl:'Комментарий к выполнению / что нужно сделать',
     descPh:'Что реализовать, как это должно работать, контекст, ограничения. Можно кратко — уточним в чате.',
     imgDrop:'🖼 Скриншоты (клик или Ctrl+V)', fileDrop:'📎 Файлы (логи, спеки, до 20)',
@@ -231,7 +235,7 @@ const I18N = {
     fbAsk:'Доволен результатом?', followLbl:'🔧 Доработать / исправить (новая итерация на той же ветке)', follow:'Отправить фикс',
     editPlan:'✏️ Редактировать план перед запуском', reviewLabel:'🔍 Само-ревью', gateFailedMsg:'❌ Build gate провален — MR помечен [BUILD FAILED], нужна правка', gateLimitedMsg:'⚠️ Build gate ограничен (на сервере нет зависимостей репозитория)',
     recognizing:'Распознаю речь…', analyzing:'анализ…', running:'выполняю пайплайн…',
-    descShort:'Опишите задачу подробнее', noRepo:'Выберите репозиторий', noMic:'Нет доступа к микрофону', netErr:'Сеть недоступна',
+    descShort:'Опишите задачу подробнее', noRepo:'Выберите хотя бы один репозиторий', noMic:'Нет доступа к микрофону', netErr:'Сеть недоступна',
     fileBig:'Файл больше 30 МБ', imgBig:'Изображение больше 10 МБ', uploadErr:'Не удалось загрузить',
     analyzeErr:'Ошибка анализа', runErr:'Ошибка пайплайна', thinking:'…', done:'Готово.',
     history:'🕘 История', historyTitle:'История разработок', historyEmpty:'Пока пусто.', untitled:'Без названия',
@@ -241,7 +245,7 @@ const I18N = {
     title:'Searchify — Develop', h1:'🛠 Develop',
     sub:'Enter the related Jira key(s) + an implementation comment, optionally attach files/screenshots. Searchify analyses the task, agrees a plan (with clarifying questions), then copies the repo, creates a branch, implements the feature, pushes and opens a merge request. Continue the thread to request fixes.',
     pushWarn:'⚠️ GITLAB_WRITE_TOKEN (write_repository + api) is not set. The pipeline will reach a local commit but skip push and the merge request. Add the token on the server to open MRs.',
-    step1:'1. What are we building?', keysLbl:'Jira keys (comma-separated)', repoLbl:'Repository', voiceLbl:'Voice',
+    step1:'1. What are we building?', keysLbl:'Jira keys (comma-separated)', repoLbl:'Repositories (one or more)', voiceLbl:'Voice',
     recStart:'🎙️ Record', recStop:'⏹ Stop', descLbl:'Implementation comment / what to do',
     descPh:'What to implement, how it should work, context, constraints. Keep it short — we’ll clarify in chat.',
     imgDrop:'🖼 Screenshots (click or Ctrl+V)', fileDrop:'📎 Files (logs, specs, up to 20)',
@@ -253,7 +257,7 @@ const I18N = {
     fbAsk:'Happy with the result?', followLbl:'🔧 Refine / fix (new iteration on the same branch)', follow:'Send fix',
     editPlan:'✏️ Edit the plan before running', reviewLabel:'🔍 Self-review', gateFailedMsg:'❌ Build gate failed — MR flagged [BUILD FAILED], needs a fix', gateLimitedMsg:'⚠️ Build gate limited (repo dependencies not installed on the server)',
     recognizing:'Transcribing…', analyzing:'analysing…', running:'running pipeline…',
-    descShort:'Describe the task in more detail', noRepo:'Pick a repository', noMic:'No microphone access', netErr:'Network unavailable',
+    descShort:'Describe the task in more detail', noRepo:'Pick at least one repository', noMic:'No microphone access', netErr:'Network unavailable',
     fileBig:'File larger than 30 MB', imgBig:'Image larger than 10 MB', uploadErr:'Upload failed',
     analyzeErr:'Analysis error', runErr:'Pipeline error', thinking:'…', done:'Done.',
     history:'🕘 History', historyTitle:'Develop history', historyEmpty:'Nothing yet.', untitled:'Untitled',
@@ -263,7 +267,7 @@ const I18N = {
     title:'Searchify — Développer', h1:'🛠 Développer',
     sub:'Saisissez la/les clé(s) Jira liées + un commentaire d’implémentation, joignez éventuellement des fichiers/captures. Searchify analyse la tâche, valide un plan (questions de clarification), puis copie le dépôt, crée une branche, implémente la fonctionnalité, pousse et ouvre une merge request. Continuez le fil pour demander des corrections.',
     pushWarn:'⚠️ GITLAB_WRITE_TOKEN (write_repository + api) absent. Le pipeline ira jusqu’au commit local mais sautera le push et la merge request. Ajoutez le token sur le serveur pour ouvrir des MR.',
-    step1:'1. Que développe-t-on ?', keysLbl:'Clés Jira (séparées par des virgules)', repoLbl:'Dépôt', voiceLbl:'Voix',
+    step1:'1. Que développe-t-on ?', keysLbl:'Clés Jira (séparées par des virgules)', repoLbl:'Dépôts (un ou plusieurs)', voiceLbl:'Voix',
     recStart:'🎙️ Enregistrer', recStop:'⏹ Arrêter', descLbl:'Commentaire d’implémentation / à faire',
     descPh:'Quoi implémenter, comportement attendu, contexte, contraintes. Bref — on précisera dans le chat.',
     imgDrop:'🖼 Captures (clic ou Ctrl+V)', fileDrop:'📎 Fichiers (logs, specs, jusqu’à 20)',
@@ -294,7 +298,9 @@ function applyLang(){
 
 let me=null, cfg={repos:[],canPush:false};
 let images=[], files=[], messages=[], visionText='';
-let runId=null, planText='', titleText='', keysArr=[], repoSel='', ready=false, phase='plan', busy=false;
+let runId=null, planText='', titleText='', keysArr=[], reposSel=[], ready=false, phase='plan', busy=false;
+function checkedRepos(){ return [...document.querySelectorAll('#repoBox input:checked')].map(i=>i.value); }
+function setRepoChecks(list){ const set=new Set(list||[]); document.querySelectorAll('#repoBox input').forEach(i=>{ i.checked=set.has(i.value); }); }
 let mediaRec=null, recChunks=[], recTarget='desc';
 
 async function boot(){
@@ -303,7 +309,7 @@ async function boot(){
   me=(await r.json()).user;
   $('authorNote').textContent=t('author')+(me.name||me.email||'');
   cfg = await fetch('/api/develop/config').then(r=>r.json()).catch(()=>({repos:[],canPush:false}));
-  $('repo').innerHTML = '<option value="">—</option>' + (cfg.repos||[]).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  $('repoBox').innerHTML = (cfg.repos||[]).map(x=>`<label><input type="checkbox" value="${esc(x)}"> ${esc(x)}</label>`).join('') || '<span class="muted">нет доступных репозиториев</span>';
   if(!cfg.canPush) $('pushWarn').style.display='';
 }
 
@@ -357,7 +363,7 @@ $('analyzeBtn').addEventListener('click', ()=>{
   $('inErr').textContent='';
   const desc=$('desc').value.trim(); if(desc.length<5){ $('inErr').textContent=t('descShort'); return; }
   keysArr = ($('keys').value.toUpperCase().match(/[A-Z][A-Z0-9]+-\d+/g)||[]);
-  repoSel = $('repo').value||'';
+  reposSel = checkedRepos();
   runId=null; planText=''; ready=false; phase='plan';
   let brief = (keysArr.length?`Jira: ${keysArr.join(', ')}\n`:'') + desc + (files.length?`\n\n(Files: ${files.map(f=>f.name).join(', ')})`:'');
   messages=[{role:'user',content:brief}];
@@ -385,7 +391,7 @@ async function runChat(){
   const thinking=addBubble('bot', t('thinking'));
   try{
     const res=await fetch('/api/develop/chat/stream',{method:'POST',headers:{'content-type':'application/json'},
-      body:JSON.stringify({ messages, keys:keysArr, repo:repoSel, images, files:files.map(f=>f.key), fileNames:files.map(f=>f.name), visionText:visionText||undefined, lang:L })});
+      body:JSON.stringify({ messages, keys:keysArr, repos:checkedRepos(), images, files:files.map(f=>f.key), fileNames:files.map(f=>f.name), visionText:visionText||undefined, lang:L })});
     if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); thinking.textContent='⚠️ '+(tx||t('analyzeErr')); throw new Error('http'); }
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
     while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
@@ -403,7 +409,7 @@ async function runChat(){
       messages.push({role:'assistant',content:result.reply||''});
       addQuestions(result.questions);
       planText=result.plan||planText; titleText=result.title||titleText; ready=!!result.ready;
-      if(result.repo && (cfg.repos||[]).includes(result.repo)){ repoSel=result.repo; $('repo').value=result.repo; }
+      if(Array.isArray(result.repos) && result.repos.length){ reposSel=result.repos.filter(x=>(cfg.repos||[]).includes(x)); setRepoChecks(reposSel); }
       if(Array.isArray(result.keys)&&result.keys.length) keysArr=result.keys;
       renderPlan();
       saveRun();
@@ -420,7 +426,7 @@ function renderPlan(){
 $('planEdit').addEventListener('input', e=>{ planText=e.target.value; $('planRender').innerHTML=planText?md(planText):''; });
 
 async function saveRun(){
-  try{ const body={ id:runId||undefined, title:titleText||'', keys:keysArr, repo:repoSel||undefined, plan:planText||undefined, messages, images, files:files.map(f=>({key:f.key,name:f.name})), visionText:visionText||undefined, lang:L };
+  try{ const body={ id:runId||undefined, title:titleText||'', keys:keysArr, repos:reposSel, plan:planText||undefined, messages, images, files:files.map(f=>({key:f.key,name:f.name})), visionText:visionText||undefined, lang:L };
     const r=await fetch('/api/develop/save',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const d=await r.json();
     if(r.ok&&d.id){ runId=d.id; $('copyLinkBtn').style.display=''; try{ history.replaceState(null,'',location.pathname+'?id='+encodeURIComponent(runId)); }catch(_){} }
   }catch(_){}
@@ -432,7 +438,8 @@ $('runBtn').addEventListener('click', ()=>startRun(''));
 $('followBtn').addEventListener('click', ()=>{ const ins=$('followInput').value.trim(); if(!ins) return; $('followInput').value=''; startRun(ins); });
 async function startRun(instruction){
   if(busy) return; $('runErr').textContent='';
-  if(!repoSel){ $('runErr').textContent=t('noRepo'); return; }
+  reposSel = checkedRepos();
+  if(!reposSel.length){ $('runErr').textContent=t('noRepo'); return; }
   await saveRun(); if(!runId){ $('runErr').textContent=t('netErr'); return; }
   busy=true; $('runBtn').disabled=true; $('followBtn').disabled=true; $('fbBox').classList.add('hidden');
   $('runStatus').innerHTML='<span class="spin"></span> '+t('running');
@@ -451,17 +458,18 @@ async function startRun(instruction){
     }
     if(result){
       phase='done';
+      const mrs = result.mrUrls||[]; const reslist = result.results||[];
       let html='';
-      if(result.mrUrl){ html=`<div class="mrbox">✅ ${esc(t('mrOpened'))}: <a href="${esc(result.mrUrl)}" target="_blank"><b>${esc(result.mrUrl)}</b></a><br><span class="muted">${esc(result.branch||'')}</span></div>`; }
-      else if(result.note==='no-changes'){ html=`<div class="warn">${esc(t('noChanges'))}</div>`; }
+      if(mrs.length){ html=`<div class="mrbox">✅ ${esc(t('mrOpened'))}:<br>${mrs.map(m=>`• <b>${esc(m.repo)}</b>: <a href="${esc(m.mrUrl)}" target="_blank">${esc(m.mrUrl)}</a>`).join('<br>')}<br><span class="muted">${esc(result.branch||'')}</span></div>`; }
       else { html=`<div class="warn">${esc(t('committedLocal'))} (${esc(result.branch||'')})</div>`; }
-      if(result.note==='build-failed' || result.gateOk===false){ html+=`<div class="warn">${esc(t('gateFailedMsg'))}</div>`; }
-      else if(result.gateOk===null){ html+=`<div class="warn">${esc(t('gateLimitedMsg'))}</div>`; }
-      if(result.reviewText){ html+=`<div style="margin-top:10px"><label class="fld">${esc(t('reviewLabel'))}</label><div class="planbox" style="max-height:22vh">${md(result.reviewText)}</div></div>`; }
+      if(reslist.some(r=>r.note==='build-failed'||r.gateOk===false)){ html+=`<div class="warn">${esc(t('gateFailedMsg'))}</div>`; }
+      else if(reslist.some(r=>r.gateOk===null)){ html+=`<div class="warn">${esc(t('gateLimitedMsg'))}</div>`; }
+      const reviews = reslist.filter(r=>r.reviewText).map(r=>`**${r.repo}** ${r.reviewText}`).join('\n\n');
+      if(reviews){ html+=`<div style="margin-top:10px"><label class="fld">${esc(t('reviewLabel'))}</label><div class="planbox" style="max-height:22vh">${md(reviews)}</div></div>`; }
       html += `<div class="planbox" style="max-height:36vh">${md(result.summary||'')}</div>`;
       $('mrOut').innerHTML=html;
       $('fbBox').classList.remove('hidden'); $('followBox').classList.remove('hidden');
-      addBubble('bot', (result.summary||t('done')) + (result.mrUrl?`\n\nMR: ${result.mrUrl}`:''));
+      addBubble('bot', (result.summary||t('done')) + (mrs.length?`\n\nMR: ${mrs.map(m=>m.mrUrl).join(' · ')}`:''));
     }
   }catch(_){ if(!$('runErr').textContent) $('runErr').textContent=t('netErr'); }
   finally{ busy=false; $('runBtn').disabled=false; $('followBtn').disabled=false; $('runStatus').textContent=''; }
@@ -488,7 +496,7 @@ async function loadHistory(){
       const st = it.mrUrl?`<span class="st mr">MR</span>`:`<span class="st">${esc(it.status||'')}</span>`;
       const rate = it.rating===1?'👍':(it.rating===-1?'👎':'');
       return `<div class="hist-item" data-id="${esc(it.id)}"><div class="hist-top"><span class="hist-title">${esc(it.title||t('untitled'))}</span><button class="hist-del" data-del="${esc(it.id)}">🗑</button></div>
-        <div class="hist-meta">${st} · ${esc((it.keys||[]).join(', '))} · ${esc(it.repo||'')} · ${it.turns} ${esc(t('turns'))} ${rate} · ${esc(when)}</div></div>`;
+        <div class="hist-meta">${st} · ${esc((it.keys||[]).join(', '))} · ${esc((it.repos||[]).join(', '))} · ${it.turns} ${esc(t('turns'))} ${rate} · ${esc(when)}</div></div>`;
     }).join('');
     $('histList').querySelectorAll('.hist-item').forEach(el=>{ el.addEventListener('click', e=>{ if(e.target.closest('[data-del]')) return; resumeRun(el.getAttribute('data-id')); }); });
     $('histList').querySelectorAll('[data-del]').forEach(b=>{ b.addEventListener('click', async e=>{ e.stopPropagation(); if(!confirm(t('confirmDel'))) return; try{ await fetch('/api/develop/run/'+b.getAttribute('data-del'),{method:'DELETE'}); }catch(_){} loadHistory(); }); });
@@ -498,14 +506,15 @@ async function resumeRun(id){
   try{ const d=await fetch('/api/develop/run/'+id).then(r=>r.json()); if(!d.run) return; const r=d.run;
     runId=r.id; $('copyLinkBtn').style.display='';
     messages=Array.isArray(r.messages)?r.messages:[]; visionText=r.visionText||''; images=Array.isArray(r.images)?r.images:[]; files=Array.isArray(r.files)?r.files:[];
-    keysArr=r.keys||[]; repoSel=r.repo||''; planText=r.plan||''; titleText=r.title||''; ready=true;
-    $('keys').value=keysArr.join(', '); if(repoSel){ $('repo').value=repoSel; }
+    keysArr=r.keys||[]; reposSel=(r.repos&&r.repos.length?r.repos:(r.repo?[r.repo]:[])); planText=r.plan||''; titleText=r.title||''; ready=true;
+    $('keys').value=keysArr.join(', '); setRepoChecks(reposSel);
     $('msgs').innerHTML=''; messages.forEach(m=>addBubble(m.role==='user'?'user':'bot', m.content));
     $('filechips').innerHTML=files.map(f=>`<span class="filechip">📎 ${esc(f.name)}</span>`).join('');
     $('thumbs').innerHTML=images.map(()=>`<div class="thumb">🖼</div>`).join('');
     renderPlan();
-    $('mrOut').innerHTML = r.mrUrl?`<div class="mrbox">✅ ${esc(t('mrOpened'))}: <a href="${esc(r.mrUrl)}" target="_blank"><b>${esc(r.mrUrl)}</b></a> <span class="muted">${esc(r.branch||'')}</span></div>`:'';
-    if(r.mrUrl||r.status==='PUSHED'){ $('followBox').classList.remove('hidden'); $('fbBox').classList.remove('hidden'); }
+    const mrs=Array.isArray(r.mrUrls)?r.mrUrls:(r.mrUrl?[{repo:(reposSel[0]||''),mrUrl:r.mrUrl}]:[]);
+    $('mrOut').innerHTML = mrs.length?`<div class="mrbox">✅ ${esc(t('mrOpened'))}:<br>${mrs.map(m=>`• <b>${esc(m.repo||'')}</b>: <a href="${esc(m.mrUrl)}" target="_blank">${esc(m.mrUrl)}</a>`).join('<br>')} <span class="muted">${esc(r.branch||'')}</span></div>`:'';
+    if(mrs.length||r.status==='PUSHED'){ $('followBox').classList.remove('hidden'); $('fbBox').classList.remove('hidden'); }
     $('runErr').textContent=''; $('pipeLog').classList.add('hidden');
     closeHistory(); $('inputScreen').classList.add('hidden'); $('workScreen').classList.remove('hidden');
   }catch(_){}

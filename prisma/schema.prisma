@@ -687,10 +687,12 @@ model DevRun {
   userLabel   String?
   title       String   @default("")
   keys        String[] // related Jira keys
-  repo        String?  // chosen repository
-  branch      String?
+  repo        String?  // legacy single repo (kept for old rows)
+  repos       String[] @default([]) // chosen repositories (a feature may span several)
+  branch      String?  // common branch name across repos
   workdir     String?
-  mrUrl       String?
+  mrUrl       String?  // primary MR (first repo) — for history display
+  mrUrls      Json?    // [{repo, branch, mrUrl, note}] per repo
   status      String   @default("DRAFT") // DRAFT | PLANNED | RUNNING | PUSHED | MR_OPEN | ERROR
   messages    Json     // [{role,content}] thread
   plan        String?  // latest implementation plan (markdown)

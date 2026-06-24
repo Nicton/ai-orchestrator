@@ -116,7 +116,7 @@ async function visionFromImages(imageKeys: string[], hint: string): Promise<stri
 }
 
 async function runDevChat(
-  messages: ChatMsg[], issues: any[], codeCtx: string, repo: string, visionText: string, fileNames: string[], lang: string,
+  messages: ChatMsg[], issues: any[], codeCtx: string, repos: string[], available: string[], visionText: string, fileNames: string[], lang: string,
   onStage?: (m: string) => void, onDelta?: (t: string) => void,
 ) {
   const replyLang = LANG_NAME[lang] || 'Russian';
@@ -128,7 +128,10 @@ async function runDevChat(
 
 Conduct a short dialogue with the developer. On EVERY turn return the best plan you can with what you know (mark unknowns explicitly). Ask follow-up questions only while they materially change the plan; once you have enough to implement safely, set "ready": true.
 
-Write your conversational "reply" and the "plan" in ${replyLang}. The plan must be concrete and grounded in the provided Jira context and existing code (cite files/areas when known). Target repository: ${repo || '(to be determined — ask which repo if unclear)'}.
+Write your conversational "reply" and the "plan" in ${replyLang}. The plan must be concrete and grounded in the provided Jira context and existing code (cite files/areas when known).
+Available repositories: ${available.join(', ') || '(none)'}.
+Developer-selected repositories: ${repos.length ? repos.join(', ') : '(none yet — infer which are affected)'}.
+A feature may span SEVERAL repositories (e.g. backend + frontend-mono). Decide which of the available repos are actually affected and structure the plan PER repository (a short "### <repo>" subsection each).
 
 Return ONLY a JSON object (no prose, no code fences):
 {
@@ -136,15 +139,16 @@ Return ONLY a JSON object (no prose, no code fences):
   "questions": ["open clarifying question", "..."],
   "ready": false,
   "title": "concise imperative change title in English (<=100 chars)",
-  "repo": "${repo || ''}",
-  "plan": "Markdown implementation plan: goal, affected files/modules, step-by-step changes, edge cases, how to verify (lint/tests), and risks. Be specific."
+  "repos": ["repo affected by this change", "..."],
+  "plan": "Markdown implementation plan, organised per repository (### <repo>): goal, affected files/modules, step-by-step changes, edge cases, how to verify (lint/tests), risks."
 }
 
 Rules:
-- Ground the plan in the Jira ticket(s), comments and the existing code context below. Do not invent APIs.
-- If the repository is unclear, ask which repo (one of the available repos) — implementation cannot start without it.
+- "repos" MUST be a subset of the available repositories; include every repo the change touches.
+- Ground the plan in the Jira ticket(s), comments and existing code. Do not invent APIs.
+- If you cannot tell which repos are affected, ask — implementation cannot start without at least one.
 - Keep "questions" to at most 4, only the still-open ones; never repeat answered ones.
-- If the dev says "go"/"запускай"/"реализуй"/"ready", set ready=true and finalize the plan with sensible assumptions for anything still unknown.
+- If the dev says "go"/"запускай"/"реализуй"/"ready", set ready=true and finalize.
 
 ${attach ? `=== ATTACHMENTS ===\n${attach}\n` : ''}
 === JIRA CONTEXT ===
@@ -160,12 +164,13 @@ ${transcript}`;
   const r = await runRolePrompt('engineer.planner', prompt, config.answerModel, onDelta);
   if (!r.text || !r.text.trim()) throw new Error('LLM returned no analysis');
   const parsed = parseJsonLoose(r.text);
+  const planRepos = Array.isArray(parsed.repos) ? parsed.repos.map((x: any) => String(x || '').trim()).filter((x: string) => available.includes(x)) : [];
   return {
     reply: String(parsed.reply || '').trim(),
     questions: Array.isArray(parsed.questions) ? parsed.questions.filter((q: any) => String(q ?? '').trim()).slice(0, 4) : [],
     ready: !!parsed.ready,
     title: String(parsed.title || '').trim().slice(0, 120) || 'Dev task',
-    repo: String(parsed.repo || repo || '').trim(),
+    repos: Array.from(new Set([...repos, ...planRepos])).filter((x) => available.includes(x)),
     plan: String(parsed.plan || '').trim(),
     tokens: r.totalTokens || null, promptTokens: r.promptTokens || null, completionTokens: r.completionTokens || null, model: r.model,
   };
@@ -264,26 +269,17 @@ ${diff || '(empty)'}`;
 
 // --- the actual pipeline (worktree → agent → self-review → build gate → MR) ---
 type StepLog = { step: string; msg: string; at: string };
-async function runPipeline(
-  run: { id: string; keys: string[]; title: string; repo: string; plan: string; messages: ChatMsg[]; branch?: string | null; visionText?: string | null },
-  followupInstruction: string,
-  onStage: (m: string) => void,
-): Promise<{ branch: string; mrUrl: string | null; summary: string; tokens: number | null; log: StepLog[]; note?: string; reviewText?: string; gateOk?: boolean }> {
-  const log: StepLog[] = [];
-  const step = (s: string, m: string) => { log.push({ step: s, msg: m, at: new Date().toISOString() }); onStage(m); };
-  const repo = run.repo;
+type RepoResult = { repo: string; branch: string; mrUrl: string | null; summary: string; tokens: number; note?: string; reviewText?: string; gateOk?: boolean | null };
+
+// Implement ONE repository end-to-end (its own worktree + branch + MR).
+async function runOneRepo(
+  run: { id: string; keys: string[]; title: string; plan: string; messages: ChatMsg[]; visionText?: string | null },
+  repo: string, repos: string[], branch: string, continuing: boolean, freeMB: number, followupInstruction: string,
+  step: (s: string, m: string) => void, onStage: (m: string) => void,
+): Promise<RepoResult> {
   const repoPath = path.join(WORKSPACES, repo);
   if (!fs.existsSync(path.join(repoPath, '.git'))) throw new Error(`Репозиторий "${repo}" не найден в workspaces/ на сервере`);
-  fs.mkdirSync(devWorkRoot(), { recursive: true });
-
-  // 0) disk hygiene — prune stale worktrees, then refuse if space is tight.
-  await cleanupWorktrees(onStage);
-  const freeMB = await dfFreeMB(devWorkRoot());
-  step('disk', `💽 свободно ~${(freeMB / 1024).toFixed(1)} ГБ`);
-  if (freeMB < MIN_FREE_MB) throw new Error(`Мало места на диске (${(freeMB / 1024).toFixed(1)} ГБ < ${(MIN_FREE_MB / 1024).toFixed(1)} ГБ). Запуск отменён, чтобы не забить /var. Подождите завершения других задач.`);
-
-  // 1) fetch base + resolve origin / default branch.
-  step('pull', `⬇️ git fetch ${repo}…`);
+  step('pull', `[${repo}] ⬇️ git fetch…`);
   await sh('git fetch origin --prune --quiet', repoPath, 180000);
   const originUrl = (await sh('git config --get remote.origin.url', repoPath)).out.trim();
   const gl = parseGitlab(originUrl);
@@ -291,27 +287,23 @@ async function runPipeline(
   for (const b of ['develop', 'main', 'master']) { const v = await sh(`git rev-parse --verify --quiet origin/${b}`, repoPath); if (v.ok && v.out.trim()) { base = b; break; } }
   if (gl) { try { const pj = await glProject(gl); if (pj?.default_branch) base = pj.default_branch; } catch { /* keep */ } }
 
-  // 2) worktree per run (keyed by run id → safe for many concurrent devs/tabs).
-  const continuing = !!run.branch; // a branch already exists from a previous run → follow-up
-  const branch = run.branch || `searchify/${safeName(run.keys[0] || run.title).slice(0, 40)}-${run.id.slice(-6)}`;
-  const workdir = path.join(devWorkRoot(), `wt-${run.id}`);
+  const workdir = path.join(devWorkRoot(), `wt-${run.id}-${safeName(repo)}`);
   await sh('git worktree prune', repoPath, 30000);
   if (fs.existsSync(workdir)) { await sh(`git worktree remove --force "${workdir}"`, repoPath, 60000); await sh(`rm -rf "${workdir}"`, devWorkRoot(), 60000); }
   const startRef = continuing ? `origin/${branch}` : `origin/${base}`;
-  step('worktree', `🌿 worktree + ветка ${branch} (от ${startRef})…`);
+  step('worktree', `[${repo}] 🌿 worktree + ветка ${branch} (от ${startRef})…`);
   let add = await sh(`git worktree add --force -B "${branch}" "${workdir}" "${startRef}"`, repoPath, 120000);
   if (!add.ok && continuing) add = await sh(`git worktree add --force -B "${branch}" "${workdir}" "origin/${base}"`, repoPath, 120000);
-  if (!add.ok) throw new Error(`worktree add failed: ${add.err.slice(0, 200)}`);
-  // share node_modules (cheap symlink) when available, so the build gate can run.
+  if (!add.ok) throw new Error(`[${repo}] worktree add failed: ${add.err.slice(0, 200)}`);
   const deps = await ensureBaseDeps(repoPath, repo, freeMB, onStage);
   if (deps === 'ready') { try { if (!fs.existsSync(path.join(workdir, 'node_modules'))) fs.symlinkSync(path.join(repoPath, 'node_modules'), path.join(workdir, 'node_modules'), 'dir'); } catch { /* */ } }
 
   let tokens = 0;
   try {
-    // 3) implement (file edits only — git handled here; must include unit tests).
-    const agentPrompt = `You are a senior engineer implementing a task in the Shiptify repository "${repo}". You are INSIDE the repo working tree. Make focused, production-quality changes that match the existing code style and conventions. Edit files directly. DO NOT run git (no commit/branch/push) — version control is handled by the system. Do not touch unrelated files and never commit secrets.
+    const multi = repos.length > 1 ? `\nNOTE: this feature spans multiple repositories (${repos.join(', ')}). You are in "${repo}" — implement ONLY the part of the plan that belongs to THIS repository; the other repos are handled in their own runs. If nothing in the plan concerns "${repo}", make no changes.` : '';
+    const agentPrompt = `You are a senior engineer implementing a task in the Shiptify repository "${repo}". You are INSIDE the repo working tree. Make focused, production-quality changes that match the existing code style and conventions. Edit files directly. DO NOT run git (no commit/branch/push) — version control is handled by the system. Do not touch unrelated files and never commit secrets.${multi}
 
-${continuing ? `This is a FOLLOW-UP / FIX on the existing branch. Apply ONLY this:\n${followupInstruction}\n` : 'Implement the task per the approved plan below.'}
+${continuing ? `This is a FOLLOW-UP / FIX on the existing branch. Apply ONLY this (and only if it concerns "${repo}"):\n${followupInstruction}\n` : 'Implement the task per the approved plan below.'}
 
 MANDATORY: add or extend UNIT TESTS for the new/changed logic, using the repository's existing test framework and file conventions. Code without tests is incomplete. If the repo has lint/typecheck/test scripts, run them and fix what you broke.
 
@@ -326,63 +318,83 @@ ${run.messages.map((m) => `${m.role === 'user' ? 'DEV' : 'ASSISTANT'}: ${m.conte
 ${run.visionText ? `\n=== ATTACHED SCREENSHOTS (vision) ===\n${run.visionText.slice(0, 2000)}` : ''}
 
 Finish with a concise Markdown summary of WHAT changed and WHY, listing changed files and the tests you added. Under 250 words.`;
-    step('implement', `🛠 Claude реализует + пишет тесты (${config.answerModel})…`);
-    const agent = await runClaudeAgent(workdir, agentPrompt, { model: config.answerModel, onTool: (t) => onStage(`   ↳ ${t}`), timeoutMs: 25 * 60 * 1000 });
+    step('implement', `[${repo}] 🛠 Claude реализует + пишет тесты…`);
+    const agent = await runClaudeAgent(workdir, agentPrompt, { model: config.answerModel, onTool: (t) => onStage(`   ↳ [${repo}] ${t}`), timeoutMs: 25 * 60 * 1000 });
     tokens += agent.totalTokens || 0;
     let summary = (agent.text || '').trim() || '(агент не вернул сводку)';
 
     if (!(await sh('git status --porcelain', workdir)).out.trim()) {
-      step('done', '⚠️ агент не внёс изменений в файлы');
-      return { branch: continuing ? branch : '', mrUrl: null, summary, tokens, log, note: 'no-changes' };
+      step('done', `[${repo}] ⚠️ изменений нет — пропускаю`);
+      return { repo, branch: continuing ? branch : '', mrUrl: null, summary, tokens, note: 'no-changes' };
     }
 
-    // 4) self-review (mandatory) — one auto-fix loop if blocking issues.
-    let review = await selfReview(workdir, run, onStage);
-    tokens += review.tokens;
-    step('review', review.approved ? '✅ само-ревью: одобрено' : '🔁 само-ревью: есть замечания — исправляю');
+    let review = await selfReview(workdir, run, onStage); tokens += review.tokens;
+    step('review', `[${repo}] ${review.approved ? '✅ ревью одобрено' : '🔁 ревью: замечания — исправляю'}`);
     if (!review.approved) {
-      const fixPrompt = `You are fixing your own implementation in repo "${repo}" before commit. Address ONLY these blocking review issues; keep changes minimal and update/extend unit tests accordingly. Do NOT run git.\n\n=== REVIEW ISSUES ===\n${review.text}\n\n=== TASK ===\n${run.title}\n${(run.plan || '').slice(0, 2000)}`;
-      const fix = await runClaudeAgent(workdir, fixPrompt, { model: config.answerModel, onTool: (t) => onStage(`   ↳ ${t}`), timeoutMs: 15 * 60 * 1000 });
-      tokens += fix.totalTokens || 0;
-      summary += `\n\n**Доработка после ревью:** ${(fix.text || '').slice(0, 600)}`;
+      const fixPrompt = `You are fixing your own implementation in repo "${repo}" before commit. Address ONLY these blocking review issues; keep changes minimal and update/extend unit tests. Do NOT run git.\n\n=== REVIEW ISSUES ===\n${review.text}\n\n=== TASK ===\n${run.title}\n${(run.plan || '').slice(0, 2000)}`;
+      const fix = await runClaudeAgent(workdir, fixPrompt, { model: config.answerModel, onTool: (t) => onStage(`   ↳ [${repo}] ${t}`), timeoutMs: 15 * 60 * 1000 });
+      tokens += fix.totalTokens || 0; summary += `\n\n**Доработка после ревью:** ${(fix.text || '').slice(0, 600)}`;
       review = await selfReview(workdir, run, onStage); tokens += review.tokens;
-      step('review', review.approved ? '✅ повторное ревью: одобрено' : '⚠️ повторное ревью: остались замечания (см. MR)');
+      step('review', `[${repo}] ${review.approved ? '✅ повторное ревью одобрено' : '⚠️ остались замечания (см. MR)'}`);
     }
 
-    // 5) build gate (mandatory).
-    const gate = await buildGate(workdir, onStage);
-    step('gate', gate.ran ? (gate.ok ? '✅ build-gate пройден' : '❌ build-gate провален — MR будет помечен') : '⚠️ build-gate: ограниченная проверка (нет зависимостей)');
+    const gate = await buildGate(workdir, (m) => onStage(`[${repo}] ${m}`));
+    step('gate', `[${repo}] ${gate.ran ? (gate.ok ? '✅ build-gate пройден' : '❌ build-gate провален') : '⚠️ build-gate ограничен'}`);
 
-    // 6) commit
     await sh('git add -A', workdir, 60000);
     const buildFailed = gate.ran && !gate.ok;
     const commitMsg = `${run.keys[0] ? `[${run.keys[0]}] ` : ''}${run.title}${continuing ? ' (follow-up)' : ''}`.replace(/"/g, "'");
-    step('commit', `📝 commit: ${commitMsg}`);
+    step('commit', `[${repo}] 📝 commit`);
     const commit = await sh(`git -c user.name="Searchify" -c user.email="searchify@shiptify.com" commit -m "${commitMsg}"`, workdir, 60000);
-    if (!commit.ok && !/nothing to commit/.test(commit.out + commit.err)) throw new Error(`commit failed: ${(commit.err || commit.out).slice(0, 200)}`);
+    if (!commit.ok && !/nothing to commit/.test(commit.out + commit.err)) throw new Error(`[${repo}] commit failed: ${(commit.err || commit.out).slice(0, 200)}`);
 
-    // 7) push (write token from /run/gl_token or env)
     const token = gitlabWriteToken();
-    if (!token || !gl) { step('push', '🛑 Пуш пропущен: нет токена записи / origin не GitLab. Закоммичено локально.'); return { branch: continuing ? branch : '', mrUrl: null, summary, tokens, log, note: 'no-write-token', reviewText: review.text, gateOk: gate.ok }; }
+    if (!token || !gl) { step('push', `[${repo}] 🛑 push пропущен (нет токена/не GitLab)`); return { repo, branch: continuing ? branch : '', mrUrl: null, summary, tokens, note: 'no-write-token', reviewText: review.text, gateOk: gate.ok }; }
     const pushUrl = `https://oauth2:${token}@${gl.host}/${gl.projectPath}.git`;
-    step('push', `⬆️ push ${branch}…`);
+    step('push', `[${repo}] ⬆️ push ${branch}…`);
     const push = await sh(`git push "${pushUrl}" "HEAD:${branch}" --force-with-lease`, workdir, 180000);
-    if (!push.ok) { const masked = (push.err || '').replace(token, '***'); throw new Error(/403|denied|insufficient|write_repository/i.test(masked) ? `Push отклонён — токен без write_repository: ${masked.slice(0, 140)}` : `push failed: ${masked.slice(0, 200)}`); }
+    if (!push.ok) { const masked = (push.err || '').replace(token, '***'); throw new Error(/403|denied|insufficient|write_repository/i.test(masked) ? `[${repo}] push отклонён — токен без write_repository: ${masked.slice(0, 120)}` : `[${repo}] push failed: ${masked.slice(0, 180)}`); }
 
-    // 8) open / update the Draft MR (carries review verdict + build-gate result).
-    step('mr', '🔀 открываю merge request (Draft)…');
-    const extra = `\n\n**Self-review:** ${review.text}\n\n**Build gate:** ${gate.ran ? (gate.ok ? '✅ passed' : '❌ FAILED') : '⚠️ limited (deps unavailable)'}\n\n\`\`\`\n${gate.summary.slice(0, 1200)}\n\`\`\``;
+    step('mr', `[${repo}] 🔀 merge request (Draft)…`);
+    const sib = repos.filter((r) => r !== repo);
+    const extra = `\n\n**Self-review:** ${review.text}\n\n**Build gate:** ${gate.ran ? (gate.ok ? '✅ passed' : '❌ FAILED') : '⚠️ limited (deps unavailable)'}\n\n\`\`\`\n${gate.summary.slice(0, 1100)}\n\`\`\`${sib.length ? `\n\n_Часть мульти-репо изменения; связанные репозитории: ${sib.join(', ')} (ветка \`${branch}\`)._` : ''}`;
     const mrUrl = await openMergeRequest(gl, token, branch, base, run, summary, extra, buildFailed);
-    step('mr', mrUrl ? `✅ MR: ${mrUrl}` : '⚠️ MR не создан (см. лог)');
-    return { branch, mrUrl, summary, tokens, log, note: buildFailed ? 'build-failed' : undefined, reviewText: review.text, gateOk: gate.ok };
+    step('mr', mrUrl ? `[${repo}] ✅ MR: ${mrUrl}` : `[${repo}] ⚠️ MR не создан`);
+    return { repo, branch, mrUrl, summary, tokens, note: buildFailed ? 'build-failed' : undefined, reviewText: review.text, gateOk: gate.ok };
   } finally {
-    // 9) always free the worktree (disk-safe). The branch lives on the remote; a
-    // follow-up recreates a fresh worktree from origin/<branch>.
-    step('cleanup', '🧹 убираю рабочую копию (worktree)');
     await sh(`git worktree remove --force "${workdir}"`, repoPath, 60000);
     await sh(`rm -rf "${workdir}"`, devWorkRoot(), 60000);
     await sh('git worktree prune', repoPath, 30000);
   }
+}
+
+// Run the whole task across one or more repositories.
+async function runPipeline(
+  run: { id: string; keys: string[]; title: string; repos: string[]; plan: string; messages: ChatMsg[]; branch?: string | null; visionText?: string | null },
+  followupInstruction: string,
+  onStage: (m: string) => void,
+): Promise<{ branch: string; results: RepoResult[]; tokens: number; log: StepLog[] }> {
+  const log: StepLog[] = [];
+  const step = (s: string, m: string) => { log.push({ step: s, msg: m, at: new Date().toISOString() }); onStage(m); };
+  const repos = (run.repos || []).filter(Boolean);
+  if (!repos.length) throw new Error('Не выбран репозиторий');
+  fs.mkdirSync(devWorkRoot(), { recursive: true });
+
+  await cleanupWorktrees(onStage);
+  const freeMB = await dfFreeMB(devWorkRoot());
+  step('disk', `💽 свободно ~${(freeMB / 1024).toFixed(1)} ГБ · репозиториев: ${repos.length}`);
+  if (freeMB < MIN_FREE_MB) throw new Error(`Мало места на диске (${(freeMB / 1024).toFixed(1)} ГБ < ${(MIN_FREE_MB / 1024).toFixed(1)} ГБ). Запуск отменён, чтобы не забить диск.`);
+
+  const continuing = !!run.branch;
+  const branch = run.branch || `searchify/${safeName(run.keys[0] || run.title).slice(0, 40)}-${run.id.slice(-6)}`;
+  const results: RepoResult[] = [];
+  let tokens = 0;
+  for (const repo of repos) {
+    step('repo', `\n══════ ${repo} ══════`);
+    const r = await runOneRepo(run, repo, repos, branch, continuing, freeMB, followupInstruction, step, onStage);
+    results.push(r); tokens += r.tokens;
+  }
+  return { branch, results, tokens, log };
 }
 
 async function glProject(gl: { apiBase: string; projectPath: string }) {
@@ -463,7 +475,7 @@ export async function registerDevelopApi(app: FastifyInstance) {
   const chatSchema = z.object({
     messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).min(1).max(40),
     keys: z.array(z.string().max(30)).max(10).optional(),
-    repo: z.string().max(60).optional(),
+    repos: z.array(z.string().max(60)).max(10).optional(),
     images: z.array(z.string().min(1).max(300)).max(20).optional(),
     files: z.array(z.string().min(1).max(300)).max(20).optional(),
     fileNames: z.array(z.string().max(200)).max(20).optional(),
@@ -474,7 +486,8 @@ export async function registerDevelopApi(app: FastifyInstance) {
     const user = await requireAuth(req, reply); if (!user) return;
     const parsed = chatSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const { messages, repo = '', images = [], fileNames = [], lang = 'ru' } = parsed.data;
+    const { messages, images = [], fileNames = [], lang = 'ru' } = parsed.data;
+    const reqRepos = (parsed.data.repos || []).filter(Boolean);
     const allText = messages.map((m) => m.content).join(' ');
     const keys = (parsed.data.keys && parsed.data.keys.length ? parsed.data.keys : (allText.match(KEY_RE) || [])).map((k) => k.toUpperCase());
     const uniqKeys = Array.from(new Set(keys)).slice(0, 10);
@@ -498,7 +511,7 @@ export async function registerDevelopApi(app: FastifyInstance) {
         send('stage', { msg: '🔎 поиск связанного кода…' });
         try { const refs = await gatherCodeForKey(uniqKeys[0], (m) => send('stage', { msg: m })); codeCtx = refs.map((b: any) => `repo ${b.repo} · ${b.branch}\n${b.stat || ''}`).join('\n\n').slice(0, 4000); } catch { /* skip */ }
       }
-      const out = await runDevChat(messages, issues, codeCtx, repo, visionText, fileNames, lang, (m) => send('stage', { msg: m }), (t) => send('delta', { text: t }));
+      const out = await runDevChat(messages, issues, codeCtx, reqRepos, repoList(), visionText, fileNames, lang, (m) => send('stage', { msg: m }), (t) => send('delta', { text: t }));
       await logFeatureUsage({ userId: user.id, userLabel: user.name, feature: 'develop', action: 'plan', ref: `${uniqKeys.join(',')} — ${out.title}`, model: out.model, promptTokens: out.promptTokens, completionTokens: out.completionTokens, totalTokens: out.tokens });
       send('result', { ...out, keys: uniqKeys, visionText });
       send('done', {});
@@ -511,7 +524,7 @@ export async function registerDevelopApi(app: FastifyInstance) {
     id: z.string().max(40).optional(),
     title: z.string().max(255).optional(),
     keys: z.array(z.string().max(30)).max(10).optional(),
-    repo: z.string().max(60).optional(),
+    repos: z.array(z.string().max(60)).max(10).optional(),
     plan: z.string().max(40000).optional(),
     messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).max(80),
     images: z.array(z.string().max(300)).max(20).optional(),
@@ -524,7 +537,8 @@ export async function registerDevelopApi(app: FastifyInstance) {
     const parsed = saveSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const d = parsed.data;
-    const data: any = { title: (d.title || '').slice(0, 255), keys: d.keys ?? [], repo: d.repo ?? null, plan: d.plan ?? null, messages: d.messages, images: d.images ?? [], files: d.files ?? [], visionText: d.visionText ?? null, lang: d.lang ?? null };
+    const repos = (d.repos || []).filter(Boolean);
+    const data: any = { title: (d.title || '').slice(0, 255), keys: d.keys ?? [], repos, repo: repos[0] ?? null, plan: d.plan ?? null, messages: d.messages, images: d.images ?? [], files: d.files ?? [], visionText: d.visionText ?? null, lang: d.lang ?? null };
     try {
       if (d.id) {
         const ex = await prisma.devRun.findUnique({ where: { id: d.id } });
@@ -537,8 +551,8 @@ export async function registerDevelopApi(app: FastifyInstance) {
 
   app.get('/api/develop/history', async (req, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
-    const rows = await prisma.devRun.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 100, select: { id: true, title: true, keys: true, repo: true, status: true, mrUrl: true, branch: true, rating: true, updatedAt: true, messages: true } });
-    return reply.send({ items: rows.map((r) => ({ id: r.id, title: r.title, keys: r.keys, repo: r.repo, status: r.status, mrUrl: r.mrUrl, branch: r.branch, rating: r.rating, updatedAt: r.updatedAt, turns: Array.isArray(r.messages) ? (r.messages as any[]).length : 0 })) });
+    const rows = await prisma.devRun.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 100, select: { id: true, title: true, keys: true, repo: true, repos: true, status: true, mrUrl: true, mrUrls: true, branch: true, rating: true, updatedAt: true, messages: true } });
+    return reply.send({ items: rows.map((r) => ({ id: r.id, title: r.title, keys: r.keys, repos: (r.repos && r.repos.length ? r.repos : (r.repo ? [r.repo] : [])), status: r.status, mrUrl: r.mrUrl, mrUrls: r.mrUrls, branch: r.branch, rating: r.rating, updatedAt: r.updatedAt, turns: Array.isArray(r.messages) ? (r.messages as any[]).length : 0 })) });
   });
   app.get('/api/develop/run/:id', async (req: any, reply) => {
     const user = await requireAuth(req, reply); if (!user) return;
@@ -585,22 +599,28 @@ export async function registerDevelopApi(app: FastifyInstance) {
     const stage = (m: string) => send('stage', { msg: m });
 
     try {
-      if (!row.repo) throw new Error('Не указан репозиторий для реализации');
-      if (!repoList().includes(row.repo)) throw new Error(`Репозиторий "${row.repo}" недоступен / не в allowlist (DEVELOP_REPOS)`);
+      const repos = (row.repos && row.repos.length ? row.repos : (row.repo ? [row.repo] : [])).filter(Boolean);
+      if (!repos.length) throw new Error('Не выбран репозиторий для реализации');
+      const bad = repos.filter((r) => !repoList().includes(r));
+      if (bad.length) throw new Error(`Репозитории недоступны / не в allowlist (DEVELOP_REPOS): ${bad.join(', ')}`);
       await prisma.devRun.update({ where: { id: row.id }, data: { status: 'RUNNING' } });
       const res = await runPipeline(
-        { id: row.id, keys: row.keys || [], title: row.title, repo: row.repo, plan: row.plan || '', messages: (row.messages as any[]) || [], branch: row.branch, visionText: row.visionText },
+        { id: row.id, keys: row.keys || [], title: row.title, repos, plan: row.plan || '', messages: (row.messages as any[]) || [], branch: row.branch, visionText: row.visionText },
         parsed.data.instruction || '',
         stage,
       );
-      const status = res.mrUrl ? 'MR_OPEN' : (res.note === 'no-write-token' ? 'PUSHED' : (res.note === 'no-changes' ? 'PLANNED' : 'PUSHED'));
+      const mrList = res.results.filter((r) => r.mrUrl).map((r) => ({ repo: r.repo, branch: r.branch, mrUrl: r.mrUrl, note: r.note || null }));
+      const anyMr = mrList.length > 0;
+      const anyChange = res.results.some((r) => r.note !== 'no-changes');
+      const status = anyMr ? 'MR_OPEN' : (!anyChange ? 'PLANNED' : 'PUSHED');
+      const combinedSummary = res.results.map((r) => `### ${r.repo}${r.mrUrl ? ` — [MR](${r.mrUrl})` : (r.note === 'no-changes' ? ' — нет изменений' : '')}\n${r.summary}`).join('\n\n');
       const newMessages = [...((row.messages as any[]) || [])];
       if (parsed.data.instruction) newMessages.push({ role: 'user', content: parsed.data.instruction });
-      newMessages.push({ role: 'assistant', content: `${res.summary}${res.mrUrl ? `\n\n**MR:** ${res.mrUrl}` : ''}` });
-      await prisma.devRun.update({ where: { id: row.id }, data: { status, branch: res.branch || row.branch, workdir: null, mrUrl: res.mrUrl ?? row.mrUrl, messages: newMessages, log: res.log as any } });
+      newMessages.push({ role: 'assistant', content: `${combinedSummary}${mrList.length ? `\n\n**MR:** ${mrList.map((m) => m.mrUrl).join(' · ')}` : ''}` });
+      await prisma.devRun.update({ where: { id: row.id }, data: { status, branch: res.branch || row.branch, workdir: null, mrUrl: mrList[0]?.mrUrl ?? row.mrUrl, mrUrls: mrList as any, messages: newMessages, log: res.log as any } });
       await logFeatureUsage({ userId: user.id, userLabel: user.name, feature: 'develop', action: parsed.data.instruction ? 'fix' : 'implement', ref: `${(row.keys || []).join(',')} — ${row.title}`, model: config.answerModel, totalTokens: res.tokens, status: 'ok' });
-      if (res.mrUrl) { try { await postMrToJira(row.keys || [], res.mrUrl, row.title, `${user.name}`); } catch { /* skip */ } }
-      send('result', { branch: res.branch, mrUrl: res.mrUrl, summary: res.summary, status, note: res.note || null, reviewText: res.reviewText || null, gateOk: res.gateOk ?? null, log: res.log });
+      if (anyMr) { try { const links = mrList.map((m) => `${m.repo}: ${m.mrUrl}`).join('\n'); await postMrToJira(row.keys || [], links, row.title, `${user.name}`); } catch { /* skip */ } }
+      send('result', { branch: res.branch, mrUrls: mrList, summary: combinedSummary, status, results: res.results.map((r) => ({ repo: r.repo, mrUrl: r.mrUrl, note: r.note || null, gateOk: r.gateOk ?? null, reviewText: r.reviewText || null })), log: res.log });
       send('done', {});
     } catch (e: any) {
       try { await prisma.devRun.update({ where: { id: row.id }, data: { status: 'ERROR' } }); } catch { /* noop */ }
