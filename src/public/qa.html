@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Searchify — QA Platform (TMS/RMS)</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="stylesheet" href="/theme.css" />
+<script>(function(){try{var t=localStorage.getItem('searchify_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',Roboto,Arial,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+  a{color:var(--blue);text-decoration:none}
+  button,input,select,textarea{font-family:inherit}
+  .qwrap{display:flex;min-height:calc(100vh - 56px)}
+  .side{width:210px;flex:0 0 210px;border-right:1px solid var(--line);background:var(--panel);padding:12px 8px}
+  .side a{display:block;padding:8px 12px;border-radius:8px;color:var(--muted);font-size:14px;cursor:pointer}
+  .side a:hover{background:var(--bg-soft);color:var(--ink)}
+  .side a.active{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue-dark);font-weight:600}
+  .main{flex:1;padding:18px 22px;min-width:0}
+  .topbar{display:flex;gap:10px;align-items:center;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+  .topbar select,.topbar input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-size:13px}
+  h1{font-size:20px;margin:0 0 12px}
+  h2{font-size:16px;margin:18px 0 8px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .card .v{font-size:26px;font-weight:600}
+  .card .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:4px}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);background:var(--bg-soft)}
+  tr:hover td{background:var(--bg-soft)}
+  .gid{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--blue-dark)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;font-weight:600;background:var(--bg-soft);border:1px solid var(--line)}
+  .pill.crit{background:#fde8e8;color:#b42318;border-color:#f4b9b9}
+  .pill.ok{background:#e9f6ec;color:#1f9d57;border-color:#bfe6cb}
+  .pill.warn{background:#fff3e0;color:#92560a;border-color:#ffd9a8}
+  button.pri{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;cursor:pointer}
+  button.pri:hover{background:var(--blue-dark)}
+  button.ghost{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
+  button.ghost:hover{background:var(--bg-soft)}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .fld{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
+  input[type=text],textarea,select.f{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-size:13px}
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+  .modal-mask.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:780px;width:100%;padding:18px 20px;box-shadow:var(--shadow)}
+  .modal h3{margin:0 0 12px;font-size:16px}
+  .muted{color:var(--muted);font-size:13px}
+  .err{color:var(--red);font-size:13px;min-height:16px}
+  .steprow{display:flex;gap:8px;margin-bottom:6px}
+  .steprow input{flex:1}
+  .searchbox{position:relative}
+  .results{position:absolute;top:38px;left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);z-index:90;max-height:320px;overflow:auto;display:none}
+  .results.open{display:block}
+  .results a{display:block;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app-nav"></div>
+<script src="/nav.js"></script>
+
+<div class="topbar">
+  <b>🧬 QA Platform</b>
+  <select id="projSel" title="Project"></select>
+  <button class="ghost" id="newProjBtn">+ Project</button>
+  <div class="searchbox" style="flex:1;max-width:420px">
+    <input type="text" id="globalSearch" placeholder="Global search: REQ-1, TC-12, AT-3, или текст…" autocomplete="off" style="width:100%" />
+    <div class="results" id="searchResults"></div>
+  </div>
+</div>
+
+<div class="qwrap">
+  <div class="side" id="side">
+    <a data-view="dashboard">📊 Dashboard</a>
+    <a data-view="requirements">📋 Requirements</a>
+    <a data-view="testcases">🧪 Test Cases</a>
+    <a data-view="checklists">✅ Checklists</a>
+    <a data-view="sharedsteps">🔁 Shared Steps</a>
+    <a data-view="automation">🤖 Automation</a>
+    <a data-view="testplans">🗂 Test Plans</a>
+    <a data-view="testruns">▶️ Test Runs</a>
+    <a data-view="traceability">🕸 Traceability</a>
+  </div>
+  <div class="main" id="main"><p class="muted">Загрузка…</p></div>
+</div>
+
+<div class="modal-mask" id="modalMask"><div class="modal" id="modal"></div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let PID=localStorage.getItem('qa_pid')||'';
+let projects=[];
+
+async function api(path,opts){
+  const r=await fetch('/api/qa'+path,Object.assign({headers:{'content-type':'application/json'}},opts||{}));
+  if(r.status===401){location.href='/login';throw new Error('auth');}
+  const t=await r.text(); let j=null; try{j=t?JSON.parse(t):null;}catch(_){}
+  if(!r.ok) throw new Error((j&&j.error&&(typeof j.error==='string'?j.error:JSON.stringify(j.error)))||t||('HTTP '+r.status));
+  return j;
+}
+function openModal(html){ $('modal').innerHTML=html; $('modalMask').classList.add('open'); }
+function closeModal(){ $('modalMask').classList.remove('open'); }
+$('modalMask').addEventListener('click',e=>{ if(e.target===$('modalMask')) closeModal(); });
+
+async function boot(){
+  try{ const d=await api('/projects'); projects=d.items||[]; }catch(_){ projects=[]; }
+  if(!projects.length){ $('main').innerHTML='<h1>QA Platform</h1><p class="muted">Нет проектов. Создайте первый проект.</p>'; }
+  if(!PID && projects[0]) PID=projects[0].id;
+  renderProjSel();
+  route();
+}
+function renderProjSel(){
+  $('projSel').innerHTML=projects.map(p=>`<option value="${esc(p.id)}"${p.id===PID?' selected':''}>${esc(p.globalId)} · ${esc(p.name)}</option>`).join('')||'<option value="">— нет —</option>';
+}
+$('projSel').addEventListener('change',e=>{ PID=e.target.value; localStorage.setItem('qa_pid',PID); route(); });
+$('newProjBtn').addEventListener('click',()=>{
+  openModal(`<h3>Новый проект</h3><label class="fld">Название</label><input type="text" id="pName"><label class="fld">Ключ (префикс)</label><input type="text" id="pKey" placeholder="APP"><div class="err" id="pErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="pSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  $('pSave').onclick=async()=>{ try{ const p=await api('/projects',{method:'POST',body:JSON.stringify({name:$('pName').value,key:$('pKey').value})}); projects.unshift(p); PID=p.id; localStorage.setItem('qa_pid',PID); renderProjSel(); closeModal(); route(); }catch(e){ $('pErr').textContent=e.message; } };
+});
+
+// ---- sidebar routing ----
+const views={};
+$('side').querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{ location.hash='#/'+a.getAttribute('view'||'data-view'); }));
+$('side').querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{ location.hash='#/'+a.getAttribute('data-view'); }));
+window.addEventListener('hashchange',route);
+function curView(){ return (location.hash||'#/dashboard').replace('#/',''); }
+function route(){
+  const v=curView();
+  $('side').querySelectorAll('a').forEach(a=>a.classList.toggle('active',a.getAttribute('data-view')===v));
+  if(!PID){ $('main').innerHTML='<p class="muted">Выберите или создайте проект.</p>'; return; }
+  (views[v]||views.dashboard)();
+}
+
+// ---- helpers ----
+function pri(p){ return `<span class="pill${p==='Critical'?' crit':''}">${esc(p||'')}</span>`; }
+function pct(n){ return `<span class="pill${n>=100?' ok':(n>0?' warn':'')}">${n||0}%</span>`; }
+async function loadList(path){ try{ return (await api(path)).items||[]; }catch(e){ $('main').innerHTML='<p class="err">'+esc(e.message)+'</p>'; return []; } }
+
+// ---- Dashboard ----
+views.dashboard=async()=>{
+  $('main').innerHTML='<h1>📊 Dashboard</h1><p class="muted"><span class="spin"></span> загрузка…</p>';
+  try{
+    const s=await api(`/projects/${PID}/dashboard/summary`);
+    const ex=await api(`/projects/${PID}/dashboard/execution`);
+    const card=(l,v)=>`<div class="card"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+    $('main').innerHTML=`<h1>📊 Dashboard</h1>
+    <h2>Requirements</h2><div class="cards">
+      ${card('Всего',s.requirementsTotal)}${card('Реализовано',s.requirementsImplemented)}${card('Частично',s.requirementsPartiallyImplemented)}
+      ${card('Покрыто тестами',s.requirementsCovered)}${card('Не покрыто',s.requirementsNotCovered)}${card('Critical без покрытия',s.criticalUncoveredRequirements)}</div>
+    <h2>Tests & Automation</h2><div class="cards">
+      ${card('Test cases',s.testCasesTotal)}${card('Автоматизировано',s.testCasesAutomated)}${card('Частично авто',s.testCasesPartiallyAutomated)}
+      ${card('Avg automation',(s.averageAutomationCoverage||0)+'%')}${card('Automated tests',s.automatedTestsTotal)}</div>
+    <h2>Execution</h2><div class="cards">
+      ${card('Passed',ex.passed)}${card('Failed',ex.failed)}${card('Blocked',ex.blocked)}${card('Skipped',ex.skipped)}${card('Hanging',ex.hanging)}</div>`;
+  }catch(e){ $('main').innerHTML='<h1>📊 Dashboard</h1><p class="err">'+esc(e.message)+'</p>'; }
+};
+
+// ---- Requirements ----
+views.requirements=async()=>{
+  $('main').innerHTML='<h1>📋 Requirements</h1><div class="bar"><button class="pri" id="addReq">+ Requirement</button></div><div id="reqList"><span class="spin"></span></div>';
+  $('addReq').onclick=reqForm;
+  const items=await loadList(`/projects/${PID}/requirements?pageSize=500`);
+  $('reqList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Impl%</th><th>Type</th></tr></thead><tbody>
+    ${items.map(r=>`<tr style="cursor:pointer" onclick="reqDetail('${r.id}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td><span class="pill">${esc(r.status)}</span></td><td>${pct(r.implementationPercent)}</td><td class="muted">${esc(r.type)}</td></tr>`).join('')||'<tr><td colspan=6 class="muted">пусто</td></tr>'}
+  </tbody></table>`;
+};
+function reqForm(){
+  openModal(`<h3>Новое требование</h3><label class="fld">Title</label><input type="text" id="rT">
+  <label class="fld">Description</label><textarea id="rD" rows="3"></textarea>
+  <div class="bar"><div><label class="fld">Priority</label><select class="f" id="rP"><option>Critical</option><option>High</option><option selected>Medium</option><option>Low</option></select></div>
+  <div><label class="fld">Type</label><select class="f" id="rTy"><option>Functional</option><option>Business</option><option>NonFunctional</option><option>UI</option><option>API</option><option>Integration</option><option>Security</option><option>Performance</option><option>Data</option><option>Permission</option><option>Reporting</option><option>Other</option></select></div>
+  <div><label class="fld">Status</label><select class="f" id="rS"><option>Draft</option><option>Approved</option><option>Implemented</option><option>PartiallyImplemented</option><option>NeedsUpdate</option><option>Deprecated</option><option>Rejected</option></select></div></div>
+  <div class="err" id="rErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="rSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  $('rSave').onclick=async()=>{ try{ await api(`/projects/${PID}/requirements`,{method:'POST',body:JSON.stringify({title:$('rT').value,description:$('rD').value,priority:$('rP').value,type:$('rTy').value,status:$('rS').value})}); closeModal(); views.requirements(); }catch(e){ $('rErr').textContent=e.message; } };
+}
+window.reqDetail=async(id)=>{
+  try{ const r=await api(`/requirements/${id}`); const c=r.coverage||{};
+    openModal(`<h3>${esc(r.globalId)} · ${esc(r.title)}</h3>
+    <p class="muted">${esc(r.description||'')}</p>
+    <div class="bar">${pri(r.priority)}<span class="pill">${esc(r.status)}</span>${pct(r.implementationPercent)}<span class="pill">${esc(r.type)}</span></div>
+    <h2>Coverage</h2><div class="cards"><div class="card"><div class="v">${c.linkedTestCasesCount||0}</div><div class="l">test cases</div></div><div class="card"><div class="v">${c.automationCoveragePercent||0}%</div><div class="l">automation</div></div><div class="card"><div class="v">${esc(c.lastValidationStatus||'—')}</div><div class="l">last validation</div></div></div>
+    <h2>Sources (${(r.sources||[]).length})</h2><div class="muted">${(r.sources||[]).map(s=>`${esc(s.type)}: ${esc(s.title||s.url||s.externalId||'')}`).join('<br>')||'—'}</div>
+    <h2>Acceptance criteria</h2><div class="muted">${(r.acceptanceCriteria||[]).map(a=>'• '+esc(a.text)).join('<br>')||'—'}</div>
+    <h2>Implementation</h2><div class="bar"><select class="f" id="iS" style="width:auto"><option>NotStarted</option><option>PartiallyImplemented</option><option>Implemented</option><option>Deprecated</option><option>Unknown</option></select>
+    <input type="text" id="iP" value="${r.implementationPercent||0}" style="width:80px"><button class="pri" id="iSave">Сохранить</button></div>
+    <div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
+    $('iS').value=r.implementationStatus||'Unknown';
+    $('iSave').onclick=async()=>{ await api(`/requirements/${id}`,{method:'PATCH',body:JSON.stringify({implementationStatus:$('iS').value,implementationPercent:parseInt($('iP').value,10)||0})}); closeModal(); views.requirements(); };
+  }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
+};
+
+// ---- Test Cases ----
+views.testcases=async()=>{
+  $('main').innerHTML='<h1>🧪 Test Cases</h1><div class="bar"><button class="pri" id="addTc">+ Test Case</button></div><div id="tcList"><span class="spin"></span></div>';
+  $('addTc').onclick=tcForm;
+  const items=await loadList(`/projects/${PID}/test-cases?pageSize=500`);
+  $('tcList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Type</th><th>Automation</th></tr></thead><tbody>
+    ${items.map(t=>`<tr style="cursor:pointer" onclick="tcDetail('${t.id}')"><td class="gid">${esc(t.globalId)}</td><td>${esc(t.title)}</td><td>${pri(t.priority)}</td><td class="muted">${esc(t.type)}</td><td>${pct(t.automationCoveragePercent)} <span class="muted">${esc(t.automationStatus)}</span></td></tr>`).join('')||'<tr><td colspan=5 class="muted">пусто</td></tr>'}
+  </tbody></table>`;
+};
+let tcSteps=[];
+function tcForm(){
+  tcSteps=[{action:'',expectedResult:''}];
+  openModal(`<h3>Новый test case</h3><label class="fld">Title</label><input type="text" id="tT">
+  <div class="bar"><div><label class="fld">Priority</label><select class="f" id="tP"><option>Critical</option><option>High</option><option selected>Medium</option><option>Low</option></select></div>
+  <div><label class="fld">Type</label><select class="f" id="tTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Integration</option><option>UI</option><option>API</option><option>Security</option><option>Performance</option><option>Other</option></select></div></div>
+  <label class="fld">Steps</label><div id="stepsBox"></div><button class="ghost" id="addStep">+ шаг</button>
+  <div class="err" id="tErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  renderSteps(); $('addStep').onclick=()=>{ tcSteps.push({action:'',expectedResult:''}); renderSteps(); };
+  $('tSave').onclick=async()=>{ try{ collectSteps(); await api(`/projects/${PID}/test-cases`,{method:'POST',body:JSON.stringify({title:$('tT').value,priority:$('tP').value,type:$('tTy').value,steps:tcSteps.filter(s=>s.action)})}); closeModal(); views.testcases(); }catch(e){ $('tErr').textContent=e.message; } };
+}
+function renderSteps(){ $('stepsBox').innerHTML=tcSteps.map((s,i)=>`<div class="steprow"><input type="text" placeholder="Action" value="${esc(s.action)}" data-a="${i}"><input type="text" placeholder="Expected" value="${esc(s.expectedResult)}" data-e="${i}"></div>`).join(''); }
+function collectSteps(){ document.querySelectorAll('[data-a]').forEach(el=>tcSteps[+el.dataset.a].action=el.value); document.querySelectorAll('[data-e]').forEach(el=>tcSteps[+el.dataset.e].expectedResult=el.value); }
+window.tcDetail=async(id)=>{
+  try{ const t=await api(`/test-cases/${id}`); const c=t.coverage||{};
+    openModal(`<h3>${esc(t.globalId)} · ${esc(t.title)}</h3>
+    <div class="bar">${pri(t.priority)}<span class="pill">${esc(t.type)}</span>${pct(c.automationCoveragePercent)}<span class="pill">${esc(c.coveragePrecision)}</span></div>
+    <h2>Steps (${(t.steps||[]).length})</h2><table><tbody>${(t.steps||[]).map((s,i)=>`<tr><td>${i+1}</td><td>${esc(s.action)}</td><td class="muted">${esc(s.expectedResult||'')}</td></tr>`).join('')||'<tr><td class="muted">нет</td></tr>'}</tbody></table>
+    <h2>Links</h2>
+    <div class="bar"><input type="text" id="lReq" placeholder="REQ-id (cuid) для линка requirement" style="flex:1"><button class="ghost" id="linkReq">Link Requirement</button></div>
+    <div class="bar"><input type="text" id="lAt" placeholder="AT-id (cuid) для линка automated test" style="flex:1"><button class="ghost" id="linkAt">Link Automated</button></div>
+    <div class="muted">linked requirements: ${(t.linkedRequirementIds||[]).length} · automated: ${(t.linkedAutomatedTestIds||[]).length}</div>
+    <div class="err" id="tdErr"></div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
+    $('linkReq').onclick=async()=>{ try{ await api(`/projects/${PID}/links`,{method:'POST',body:JSON.stringify({sourceType:'Requirement',sourceId:$('lReq').value.trim(),targetType:'TestCase',targetId:id,linkType:'covers'})}); tcDetail(id); }catch(e){ $('tdErr').textContent=e.message; } };
+    $('linkAt').onclick=async()=>{ try{ await api(`/projects/${PID}/links`,{method:'POST',body:JSON.stringify({sourceType:'AutomatedTest',sourceId:$('lAt').value.trim(),targetType:'TestCase',targetId:id,linkType:'covers',coverageType:'Full'})}); tcDetail(id); }catch(e){ $('tdErr').textContent=e.message; } };
+  }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
+};
+
+// ---- Checklists ----
+views.checklists=async()=>{
+  $('main').innerHTML='<h1>✅ Checklists</h1><div class="bar"><button class="pri" id="addCl">+ Checklist</button></div><div id="clList"><span class="spin"></span></div>';
+  $('addCl').onclick=clForm;
+  const items=await loadList(`/projects/${PID}/checklists`);
+  $('clList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Type</th><th></th></tr></thead><tbody>
+    ${items.map(c=>`<tr><td class="gid">${esc(c.globalId)}</td><td>${esc(c.title)}</td><td class="muted">${esc(c.type)}</td><td><button class="ghost" onclick="clExpand('${c.id}')">→ Test Cases</button></td></tr>`).join('')||'<tr><td colspan=4 class="muted">пусто</td></tr>'}
+  </tbody></table>`;
+};
+function clForm(){
+  openModal(`<h3>Новый чек-лист</h3><label class="fld">Title</label><input type="text" id="cT"><label class="fld">Type</label><select class="f" id="cTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Other</option></select><label class="fld">Items (по строке)</label><textarea id="cI" rows="6" placeholder="Открыть страницу логина&#10;Ввести валидные данные&#10;Нажать Login"></textarea><div class="err" id="cErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="cSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  $('cSave').onclick=async()=>{ try{ const items=$('cI').value.split('\n').map(s=>s.trim()).filter(Boolean); await api(`/projects/${PID}/checklists`,{method:'POST',body:JSON.stringify({title:$('cT').value,type:$('cTy').value,items})}); closeModal(); views.checklists(); }catch(e){ $('cErr').textContent=e.message; } };
+}
+window.clExpand=async(id)=>{ try{ const r=await api(`/checklists/${id}/expand-to-test-cases`,{method:'POST',body:'{}'}); alert('Создано test cases: '+r.total); }catch(e){ alert(e.message); } };
+
+// ---- Shared Steps ----
+views.sharedsteps=async()=>{
+  $('main').innerHTML='<h1>🔁 Shared Steps</h1><div class="bar"><button class="pri" id="addSs">+ Shared Step</button></div><div id="ssList"><span class="spin"></span></div>';
+  $('addSs').onclick=()=>{ openModal(`<h3>Новый shared step</h3><label class="fld">Title</label><input type="text" id="sT"><label class="fld">Steps (action | expected, по строке)</label><textarea id="sI" rows="5" placeholder="Login | пользователь авторизован"></textarea><div class="err" id="sErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="sSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+    $('sSave').onclick=async()=>{ try{ const steps=$('sI').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const[a,e]=l.split('|');return{action:(a||'').trim(),expectedResult:(e||'').trim()};}); await api(`/projects/${PID}/shared-steps`,{method:'POST',body:JSON.stringify({title:$('sT').value,steps})}); closeModal(); views.sharedsteps(); }catch(e){ $('sErr').textContent=e.message; } }; };
+  const items=await loadList(`/projects/${PID}/shared-steps`);
+  $('ssList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th></tr></thead><tbody>${items.map(s=>`<tr><td class="gid">${esc(s.globalId)}</td><td>${esc(s.title)}</td></tr>`).join('')||'<tr><td colspan=2 class="muted">пусто</td></tr>'}</tbody></table>`;
+};
+
+// ---- Automation ----
+views.automation=async()=>{
+  $('main').innerHTML='<h1>🤖 Automation Library</h1><div class="bar"><button class="pri" id="addAt">+ Automated Test</button></div><div id="atList"><span class="spin"></span></div>';
+  $('addAt').onclick=()=>{ openModal(`<h3>Automated test (upsert по externalId)</h3><label class="fld">Name</label><input type="text" id="aN"><label class="fld">External ID</label><input type="text" id="aE" placeholder="tests/auth/login.spec.ts::valid login"><label class="fld">Framework</label><select class="f" id="aF"><option>Playwright</option><option>TestCafe</option><option>Cypress</option><option>Selenium</option><option>Other</option></select><div class="err" id="aErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="aSave">Сохранить</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+    $('aSave').onclick=async()=>{ try{ await api(`/projects/${PID}/automated-tests/upsert`,{method:'POST',body:JSON.stringify({name:$('aN').value,externalId:$('aE').value,framework:$('aF').value})}); closeModal(); views.automation(); }catch(e){ $('aErr').textContent=e.message; } }; };
+  const items=await loadList(`/projects/${PID}/automated-tests?pageSize=500`);
+  $('atList').innerHTML=`<table><thead><tr><th>ID</th><th>Name</th><th>Framework</th><th>externalId</th><th>Last</th></tr></thead><tbody>${items.map(a=>`<tr><td class="gid">${esc(a.globalId)}</td><td>${esc(a.name)}</td><td class="muted">${esc(a.framework)}</td><td class="muted" style="font-size:11px">${esc(a.externalId||'')}</td><td>${esc(a.lastRunStatus||'—')}</td></tr>`).join('')||'<tr><td colspan=5 class="muted">пусто</td></tr>'}</tbody></table>`;
+};
+
+// ---- Test Plans ----
+views.testplans=async()=>{
+  $('main').innerHTML='<h1>🗂 Test Plans</h1><div class="bar"><button class="pri" id="addTp">+ Test Plan</button></div><div id="tpList"><span class="spin"></span></div>';
+  $('addTp').onclick=tpForm;
+  const items=await loadList(`/projects/${PID}/test-plans`);
+  $('tpList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Type</th><th></th></tr></thead><tbody>${items.map(t=>`<tr><td class="gid">${esc(t.globalId)}</td><td>${esc(t.title)}</td><td class="muted">${esc(t.type)}</td><td><button class="ghost" onclick="tpRun('${t.id}','${esc(t.title)}')">▶️ Run</button></td></tr>`).join('')||'<tr><td colspan=4 class="muted">пусто</td></tr>'}</tbody></table>`;
+};
+async function tpForm(){
+  const tcs=await loadList(`/projects/${PID}/test-cases?pageSize=1000`);
+  const cls=await loadList(`/projects/${PID}/checklists`);
+  openModal(`<h3>Новый test plan</h3><label class="fld">Title</label><input type="text" id="tpT"><label class="fld">Type</label><select class="f" id="tpTy"><option>Smoke</option><option>Regression</option><option>Release</option><option>Feature</option><option selected>Custom</option></select>
+  <div class="bar"><button class="ghost" id="selAll">Select All</button><span class="muted" id="selCnt">0</span></div>
+  <div style="max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px">
+    <b>Test Cases</b><br>${tcs.map(t=>`<label style="display:block;font-size:13px"><input type="checkbox" class="selItem" data-type="TestCase" value="${t.id}"> ${esc(t.globalId)} ${esc(t.title)}</label>`).join('')}
+    <b>Checklists</b><br>${cls.map(c=>`<label style="display:block;font-size:13px"><input type="checkbox" class="selItem" data-type="Checklist" value="${c.id}"> ${esc(c.globalId)} ${esc(c.title)}</label>`).join('')}
+  </div><div class="err" id="tpErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tpSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  const upd=()=>$('selCnt').textContent=document.querySelectorAll('.selItem:checked').length+' выбрано';
+  document.querySelectorAll('.selItem').forEach(c=>c.addEventListener('change',upd));
+  $('selAll').onclick=()=>{ document.querySelectorAll('.selItem').forEach(c=>c.checked=true); upd(); };
+  $('tpSave').onclick=async()=>{ try{ const items=[...document.querySelectorAll('.selItem:checked')].map(c=>({sourceType:c.dataset.type,sourceId:c.value})); await api(`/projects/${PID}/test-plans`,{method:'POST',body:JSON.stringify({title:$('tpT').value,type:$('tpTy').value,items})}); closeModal(); views.testplans(); }catch(e){ $('tpErr').textContent=e.message; } };
+}
+window.tpRun=async(id,title)=>{ try{ const run=await api(`/test-plans/${id}/runs`,{method:'POST',body:JSON.stringify({title:'Run: '+title})}); await api(`/test-runs/${run.id}/start`,{method:'POST',body:'{}'}); location.hash='#/testruns'; }catch(e){ alert(e.message); } };
+
+// ---- Test Runs ----
+views.testruns=async()=>{
+  $('main').innerHTML='<h1>▶️ Test Runs</h1><div id="trList"><span class="spin"></span></div>';
+  const items=await loadList(`/projects/${PID}/test-runs`);
+  $('trList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Source</th></tr></thead><tbody>${items.map(r=>`<tr style="cursor:pointer" onclick="trDetail('${r.id}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td><span class="pill">${esc(r.status)}</span></td><td class="muted">${esc(r.source)}</td></tr>`).join('')||'<tr><td colspan=4 class="muted">пусто</td></tr>'}</tbody></table>`;
+};
+window.trDetail=async(id)=>{
+  try{ const r=await api(`/test-runs/${id}`);
+    openModal(`<h3>${esc(r.globalId)} · ${esc(r.title)}</h3><div class="bar"><span class="pill">${esc(r.status)}</span><button class="ghost" onclick="trFinish('${id}')">Finish</button></div>
+    <table><thead><tr><th>Item</th><th>Status</th><th>Mark</th></tr></thead><tbody>${(r.items||[]).map(it=>`<tr><td>${esc(it.titleSnapshot||it.globalId)}</td><td><span class="pill">${esc(it.status)}</span></td><td>${['Passed','Failed','Blocked','Skipped'].map(s=>`<button class="ghost" style="padding:3px 7px" onclick="mark('${id}','${it.id}','${s}')">${s[0]}</button>`).join(' ')}</td></tr>`).join('')||'<tr><td colspan=3 class="muted">нет items</td></tr>'}</tbody></table>
+    <div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
+  }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
+};
+window.mark=async(runId,itemId,status)=>{ try{ await api(`/test-runs/${runId}/items/${itemId}/result`,{method:'POST',body:JSON.stringify({status})}); trDetail(runId); }catch(e){ alert(e.message); } };
+window.trFinish=async(id)=>{ try{ await api(`/test-runs/${id}/finish`,{method:'POST',body:'{}'}); trDetail(id); }catch(e){ alert(e.message); } };
+
+// ---- Traceability ----
+views.traceability=async()=>{
+  $('main').innerHTML='<h1>🕸 Traceability Matrix</h1><div id="trc"><span class="spin"></span></div>';
+  const items=await loadList(`/projects/${PID}/traceability`);
+  $('trc').innerHTML=`<div style="overflow:auto"><table><thead><tr><th>Req</th><th>Title</th><th>Priority</th><th>Impl</th><th>TCs</th><th>Auto%</th><th>Last</th><th>Coverage</th></tr></thead><tbody>
+    ${items.map(r=>`<tr><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td>${r.implementationPercent||0}%</td><td>${r.linkedTestCasesCount||0}</td><td>${pct(r.automationCoveragePercent)}</td><td class="muted">${esc(r.lastValidationStatus||'—')}</td><td><span class="pill${r.coverageStatus==='NotCovered'?' crit':(/Covered|Automated/.test(r.coverageStatus)?' ok':' warn')}">${esc(r.coverageStatus)}</span></td></tr>`).join('')||'<tr><td colspan=8 class="muted">нет требований</td></tr>'}
+  </tbody></table></div>`;
+};
+
+// ---- Global search ----
+let searchT;
+$('globalSearch').addEventListener('input',e=>{ clearTimeout(searchT); const q=e.target.value.trim(); if(q.length<2){ $('searchResults').classList.remove('open'); return; } searchT=setTimeout(async()=>{ try{ const d=await api(`/projects/${PID}/search?query=${encodeURIComponent(q)}`); $('searchResults').innerHTML=(d.items||[]).map(it=>`<a href="${esc(it.directUrl)}" onclick="return openEntity(event,'${it.entityType}','${it.id}')"><span class="gid">${esc(it.globalId||'')}</span> ${esc(it.title||'')} <span class="muted">${esc(it.entityType)}${it.isDeleted?' · deleted':''}</span></a>`).join('')||'<a class="muted">ничего</a>'; $('searchResults').classList.add('open'); }catch(_){} },250); });
+window.openEntity=(e,type,id)=>{ e.preventDefault(); $('searchResults').classList.remove('open'); $('globalSearch').value=''; if(type==='Requirement') reqDetail(id); else if(type==='TestCase') tcDetail(id); else if(type==='TestRun') trDetail(id); else { location.hash='#/'+(type==='AutomatedTest'?'automation':type==='Checklist'?'checklists':'dashboard'); } return false; };
+document.addEventListener('click',e=>{ if(!e.target.closest('.searchbox')) $('searchResults').classList.remove('open'); });
+
+boot();
+</script>
+</body>
+</html>

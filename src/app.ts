@@ -876,6 +876,10 @@ app.get('/develop', async (_, reply) => {
   return reply.sendFile('develop.html');
 });
 
+app.get('/qa', async (_, reply) => {
+  return reply.sendFile('qa.html');
+});
+
 // Release notes — 3-audience reports from the release delta.
 app.get('/releases', async (_, reply) => {
   return reply.sendFile('releases.html');

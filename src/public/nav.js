@@ -31,13 +31,14 @@
     preplanning: ['/pre-planning', '🧭', { fr: 'Pré-planning', en: 'Pre-planning', ru: 'Pre-planning' }],
     tasks: ['/tasks', '🆕', { fr: 'Nouvelles tâches', en: 'New tasks', ru: 'Новые задачи' }],
     develop: ['/develop', '🛠', { fr: 'Développer', en: 'Develop', ru: 'Разработать' }],
+    qaplatform: ['/qa', '🧬', { fr: 'QA Platform (TMS/RMS)', en: 'QA Platform (TMS/RMS)', ru: 'QA Платформа (TMS/RMS)' }],
     graph: ['/graph', '🕸', { fr: 'Graphe', en: 'Graph', ru: 'Граф' }],
     ideas: ['/ideas', '💡', { fr: 'Idées', en: 'Ideas', ru: 'Идеи' }],
     docsync: ['/doc-sync', '🔄', { fr: 'Doc Sync', en: 'Doc Sync', ru: 'Doc Sync' }],
   };
   // Role groups shown as dropdowns in the header.
   var GROUPS = [
-    { id: 'qa', label: { fr: 'Pour QA', en: 'For QA', ru: 'Для QA' }, items: ['quality', 'bugs', 'testing', 'releases', 'preplanning'] },
+    { id: 'qa', label: { fr: 'Pour QA', en: 'For QA', ru: 'Для QA' }, items: ['quality', 'bugs', 'testing', 'qaplatform', 'releases', 'preplanning'] },
     { id: 'dev', label: { fr: 'Pour DEV', en: 'For DEV', ru: 'Для DEV' }, items: ['develop', 'releases', 'preplanning'] },
     { id: 'biz', label: { fr: 'Pour Business', en: 'For Business', ru: 'Для Business' }, items: ['tasks', 'releases', 'preplanning'] },
   ];
