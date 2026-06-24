@@ -141,8 +141,22 @@ async function requirementCoverage(req: { id: string; projectId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// API-token auth so non-browser clients (Claude Code / AI agent, CI reporters)
+// can use the API-first surface without a session cookie. Set QA_API_TOKEN in env
+// and send it via `x-qa-token: <token>` or `Authorization: Bearer <token>`.
+function apiTokenUser(req: any): U | null {
+  const expected = String(process.env.QA_API_TOKEN || '').trim();
+  if (!expected) return null;
+  const hdr = String(req.headers?.['x-qa-token'] || req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (hdr && hdr === expected) return { id: 'api-agent', name: 'API Agent', email: null };
+  return null;
+}
+
 export async function registerQaApi(app: FastifyInstance) {
-  const A = async (req: any, reply: any): Promise<U | null> => requireAuth(req, reply) as any;
+  const A = async (req: any, reply: any): Promise<U | null> => {
+    const t = apiTokenUser(req); if (t) return t;
+    return requireAuth(req, reply) as any;
+  };
 
   // ===== Projects =====
   app.get('/api/qa/projects', async (req: any, reply) => {

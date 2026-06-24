@@ -1,0 +1,9 @@
+{
+  "name": "tms-playwright-reporter",
+  "version": "0.1.0",
+  "description": "Live Playwright reporter for the Searchify QA Platform (TMS/RMS) — streams run/test/step events with bulk fallback and idempotency.",
+  "main": "index.js",
+  "keywords": ["playwright", "reporter", "tms", "qa"],
+  "peerDependencies": { "@playwright/test": ">=1.30.0" },
+  "license": "UNLICENSED"
+}

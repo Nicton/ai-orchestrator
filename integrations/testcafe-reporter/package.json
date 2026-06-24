@@ -1,0 +1,9 @@
+{
+  "name": "testcafe-reporter-tms",
+  "version": "0.1.0",
+  "description": "TestCafe reporter for the Searchify QA Platform (TMS/RMS) — task/test events with bulk fallback and idempotency.",
+  "main": "index.js",
+  "keywords": ["testcafe", "reporter", "tms", "qa"],
+  "peerDependencies": { "testcafe": ">=2.0.0" },
+  "license": "UNLICENSED"
+}
