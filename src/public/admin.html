@@ -282,7 +282,7 @@ async function renderFeatureUsage(){
     <div class="panel">
       <h3>Recent feature requests (${(fu.recent||[]).length})</h3>
       <div style="overflow-x:auto"><table>
-        <thead><tr><th>When</th><th>User</th><th>Feature</th><th>Action</th><th>Ref</th><th>Model</th><th style="width:90px">Tokens</th><th>St.</th></tr></thead>
+        <thead><tr><th>When</th><th>User</th><th>Feature</th><th>Action</th><th>Ref</th><th>Model</th><th style="width:90px">Tokens</th><th title="Satisfaction">🙂</th><th>St.</th></tr></thead>
         <tbody>${(fu.recent||[]).map(r=>`<tr>
           <td class="muted" style="white-space:nowrap">${new Date(r.createdAt).toLocaleString()}</td>
           <td>${escapeHtml(r.userLabel||'—')}</td>
@@ -291,8 +291,9 @@ async function renderFeatureUsage(){
           <td class="truncate">${escapeHtml(r.ref||'—')}</td>
           <td class="muted" style="font-size:12px">${escapeHtml(r.model||'—')}</td>
           <td>${r.totalTokens!=null?fmtN(r.totalTokens):'<span class="muted">—</span>'}</td>
+          <td class="rating-emoji" title="${escapeHtml(r.ratingNote||'')}">${r.rating===1?'👍':(r.rating===-1?'👎':'<span class="muted">—</span>')}</td>
           <td>${r.status==='error'?'⚠️':'✓'}</td>
-        </tr>`).join('')||`<tr><td colspan="8" class="muted">No requests yet.</td></tr>`}</tbody>
+        </tr>`).join('')||`<tr><td colspan="9" class="muted">No requests yet.</td></tr>`}</tbody>
       </table></div>
     </div>`;
 }
