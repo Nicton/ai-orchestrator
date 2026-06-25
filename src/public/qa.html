@@ -197,19 +197,52 @@ views.dashboard=async()=>{
   }catch(e){ $('main').innerHTML='<h1>📊 Dashboard</h1><p class="err">'+esc(e.message)+'</p>'; }
 };
 
-// ---- Requirements ----
+// ---- Requirements (дерево системы: модули/секции → требования) ----
 views.requirements=async()=>{
-  $('main').innerHTML='<h1>📋 Requirements</h1><div class="bar"><button class="pri" id="addReq">+ Requirement</button><button class="ghost" id="impJira">⬇️ Импорт из Jira</button><select class="f" id="reqSecFilter" style="width:auto"></select><button class="ghost" id="newSec">+ секция</button></div><div id="reqList"><span class="spin"></span></div>';
-  $('addReq').onclick=reqForm;
+  $('main').innerHTML='<h1>📋 Requirements</h1><div class="bar"><button class="pri" id="addReq">+ Requirement</button><button class="ghost" id="newSecR">+ Модуль (секция)</button><button class="ghost" id="impJira">⬇️ Импорт из Jira</button></div><div style="display:flex;gap:16px;align-items:flex-start"><div id="rtree" style="width:330px;flex:0 0 330px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px;max-height:70vh;overflow:auto"></div><div id="ritems" style="flex:1;min-width:0"></div></div>';
+  $('addReq').onclick=()=>reqForm();
   $('impJira').onclick=jiraImport;
-  await fillSec('req','reqSecFilter',window._reqSec||''); $('reqSecFilter').insertAdjacentHTML('afterbegin','<option value="">все секции</option>'); $('reqSecFilter').value=window._reqSec||'';
-  $('reqSecFilter').onchange=e=>{ window._reqSec=e.target.value; views.requirements(); };
-  $('newSec').onclick=async()=>{ await newSection('req'); views.requirements(); };
-  const items=await loadList(`/projects/${PID}/requirements?pageSize=500${window._reqSec?'&sectionId='+window._reqSec:''}`);
-  $('reqList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Impl%</th><th>Type</th></tr></thead><tbody>
-    ${items.map(r=>`<tr style="cursor:pointer" onclick="reqDetail('${r.id}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td><span class="pill">${esc(r.status)}</span></td><td>${pct(r.implementationPercent)}</td><td class="muted">${esc(r.type)}</td></tr>`).join('')||'<tr><td colspan=6 class="muted">пусто</td></tr>'}
-  </tbody></table>`;
+  $('newSecR').onclick=async()=>{ const name=prompt('Название корневого модуля/секции:'); if(!name) return; try{ await api(`/projects/${PID}/requirement-sections`,{method:'POST',body:JSON.stringify({name})}); views.requirements(); }catch(e){ alert(e.message); } };
+  $('rtree').innerHTML='<span class="spin"></span>';
+  const [secs,reqs]=await Promise.all([secList('req'),loadList(`/projects/${PID}/requirements?pageSize=3000`)]);
+  window._rlib={secs,reqs};
+  if(!window._rlibExp) window._rlibExp=new Set();
+  if(window._reqSecSel===undefined) window._reqSecSel='';
+  renderReqTree(); renderReqItems();
 };
+function rlibChildren(pid){ return (window._rlib.secs||[]).filter(s=>(s.parentId||'')===(pid||'')); }
+function rlibCount(secId){ let n=(window._rlib.reqs||[]).filter(r=>(r.sectionId||'')===secId).length; for(const ch of rlibChildren(secId)) n+=rlibCount(ch.id); return n; }
+function renderReqTree(){
+  const total=(window._rlib.reqs||[]).length;
+  let html=`<div class="qrow${window._reqSecSel===''?' sel':''}" ondragover="qaAllow(event)" ondragleave="qaLeave(event)" ondrop="reqDrop(event,'')"><span class="qtog"></span><span class="qname" onclick="selReqSec('')">📂 Все требования</span><span class="qcount">${total}</span></div>`;
+  const node=(s,d)=>{ const kids=rlibChildren(s.id); const exp=window._rlibExp.has(s.id);
+    let h=`<div class="qrow${window._reqSecSel===s.id?' sel':''}" draggable="true" data-sec="${s.id}" ondragstart="qaDragStart(event,'rsection','${s.id}')" ondragover="qaAllow(event)" ondragleave="qaLeave(event)" ondrop="reqDrop(event,'${s.id}')" style="padding-left:${4+d*14}px">`+(kids.length?`<span class="qtog" onclick="togReqSec('${s.id}')">${exp?'▾':'▸'}</span>`:'<span class="qtog"></span>')+`<span class="qname" onclick="selReqSec('${s.id}')">📁 ${esc(s.name)}</span><span class="qcount">${rlibCount(s.id)}</span><span class="qacts"><button title="Переименовать" onclick="renameReqSec(event,'${s.id}')">✏️</button><button title="Добавить подсекцию" onclick="addReqSubSec(event,'${s.id}')">＋</button></span></div>`;
+    if(exp) for(const k of kids) h+=node(k,d+1);
+    return h; };
+  for(const s of rlibChildren('')) html+=node(s,0);
+  $('rtree').innerHTML=html;
+}
+window.reqDrop=async(e,secId)=>{ e.preventDefault(); e.stopPropagation(); document.querySelectorAll('.qrow.dropt').forEach(x=>x.classList.remove('dropt')); const d=window._drag; window._drag=null; if(!d) return;
+  try{
+    if(d.kind==='req') await api('/requirements/'+d.id,{method:'PATCH',body:JSON.stringify({sectionId:secId||null})});
+    else if(d.kind==='rsection'){ if(d.id===secId) return; await api('/requirement-sections/'+d.id,{method:'PATCH',body:JSON.stringify({parentId:secId||null})}); }
+    views.requirements();
+  }catch(err){ alert(err.message); }
+};
+window.renameReqSec=async(e,id)=>{ e.stopPropagation(); const s=(window._rlib.secs||[]).find(x=>x.id===id); const name=prompt('Новое название секции:', s?s.name:''); if(!name) return; try{ await api('/requirement-sections/'+id,{method:'PATCH',body:JSON.stringify({name})}); views.requirements(); }catch(err){ alert(err.message); } };
+window.addReqSubSec=async(e,parentId)=>{ e.stopPropagation(); const name=prompt('Название подсекции:'); if(!name) return; try{ await api(`/projects/${PID}/requirement-sections`,{method:'POST',body:JSON.stringify({name,parentId})}); window._rlibExp.add(parentId); views.requirements(); }catch(err){ alert(err.message); } };
+window.selReqSec=id=>{ window._reqSecSel=id; renderReqTree(); renderReqItems(); };
+window.togReqSec=id=>{ if(window._rlibExp.has(id)) window._rlibExp.delete(id); else window._rlibExp.add(id); renderReqTree(); };
+window.delReqSec=async()=>{ const id=window._reqSecSel; if(!id) return; if(!confirm('Удалить секцию? Требования внутри не удаляются.')) return; try{ await api('/requirement-sections/'+id,{method:'DELETE'}); window._reqSecSel=''; views.requirements(); }catch(e){ alert(e.message); } };
+function renderReqItems(){
+  const {reqs,secs}=window._rlib; const sel=window._reqSecSel; const sec=secs.find(s=>s.id===sel);
+  const inSec=reqs.filter(r=>(r.sectionId||'')===sel);
+  const title=sel===''?'Все (без секции)':(sec?esc(sec.name):'—');
+  let h=`<h2 style="margin-top:0">${title} <span class="muted">— ${inSec.length} требований</span> ${sel?`<button class="ghost" onclick="delReqSec()" style="padding:3px 8px">🗑 секцию</button>`:''}</h2><table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Impl%</th><th>Type</th></tr></thead><tbody>`;
+  h+=inSec.map(r=>`<tr draggable="true" ondragstart="qaDragStart(event,'req','${r.id}')" style="cursor:pointer" onclick="reqDetail('${r.id}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td><span class="pill">${esc(r.status)}</span></td><td>${pct(r.implementationPercent)}</td><td class="muted">${esc(r.type)}</td></tr>`).join('');
+  if(!inSec.length) h+='<tr><td colspan=6 class="muted">пусто — добавьте требование, выберите секцию или перетащите сюда</td></tr>';
+  $('ritems').innerHTML=h+'</tbody></table>';
+}
 function reqForm(){
   openModal(`<h3>Новое требование</h3><label class="fld">Title</label><input type="text" id="rT">
   <label class="fld">Description</label><textarea id="rD" rows="3"></textarea>
@@ -218,7 +251,7 @@ function reqForm(){
   <div><label class="fld">Status</label><select class="f" id="rS"><option>Draft</option><option>Approved</option><option>Implemented</option><option>PartiallyImplemented</option><option>NeedsUpdate</option><option>Deprecated</option><option>Rejected</option></select></div></div>
   <label class="fld">Section</label><select class="f" id="rSec"></select>
   <div class="err" id="rErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="rSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
-  fillSec('req','rSec');
+  fillSec('req','rSec',window._reqSecSel||'');
   $('rSave').onclick=async()=>{ try{ await api(`/projects/${PID}/requirements`,{method:'POST',body:JSON.stringify({title:$('rT').value,description:$('rD').value,priority:$('rP').value,type:$('rTy').value,status:$('rS').value,sectionId:$('rSec').value||undefined})}); closeModal(); views.requirements(); }catch(e){ $('rErr').textContent=e.message; } };
 }
 window.reqDetail=async(id)=>{

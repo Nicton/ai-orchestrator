@@ -302,6 +302,21 @@ export async function registerQaApi(app: FastifyInstance) {
     const rows = await prisma.qaRequirementSection.findMany({ where: { projectId: req.params.projectId, isDeleted: false }, orderBy: { order: 'asc' } });
     return reply.send({ items: rows });
   });
+  app.patch('/api/qa/requirement-sections/:id', async (req: any, reply) => {
+    const u = await A(req, reply); if (!u) return; const id = req.params.id; const b = req.body || {};
+    const data: any = { updatedBy: u.name };
+    for (const f of ['name', 'description', 'order']) if (b[f] !== undefined) data[f] = b[f];
+    if (b.parentId !== undefined) {
+      const np = b.parentId || null;
+      if (np === id) return reply.code(400).send({ error: 'cannot nest a section into itself' });
+      let cur: string | null = np; let depth = 0; // cycle guard: new parent must not be a descendant of id
+      while (cur && depth < 50) { if (cur === id) return reply.code(400).send({ error: 'cannot move a section into its own descendant' }); const par: any = await prisma.qaRequirementSection.findUnique({ where: { id: cur }, select: { parentId: true } }); cur = par?.parentId || null; depth++; }
+      data.parentId = np;
+    }
+    const row = await prisma.qaRequirementSection.update({ where: { id }, data }).catch(() => null);
+    return row ? reply.send(row) : reply.code(404).send({ error: 'not found' });
+  });
+  app.delete('/api/qa/requirement-sections/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; await prisma.qaRequirementSection.update({ where: { id: req.params.id }, data: { isDeleted: true } }).catch(() => null); return reply.send({ ok: true }); });
 
   // ===== Requirements =====
   const reqCreate = async (projectId: string, b: any, u: U) => {
