@@ -37,6 +37,12 @@
   .qtog{width:14px;flex:0 0 14px;text-align:center;color:var(--muted);cursor:pointer;font-size:11px;user-select:none}
   .qname{flex:1;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .qcount{flex:0 0 auto;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px;padding:0 7px;font-size:11px;color:var(--muted)}
+  .qrow.dropt{outline:2px dashed var(--blue);outline-offset:-2px;background:color-mix(in srgb,var(--blue) 10%,transparent)}
+  .qacts{flex:0 0 auto;display:none;gap:2px}
+  .qrow:hover .qacts{display:inline-flex}
+  .qacts button{border:none;background:none;cursor:pointer;font-size:12px;padding:0 3px;color:var(--muted)}
+  .qacts button:hover{color:var(--ink)}
+  tr[draggable=true]{cursor:grab}
   .pill{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;font-weight:600;background:var(--bg-soft);border:1px solid var(--line)}
   .pill.crit{background:#fde8e8;color:#b42318;border-color:#f4b9b9}
   .pill.ok{background:#e9f6ec;color:#1f9d57;border-color:#bfe6cb}
@@ -82,8 +88,7 @@
   <div class="side" id="side">
     <a data-view="dashboard">📊 Dashboard</a>
     <a data-view="requirements">📋 Requirements</a>
-    <a data-view="testcases">🧪 Test Cases</a>
-    <a data-view="checklists">✅ Checklists</a>
+    <a data-view="testcases">🧪 Test Library</a>
     <a data-view="sharedsteps">🔁 Shared Steps</a>
     <a data-view="automation">🤖 Automation</a>
     <a data-view="testplans">🗂 Test Plans</a>
@@ -245,7 +250,7 @@ function jiraImport(){
 views.testcases=async()=>{
   $('main').innerHTML='<h1>🌳 Test Library</h1><div class="bar"><button class="pri" id="addTc">+ Test Case</button><button class="ghost" id="addCl2">+ Checklist</button><button class="ghost" id="newSecT">+ Секция</button><button class="ghost" id="impQase">⬇️ Импорт из Qase</button></div><div style="display:flex;gap:16px;align-items:flex-start"><div id="qtree" style="width:330px;flex:0 0 330px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px;max-height:70vh;overflow:auto"></div><div id="qitems" style="flex:1;min-width:0"></div></div>';
   $('addTc').onclick=tcForm; $('addCl2').onclick=clForm;
-  $('newSecT').onclick=async()=>{ await newSection('test'); views.testcases(); };
+  $('newSecT').onclick=async()=>{ const name=prompt('Название корневой секции:'); if(!name) return; try{ await api(`/projects/${PID}/test-sections`,{method:'POST',body:JSON.stringify({name})}); views.testcases(); }catch(e){ alert(e.message); } };
   $('impQase').onclick=qaseImport;
   $('qtree').innerHTML='<span class="spin"></span>';
   const [secs,tcs,cls]=await Promise.all([secList('test'),loadList(`/projects/${PID}/test-cases?pageSize=3000`),loadList(`/projects/${PID}/checklists`)]);
@@ -258,14 +263,28 @@ function libChildren(pid){ return (window._lib.secs||[]).filter(s=>(s.parentId||
 function libCount(secId){ const {tcs,cls}=window._lib; let n=tcs.filter(t=>(t.sectionId||'')===secId).length+cls.filter(c=>(c.sectionId||'')===secId).length; for(const ch of libChildren(secId)) n+=libCount(ch.id); return n; }
 function renderTree(){
   const {tcs,cls}=window._lib; const total=tcs.length+cls.length;
-  let html=`<div class="qrow${window._tcSec===''?' sel':''}"><span class="qtog"></span><span class="qname" onclick="selSec('')">📂 Все</span><span class="qcount">${total}</span></div>`;
+  let html=`<div class="qrow${window._tcSec===''?' sel':''}" ondragover="qaAllow(event)" ondragleave="qaLeave(event)" ondrop="qaDrop(event,'')"><span class="qtog"></span><span class="qname" onclick="selSec('')">📂 Все</span><span class="qcount">${total}</span></div>`;
   const node=(s,d)=>{ const kids=libChildren(s.id); const exp=window._libExp.has(s.id);
-    let h=`<div class="qrow${window._tcSec===s.id?' sel':''}" style="padding-left:${4+d*14}px">`+(kids.length?`<span class="qtog" onclick="togSec('${s.id}')">${exp?'▾':'▸'}</span>`:'<span class="qtog"></span>')+`<span class="qname" onclick="selSec('${s.id}')">📁 ${esc(s.name)}</span><span class="qcount">${libCount(s.id)}</span></div>`;
+    let h=`<div class="qrow${window._tcSec===s.id?' sel':''}" draggable="true" data-sec="${s.id}" ondragstart="qaDragStart(event,'section','${s.id}')" ondragover="qaAllow(event)" ondragleave="qaLeave(event)" ondrop="qaDrop(event,'${s.id}')" style="padding-left:${4+d*14}px">`+(kids.length?`<span class="qtog" onclick="togSec('${s.id}')">${exp?'▾':'▸'}</span>`:'<span class="qtog"></span>')+`<span class="qname" onclick="selSec('${s.id}')">📁 ${esc(s.name)}</span><span class="qcount">${libCount(s.id)}</span><span class="qacts"><button title="Переименовать" onclick="renameSec(event,'${s.id}')">✏️</button><button title="Добавить подсекцию" onclick="addSubSec(event,'${s.id}')">＋</button></span></div>`;
     if(exp) for(const k of kids) h+=node(k,d+1);
     return h; };
   for(const s of libChildren('')) html+=node(s,0);
   $('qtree').innerHTML=html;
 }
+window._drag=null;
+window.qaDragStart=(e,kind,id)=>{ window._drag={kind,id}; try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',id); }catch(_){} e.stopPropagation(); };
+window.qaAllow=e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(_){} const r=e.target.closest('.qrow'); if(r) r.classList.add('dropt'); };
+window.qaLeave=e=>{ const r=e.target.closest('.qrow'); if(r) r.classList.remove('dropt'); };
+window.qaDrop=async(e,secId)=>{ e.preventDefault(); e.stopPropagation(); document.querySelectorAll('.qrow.dropt').forEach(x=>x.classList.remove('dropt')); const d=window._drag; window._drag=null; if(!d) return;
+  try{
+    if(d.kind==='case') await api('/test-cases/'+d.id,{method:'PATCH',body:JSON.stringify({sectionId:secId||null})});
+    else if(d.kind==='checklist') await api('/checklists/'+d.id,{method:'PATCH',body:JSON.stringify({sectionId:secId||null})});
+    else if(d.kind==='section'){ if(d.id===secId) return; await api('/test-sections/'+d.id,{method:'PATCH',body:JSON.stringify({parentId:secId||null})}); }
+    views.testcases();
+  }catch(err){ alert(err.message); }
+};
+window.renameSec=async(e,id)=>{ e.stopPropagation(); const s=(window._lib.secs||[]).find(x=>x.id===id); const name=prompt('Новое название секции:', s?s.name:''); if(!name) return; try{ await api('/test-sections/'+id,{method:'PATCH',body:JSON.stringify({name})}); views.testcases(); }catch(err){ alert(err.message); } };
+window.addSubSec=async(e,parentId)=>{ e.stopPropagation(); const name=prompt('Название подсекции:'); if(!name) return; try{ await api(`/projects/${PID}/test-sections`,{method:'POST',body:JSON.stringify({name,parentId})}); window._libExp.add(parentId); views.testcases(); }catch(err){ alert(err.message); } };
 window.selSec=id=>{ window._tcSec=id; renderTree(); renderItems(); };
 window.togSec=id=>{ if(window._libExp.has(id)) window._libExp.delete(id); else window._libExp.add(id); renderTree(); };
 function renderItems(){
@@ -273,12 +292,12 @@ function renderItems(){
   const cInSec=tcs.filter(t=>(t.sectionId||'')===sel); const clInSec=cls.filter(c=>(c.sectionId||'')===sel);
   const title=sel===''?'Все (без секции)':(sec?esc(sec.name):'—');
   let h=`<h2 style="margin-top:0">${title} <span class="muted">— ${cInSec.length} кейсов · ${clInSec.length} чек-листов</span></h2><table><thead><tr><th>ID</th><th>Название</th><th>Тип</th><th>Priority</th><th>Auto</th></tr></thead><tbody>`;
-  h+=clInSec.map(c=>`<tr style="cursor:pointer" onclick="clDetail('${c.id}')"><td class="gid">${esc(c.globalId)}</td><td>✅ ${esc(c.title)}</td><td class="muted">checklist·${esc(c.type)}</td><td></td><td></td></tr>`).join('');
-  h+=cInSec.map(t=>`<tr style="cursor:pointer" onclick="tcDetail('${t.id}')"><td class="gid">${esc(t.globalId)}</td><td>🧪 ${esc(t.title)}</td><td class="muted">${esc(t.type)}</td><td>${pri(t.priority)}</td><td>${pct(t.automationCoveragePercent)}</td></tr>`).join('');
-  if(!cInSec.length&&!clInSec.length) h+='<tr><td colspan=5 class="muted">пусто — добавьте тест-кейс/чек-лист или выберите секцию</td></tr>';
+  h+=clInSec.map(c=>`<tr draggable="true" ondragstart="qaDragStart(event,'checklist','${c.id}')" style="cursor:pointer" onclick="clDetail('${c.id}')"><td class="gid">${esc(c.globalId)}</td><td>✅ ${esc(c.title)}</td><td class="muted">checklist·${esc(c.type)}</td><td></td><td></td></tr>`).join('');
+  h+=cInSec.map(t=>`<tr draggable="true" ondragstart="qaDragStart(event,'case','${t.id}')" style="cursor:pointer" onclick="tcDetail('${t.id}')"><td class="gid">${esc(t.globalId)}</td><td>🧪 ${esc(t.title)}</td><td class="muted">${esc(t.type)}</td><td>${pri(t.priority)}</td><td>${pct(t.automationCoveragePercent)}</td></tr>`).join('');
+  if(!cInSec.length&&!clInSec.length) h+='<tr><td colspan=5 class="muted">пусто — добавьте тест-кейс/чек-лист, выберите секцию или перетащите сюда</td></tr>';
   $('qitems').innerHTML=h+'</tbody></table>';
 }
-window.clDetail=async(id)=>{ try{ const c=await api(`/checklists/${id}`); openModal(`<h3>${esc(c.globalId)} · ${esc(c.title)}</h3><div class="bar"><span class="pill">${esc(c.type)}</span><button class="ghost" onclick="clExpand('${id}')">→ разложить на тест-кейсы</button><button class="ghost" onclick="showVersions('checklists','${id}')">🕓 Версии</button></div><h2>Items (${(c.items||[]).length})</h2><div class="muted">${(c.items||[]).map((it,i)=>`${i+1}. ${esc(it.title)}`).join('<br>')||'—'}</div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`); }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); } };
+window.clDetail=async(id)=>{ try{ const c=await api(`/checklists/${id}`); openModal(`<h3>${esc(c.globalId)} · ${esc(c.title)}</h3><div class="bar"><span class="pill">${esc(c.type)}</span><button class="pri" onclick="clEdit('${id}')">✏️ Редактировать</button><button class="ghost" onclick="clExpand('${id}')">→ разложить на тест-кейсы</button><button class="ghost" onclick="showVersions('checklists','${id}')">🕓 Версии</button><button class="ghost" onclick="qaDelete('checklists','${id}','чек-лист')">🗑 Удалить</button></div><h2>Items (${(c.items||[]).length})</h2><div class="muted">${(c.items||[]).map((it,i)=>`${i+1}. ${esc(it.title)}`).join('<br>')||'—'}</div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`); }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); } };
 function qaseImport(){
   openModal(`<h3>⬇️ Импорт из Qase</h3><p class="muted">Импортирует сьюты Qase → секции, и кейсы со шагами → тест-кейсы. Нужен <b>Qase API token</b> (Qase → Settings → API tokens) в env сервера (<code>QASE_API_TOKEN</code>). Логин/пароль для API не подходят.</p>
   <label class="fld">Код проекта Qase</label><input type="text" id="qProj" value="MA">
@@ -292,25 +311,34 @@ function qaseImport(){
     }catch(e){ $('qErr').textContent=e.message; $('qOut').innerHTML=''; } };
 }
 let tcSteps=[];
-function tcForm(){
-  tcSteps=[{action:'',expectedResult:''}];
-  openModal(`<h3>Новый test case</h3><label class="fld">Title</label><input type="text" id="tT">
-  <div class="bar"><div><label class="fld">Priority</label><select class="f" id="tP"><option>Critical</option><option>High</option><option selected>Medium</option><option>Low</option></select></div>
-  <div><label class="fld">Type</label><select class="f" id="tTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Integration</option><option>UI</option><option>API</option><option>Security</option><option>Performance</option><option>Other</option></select></div>
+const opts=(arr,sel)=>arr.map(o=>`<option${o===sel?' selected':''}>${o}</option>`).join('');
+function tcForm(ex){
+  const editing=ex&&ex.id;
+  tcSteps=editing?((ex.steps||[]).map(s=>({action:s.action||'',expectedResult:s.expectedResult||''}))):[{action:'',expectedResult:''}];
+  if(!tcSteps.length) tcSteps=[{action:'',expectedResult:''}];
+  openModal(`<h3>${editing?('✏️ '+esc(ex.globalId)+' — редактировать'):'Новый test case'}</h3>
+  <label class="fld">Title</label><input type="text" id="tT" value="${editing?esc(ex.title):''}">
+  <label class="fld">Preconditions</label><input type="text" id="tPre" value="${editing?esc(ex.preconditions||''):''}">
+  <div class="bar"><div><label class="fld">Priority</label><select class="f" id="tP">${opts(['Critical','High','Medium','Low'],editing?ex.priority:'Medium')}</select></div>
+  <div><label class="fld">Type</label><select class="f" id="tTy">${opts(['Smoke','Regression','Functional','Integration','UI','API','Security','Performance','Other'],editing?ex.type:'Functional')}</select></div>
+  <div><label class="fld">Status</label><select class="f" id="tSt">${opts(['Draft','Ready','NeedsUpdate','Deprecated'],editing?ex.status:'Draft')}</select></div>
   <div style="flex:1"><label class="fld">Section</label><select class="f" id="tSec"></select></div></div>
   <label class="fld">Steps</label><div id="stepsBox"></div><button class="ghost" id="addStep">+ шаг</button>
-  <div class="err" id="tErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
-  fillSec('test','tSec',window._tcSec||'');
+  <div class="err" id="tErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tSave">${editing?'Сохранить':'Создать'}</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  fillSec('test','tSec',editing?(ex.sectionId||''):(window._tcSec||''));
   renderSteps(); $('addStep').onclick=()=>{ tcSteps.push({action:'',expectedResult:''}); renderSteps(); };
-  $('tSave').onclick=async()=>{ try{ collectSteps(); await api(`/projects/${PID}/test-cases`,{method:'POST',body:JSON.stringify({title:$('tT').value,priority:$('tP').value,type:$('tTy').value,sectionId:$('tSec').value||undefined,steps:tcSteps.filter(s=>s.action)})}); closeModal(); views.testcases(); }catch(e){ $('tErr').textContent=e.message; } };
+  $('tSave').onclick=async()=>{ try{ collectSteps(); const body={title:$('tT').value,preconditions:$('tPre').value,priority:$('tP').value,type:$('tTy').value,status:$('tSt').value,sectionId:$('tSec').value||null,steps:tcSteps.filter(s=>s.action)};
+    if(editing) await api('/test-cases/'+ex.id,{method:'PATCH',body:JSON.stringify(body)}); else await api(`/projects/${PID}/test-cases`,{method:'POST',body:JSON.stringify(body)});
+    closeModal(); views.testcases(); }catch(e){ $('tErr').textContent=e.message; } };
 }
+window.tcEdit=async(id)=>{ try{ const t=await api('/test-cases/'+id); tcForm(t); }catch(e){ alert(e.message); } };
 function renderSteps(){ $('stepsBox').innerHTML=tcSteps.map((s,i)=>`<div class="steprow"><input type="text" placeholder="Action" value="${esc(s.action)}" data-a="${i}"><input type="text" placeholder="Expected" value="${esc(s.expectedResult)}" data-e="${i}"></div>`).join(''); }
 function collectSteps(){ document.querySelectorAll('[data-a]').forEach(el=>tcSteps[+el.dataset.a].action=el.value); document.querySelectorAll('[data-e]').forEach(el=>tcSteps[+el.dataset.e].expectedResult=el.value); }
 window.tcDetail=async(id)=>{
   try{ const t=await api(`/test-cases/${id}`); const c=t.coverage||{};
     const stepOpts=(t.steps||[]).map((s,i)=>`<option value="${s.id}">шаг ${i+1}: ${esc(s.action).slice(0,40)}</option>`).join('');
     openModal(`<h3>${esc(t.globalId)} · ${esc(t.title)}</h3>
-    <div class="bar">${pri(t.priority)}<span class="pill">${esc(t.type)}</span>${pct(c.automationCoveragePercent)}<span class="pill">${esc(c.coveragePrecision)}</span><button class="ghost" onclick="showVersions('test-cases','${id}')">🕓 Версии</button></div>
+    <div class="bar">${pri(t.priority)}<span class="pill">${esc(t.type)}</span>${pct(c.automationCoveragePercent)}<span class="pill">${esc(c.coveragePrecision)}</span><button class="pri" onclick="tcEdit('${id}')">✏️ Редактировать</button><button class="ghost" onclick="showVersions('test-cases','${id}')">🕓 Версии</button><button class="ghost" onclick="qaDelete('test-cases','${id}','тест-кейс')">🗑 Удалить</button></div>
     <p class="muted">Покрытие шагов: ${c.coveredSteps||0}/${c.totalSteps||0}. Линкуй автотест либо на весь кейс (Full), либо на конкретные шаги (точнее).</p>
     <h2>Steps (${(t.steps||[]).length})</h2><table><tbody>${(t.steps||[]).map((s,i)=>`<tr><td>${i+1}</td><td>${esc(s.action)}</td><td class="muted">${esc(s.expectedResult||'')}</td></tr>`).join('')||'<tr><td class="muted">нет</td></tr>'}</tbody></table>
     <h2>Links (req: ${(t.linkedRequirementIds||[]).length} · automated: ${(t.linkedAutomatedTestIds||[]).length})</h2>
@@ -333,11 +361,17 @@ views.checklists=async()=>{
     ${items.map(c=>`<tr><td class="gid">${esc(c.globalId)}</td><td>${esc(c.title)}</td><td class="muted">${esc(c.type)}</td><td><button class="ghost" onclick="clExpand('${c.id}')">→ Test Cases</button></td></tr>`).join('')||'<tr><td colspan=4 class="muted">пусто</td></tr>'}
   </tbody></table>`;
 };
-function clForm(){
-  openModal(`<h3>Новый чек-лист</h3><label class="fld">Title</label><input type="text" id="cT"><label class="fld">Type</label><select class="f" id="cTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Other</option></select><label class="fld">Section</label><select class="f" id="cSec"></select><label class="fld">Items (по строке)</label><textarea id="cI" rows="6" placeholder="Открыть страницу логина&#10;Ввести валидные данные&#10;Нажать Login"></textarea><div class="err" id="cErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="cSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
-  fillSec('test','cSec',window._tcSec||'');
-  $('cSave').onclick=async()=>{ try{ const items=$('cI').value.split('\n').map(s=>s.trim()).filter(Boolean); await api(`/projects/${PID}/checklists`,{method:'POST',body:JSON.stringify({title:$('cT').value,type:$('cTy').value,sectionId:$('cSec').value||undefined,items})}); closeModal(); (curView()==='testcases'?views.testcases:views.checklists)(); }catch(e){ $('cErr').textContent=e.message; } };
+function clForm(ex){
+  const editing=ex&&ex.id;
+  const itemsText=editing?((ex.items||[]).map(i=>typeof i==='string'?i:(i.title||'')).join('\n')):'';
+  openModal(`<h3>${editing?('✏️ '+esc(ex.globalId)+' — редактировать'):'Новый чек-лист'}</h3><label class="fld">Title</label><input type="text" id="cT" value="${editing?esc(ex.title):''}"><div class="bar"><div><label class="fld">Type</label><select class="f" id="cTy">${opts(['Smoke','Regression','Functional','Other'],editing?ex.type:'Functional')}</select></div><div><label class="fld">Status</label><select class="f" id="cSt">${opts(['Draft','Ready','NeedsUpdate','Deprecated'],editing?ex.status:'Draft')}</select></div><div style="flex:1"><label class="fld">Section</label><select class="f" id="cSec"></select></div></div><label class="fld">Items (по строке)</label><textarea id="cI" rows="6" placeholder="Открыть страницу логина&#10;Ввести валидные данные&#10;Нажать Login">${esc(itemsText)}</textarea><div class="err" id="cErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="cSave">${editing?'Сохранить':'Создать'}</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  fillSec('test','cSec',editing?(ex.sectionId||''):(window._tcSec||''));
+  $('cSave').onclick=async()=>{ try{ const items=$('cI').value.split('\n').map(s=>s.trim()).filter(Boolean); const body={title:$('cT').value,type:$('cTy').value,status:$('cSt').value,sectionId:$('cSec').value||null,items};
+    if(editing) await api('/checklists/'+ex.id,{method:'PATCH',body:JSON.stringify(body)}); else await api(`/projects/${PID}/checklists`,{method:'POST',body:JSON.stringify(body)});
+    closeModal(); (curView()==='testcases'?views.testcases:views.checklists)(); }catch(e){ $('cErr').textContent=e.message; } };
 }
+window.clEdit=async(id)=>{ try{ const c=await api('/checklists/'+id); clForm(c); }catch(e){ alert(e.message); } };
+window.qaDelete=async(entity,id,label)=>{ if(!confirm('Удалить '+label+'? (soft delete, можно восстановить)')) return; try{ await api('/'+entity+'/'+id,{method:'DELETE'}); closeModal(); views.testcases(); }catch(e){ alert(e.message); } };
 window.clExpand=async(id)=>{ try{ const r=await api(`/checklists/${id}/expand-to-test-cases`,{method:'POST',body:'{}'}); alert('Создано test cases: '+r.total); }catch(e){ alert(e.message); } };
 
 // ---- Shared Steps ----

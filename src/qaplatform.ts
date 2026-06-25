@@ -346,7 +346,20 @@ export async function registerQaApi(app: FastifyInstance) {
   // ===== Test sections (tree) =====
   app.post('/api/qa/projects/:projectId/test-sections', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const b = req.body || {}; const row = await prisma.qaTestSection.create({ data: { projectId: req.params.projectId, parentId: b.parentId || null, name: b.name || 'Section', description: b.description || null, order: b.order || 0, ...auth(u) } }); return reply.code(201).send(row); });
   app.get('/api/qa/projects/:projectId/test-sections/tree', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const rows = await prisma.qaTestSection.findMany({ where: { projectId: req.params.projectId, isDeleted: false }, orderBy: { order: 'asc' } }); return reply.send({ items: rows }); });
-  app.patch('/api/qa/test-sections/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const row = await prisma.qaTestSection.update({ where: { id: req.params.id }, data: { ...req.body, updatedBy: u.name } }).catch(() => null); return row ? reply.send(row) : reply.code(404).send({ error: 'not found' }); });
+  app.patch('/api/qa/test-sections/:id', async (req: any, reply) => {
+    const u = await A(req, reply); if (!u) return; const id = req.params.id; const b = req.body || {};
+    const data: any = { updatedBy: u.name };
+    for (const f of ['name', 'description', 'order']) if (b[f] !== undefined) data[f] = b[f];
+    if (b.parentId !== undefined) {
+      const np = b.parentId || null;
+      if (np === id) return reply.code(400).send({ error: 'cannot nest a section into itself' });
+      let cur: string | null = np; let depth = 0; // cycle guard: new parent must not be a descendant of id
+      while (cur && depth < 50) { if (cur === id) return reply.code(400).send({ error: 'cannot move a section into its own descendant' }); const par: any = await prisma.qaTestSection.findUnique({ where: { id: cur }, select: { parentId: true } }); cur = par?.parentId || null; depth++; }
+      data.parentId = np;
+    }
+    const row = await prisma.qaTestSection.update({ where: { id }, data }).catch(() => null);
+    return row ? reply.send(row) : reply.code(404).send({ error: 'not found' });
+  });
   app.delete('/api/qa/test-sections/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; await prisma.qaTestSection.update({ where: { id: req.params.id }, data: { isDeleted: true } }).catch(() => null); return reply.send({ ok: true }); });
 
   // ===== Test cases =====
@@ -438,7 +451,7 @@ export async function registerQaApi(app: FastifyInstance) {
   app.post('/api/qa/projects/:projectId/checklists/bulk', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await runBulk(req.body?.items || [], async (it) => { const r = await clCreate(req.params.projectId, it, u); return { id: r.id, globalId: r.globalId }; })); });
   app.get('/api/qa/projects/:projectId/checklists', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const rows = await prisma.qaChecklist.findMany({ where: { projectId: req.params.projectId, isDeleted: false }, orderBy: { createdAt: 'desc' } }); return reply.send({ items: rows }); });
   app.get('/api/qa/checklists/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const row = await prisma.qaChecklist.findUnique({ where: { id: req.params.id } }); if (!row) return reply.code(404).send({ error: 'not found' }); const items = await prisma.qaChecklistItem.findMany({ where: { checklistId: row.id, isDeleted: false }, orderBy: { order: 'asc' } }); return reply.send({ ...row, items }); });
-  app.patch('/api/qa/checklists/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const cur = await prisma.qaChecklist.findUnique({ where: { id: req.params.id } }); if (!cur) return reply.code(404).send({ error: 'not found' }); const b = req.body || {}; const row = await prisma.qaChecklist.update({ where: { id: req.params.id }, data: { title: b.title ?? cur.title, description: b.description ?? cur.description, type: b.type ?? cur.type, status: b.status ?? cur.status, updatedBy: u.name, currentVersionNumber: (cur.currentVersionNumber || 1) + 1 } }); if (Array.isArray(b.items)) { await prisma.qaChecklistItem.updateMany({ where: { checklistId: row.id }, data: { isDeleted: true } }); let o = 0; for (const it of b.items) await prisma.qaChecklistItem.create({ data: { projectId: cur.projectId, checklistId: row.id, order: o++, title: typeof it === 'string' ? it : (it.title || '') } }); } await snapshot('Checklist', row, u.name); return reply.send(row); });
+  app.patch('/api/qa/checklists/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const cur = await prisma.qaChecklist.findUnique({ where: { id: req.params.id } }); if (!cur) return reply.code(404).send({ error: 'not found' }); const b = req.body || {}; const row = await prisma.qaChecklist.update({ where: { id: req.params.id }, data: { title: b.title ?? cur.title, description: b.description ?? cur.description, type: b.type ?? cur.type, status: b.status ?? cur.status, sectionId: b.sectionId !== undefined ? (b.sectionId || null) : cur.sectionId, updatedBy: u.name, currentVersionNumber: (cur.currentVersionNumber || 1) + 1 } }); if (Array.isArray(b.items)) { await prisma.qaChecklistItem.updateMany({ where: { checklistId: row.id }, data: { isDeleted: true } }); let o = 0; for (const it of b.items) await prisma.qaChecklistItem.create({ data: { projectId: cur.projectId, checklistId: row.id, order: o++, title: typeof it === 'string' ? it : (it.title || '') } }); } await snapshot('Checklist', row, u.name); return reply.send(row); });
   // expand checklist → test cases (one TC per item)
   app.post('/api/qa/checklists/:id/expand-to-test-cases', async (req: any, reply) => {
     const u = await A(req, reply); if (!u) return; const cl = await prisma.qaChecklist.findUnique({ where: { id: req.params.id } }); if (!cl) return reply.code(404).send({ error: 'not found' });
