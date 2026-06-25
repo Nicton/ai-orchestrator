@@ -403,7 +403,7 @@ A shallow one-line requirement is not enough. Decompose it into every distinct, 
 
 Return STRICT JSON only (no markdown, no commentary):
 {"title":"<concise English requirement title — keep the leading REQ-ID code if the input had one>","description":"<1-3 sentence English summary>","acceptanceCriteria":["<atomic testable criterion in English>","..."]}`;
-    const out = await runRolePrompt('qa.analyst', prompt);
+    const out = await runRolePrompt('qa.analyst', prompt, undefined, () => { /* stream mode (proven CLI path) */ });
     let parsed: any = null;
     try { const m = (out.text || '').match(/\{[\s\S]*\}/); parsed = m ? JSON.parse(m[0]) : null; } catch { parsed = null; }
     if (!parsed || !parsed.title) return reply.code(502).send({ error: 'analysis failed', diag: out.diag, raw: (out.text || '').slice(0, 300) });
