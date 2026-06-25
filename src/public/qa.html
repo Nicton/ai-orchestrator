@@ -94,6 +94,7 @@
     <a data-view="testplans">🗂 Test Plans</a>
     <a data-view="testruns">▶️ Test Runs</a>
     <a data-view="traceability">🕸 Traceability</a>
+    <a data-view="trash">🗑 Корзина</a>
   </div>
   <div class="main" id="main"><p class="muted">Загрузка…</p></div>
 </div>
@@ -172,7 +173,26 @@ views.dashboard=async()=>{
       ${card('Test cases',s.testCasesTotal)}${card('Автоматизировано',s.testCasesAutomated)}${card('Частично авто',s.testCasesPartiallyAutomated)}
       ${card('Avg automation',(s.averageAutomationCoverage||0)+'%')}${card('Automated tests',s.automatedTestsTotal)}</div>
     <h2>Execution</h2><div class="cards">
-      ${card('Passed',ex.passed)}${card('Failed',ex.failed)}${card('Blocked',ex.blocked)}${card('Skipped',ex.skipped)}${card('Hanging',ex.hanging)}</div>`;
+      ${card('Passed',ex.passed)}${card('Failed',ex.failed)}${card('Blocked',ex.blocked)}${card('Skipped',ex.skipped)}${card('Hanging',ex.hanging)}</div>
+    <div id="dashGrid"><p class="muted"><span class="spin"></span> аналитика…</p></div>`;
+    try{
+      const [dr,da,dt]=await Promise.all([
+        api(`/projects/${PID}/dashboard/requirements`),
+        api(`/projects/${PID}/dashboard/automation`),
+        api(`/projects/${PID}/dashboard/traceability`),
+      ]);
+      const bars=obj=>{ const e=Object.entries(obj||{}); const max=Math.max(1,...e.map(([,v])=>v)); return e.length?`<table><tbody>${e.map(([k,v])=>`<tr><td style="white-space:nowrap">${esc(k)}</td><td style="width:100%"><div style="background:color-mix(in srgb,var(--blue) 60%,transparent);height:14px;border-radius:4px;width:${Math.round(v/max*100)}%;min-width:2px"></div></td><td class="gid">${v}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">пусто</p>'; };
+      $('dashGrid').innerHTML=`
+      <h2>Requirements — разбивка</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+        <div><h3 style="font-size:13px;margin:0 0 6px">По статусу</h3>${bars(dr.byStatus)}</div>
+        <div><h3 style="font-size:13px;margin:0 0 6px">По приоритету</h3>${bars(dr.byPriority)}</div>
+        <div><h3 style="font-size:13px;margin:0 0 6px">По типу</h3>${bars(dr.byType)}</div>
+      </div>
+      <div class="cards" style="margin-top:12px">${card('Avg impl%',(dr.implementationPercentAvg||0)+'%')}${card('Без источников',dr.withoutSources)}${card('Без тест-кейсов',dr.withoutTestCases)}${card('Без автоматизации',dr.withoutAutomation)}${card('Critical без покрытия',dr.criticalUncovered)}</div>
+      <h2>Automation</h2><div class="cards">${card('Avg coverage',(da.averageCoveragePercent||0)+'%')}${card('Automated',da.automated)}${card('Partially',da.partiallyAutomated)}${card('Not automated',da.notAutomated)}${card('Active AT',da.active)}${card('Flaky AT',da.flaky)}</div>
+      <h2>Traceability — покрытие требований</h2>${bars(dt.byCoverage)}`;
+    }catch(e){ $('dashGrid').innerHTML='<p class="err">'+esc(e.message)+'</p>'; }
   }catch(e){ $('main').innerHTML='<h1>📊 Dashboard</h1><p class="err">'+esc(e.message)+'</p>'; }
 };
 
@@ -226,12 +246,25 @@ window.reqDetail=async(id)=>{
   }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
 };
 window.showVersions=async(entity,id)=>{
-  try{ const d=await api(`/${entity}/${id}/versions`);
+  try{ const d=await api(`/${entity}/${id}/versions`); const vs=d.items||[]; window._vers={entity,id,list:vs};
+    const opt=sel=>vs.map(v=>`<option value="${v.versionNumber}"${v.versionNumber===sel?' selected':''}>v${v.versionNumber} · ${new Date(v.createdAt).toLocaleString()}</option>`).join('');
     openModal(`<h3>🕓 Версии</h3><table><thead><tr><th>v</th><th>Когда</th><th>Автор</th><th>Комментарий</th><th></th></tr></thead><tbody>
-    ${(d.items||[]).map(v=>`<tr><td>${v.versionNumber}</td><td class="muted">${new Date(v.createdAt).toLocaleString()}</td><td class="muted">${esc(v.createdBy||'')}</td><td>${esc(v.comment||v.changeReason||'')}</td><td><button class="ghost" onclick="restoreVer('${entity}','${id}',${v.versionNumber})">Restore</button></td></tr>`).join('')||'<tr><td colspan=5 class="muted">нет версий</td></tr>'}
-    </tbody></table><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
+    ${vs.map(v=>`<tr><td>${v.versionNumber}</td><td class="muted">${new Date(v.createdAt).toLocaleString()}</td><td class="muted">${esc(v.createdBy||'')}</td><td>${esc(v.comment||v.changeReason||'')}</td><td><button class="ghost" onclick="restoreVer('${entity}','${id}',${v.versionNumber})">Restore</button></td></tr>`).join('')||'<tr><td colspan=5 class="muted">нет версий</td></tr>'}
+    </tbody></table>
+    ${vs.length>=2?`<h2>Diff</h2><div class="bar"><select class="f" id="vFrom" style="width:auto">${opt(vs[1].versionNumber)}</select>→<select class="f" id="vTo" style="width:auto">${opt(vs[0].versionNumber)}</select><button class="ghost" id="vDiff">Сравнить</button></div><div id="vDiffOut"></div>`:''}
+    <div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
+    if(vs.length>=2) $('vDiff').onclick=diffVersions;
   }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
 };
+function diffVersions(){
+  const {list}=window._vers; const a=list.find(v=>v.versionNumber===+$('vFrom').value), b=list.find(v=>v.versionNumber===+$('vTo').value);
+  if(!a||!b){ $('vDiffOut').innerHTML='<p class="muted">выберите версии</p>'; return; }
+  const sa=a.snapshotJson||{}, sb=b.snapshotJson||{}; const skip=new Set(['id','createdAt','updatedAt','currentVersionNumber','updatedBy','createdBy','isDeleted','deletedAt','projectId']);
+  const keys=[...new Set([...Object.keys(sa),...Object.keys(sb)])].filter(k=>!skip.has(k)).sort();
+  const norm=v=>v==null?'':(typeof v==='object'?JSON.stringify(v):String(v));
+  const rows=keys.filter(k=>norm(sa[k])!==norm(sb[k])).map(k=>`<tr><td class="gid">${esc(k)}</td><td style="background:color-mix(in srgb,var(--red) 9%,transparent);white-space:pre-wrap">${esc(norm(sa[k]))||'<span class="muted">∅</span>'}</td><td style="background:color-mix(in srgb,#1f9d57 12%,transparent);white-space:pre-wrap">${esc(norm(sb[k]))||'<span class="muted">∅</span>'}</td></tr>`).join('');
+  $('vDiffOut').innerHTML=rows?`<table><thead><tr><th>Поле</th><th>v${a.versionNumber}</th><th>v${b.versionNumber}</th></tr></thead><tbody>${rows}</tbody></table>`:'<p class="muted">различий нет</p>';
+}
 window.restoreVer=async(entity,id,n)=>{ if(!confirm('Восстановить версию '+n+' как актуальную?'))return; try{ await api(`/${entity}/${id}/versions/${n}/restore`,{method:'POST',body:'{}'}); closeModal(); alert('Восстановлено как новая версия'); }catch(e){ alert(e.message); } };
 function jiraImport(){
   openModal(`<h3>⬇️ Импорт требований из Jira</h3><label class="fld">Ключи задач (через запятую) — или оставьте пустым и задайте JQL</label><input type="text" id="jKeys" placeholder="TD-1203, AUTH-1">
@@ -438,11 +471,18 @@ views.testruns=async()=>{
 };
 window.trDetail=async(id)=>{
   try{ const r=await api(`/test-runs/${id}`);
-    openModal(`<h3>${esc(r.globalId)} · ${esc(r.title)}</h3><div class="bar"><span class="pill">${esc(r.status)}</span><button class="ghost" onclick="trFinish('${id}')">Finish</button></div>
-    <table><thead><tr><th>Item</th><th>Status</th><th>Mark</th></tr></thead><tbody>${(r.items||[]).map(it=>`<tr><td>${esc(it.titleSnapshot||it.globalId)}</td><td><span class="pill">${esc(it.status)}</span></td><td>${['Passed','Failed','Blocked','Skipped'].map(s=>`<button class="ghost" style="padding:3px 7px" onclick="mark('${id}','${it.id}','${s}')">${s[0]}</button>`).join(' ')}</td></tr>`).join('')||'<tr><td colspan=3 class="muted">нет items</td></tr>'}</tbody></table>
+    const stPill=s=>`<span class="pill${s==='Passed'?' ok':(s==='Failed'?' crit':(s==='Blocked'||s==='Skipped'?' warn':''))}">${esc(s)}</span>`;
+    const hang=it=>it.hangingStatus&&it.hangingStatus!=='Normal'?` <span class="pill warn">${esc(it.hangingStatus)}</span>`:'';
+    openModal(`<h3>${esc(r.globalId)} · ${esc(r.title)}</h3><div class="bar">${stPill(r.status)}<span class="muted">${esc(r.source||'')}</span><button class="ghost" onclick="trFinish('${id}')">Finish</button></div>
+    <table><thead><tr><th></th><th>Item</th><th>Status</th><th>Длит.</th><th>Mark</th></tr></thead><tbody>${(r.items||[]).map(it=>`<tr><td style="cursor:pointer" onclick="trSteps('${it.id}',this)" title="показать шаги">🔬</td><td>${esc(it.titleSnapshot||it.globalId)}${hang(it)}</td><td>${stPill(it.status)}</td><td class="muted">${it.durationMs!=null?Math.round(it.durationMs)+' ms':'—'}</td><td>${['Passed','Failed','Blocked','Skipped'].map(s=>`<button class="ghost" style="padding:3px 7px" onclick="mark('${id}','${it.id}','${s}')">${s[0]}</button>`).join(' ')}</td></tr><tr id="strow-${it.id}" style="display:none"><td></td><td colspan=4 id="stcell-${it.id}" class="muted"></td></tr>`).join('')||'<tr><td colspan=5 class="muted">нет items</td></tr>'}</tbody></table>
     <div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
   }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
 };
+window.trSteps=async(itemId,td)=>{ const row=$('strow-'+itemId); if(!row) return; if(row.style.display!=='none'){ row.style.display='none'; return; } row.style.display=''; const cell=$('stcell-'+itemId); cell.innerHTML='<span class="spin"></span>';
+  try{ const d=await api(`/test-run-items/${itemId}/steps`); const items=d.items||[];
+    const stPill=s=>`<span class="pill${s==='Passed'?' ok':(s==='Failed'?' crit':(s==='Skipped'||s==='Blocked'?' warn':''))}">${esc(s)}</span>`;
+    cell.innerHTML=items.length?`<table style="margin:4px 0"><thead><tr><th>#</th><th>Шаг</th><th>Статус</th><th>Длит.</th><th>Ошибка</th></tr></thead><tbody>${items.map(s=>`<tr><td>${s.stepOrder!=null?s.stepOrder+1:''}</td><td>${esc(s.title||'')}</td><td>${stPill(s.status)}</td><td class="muted">${s.durationMs!=null?Math.round(s.durationMs)+' ms':'—'}</td><td class="muted">${esc(s.errorMessage||'')}</td></tr>`).join('')}</tbody></table>`:'<span class="muted">нет пошаговых результатов (шлются репортером через /events)</span>';
+  }catch(e){ cell.innerHTML='<span class="err">'+esc(e.message)+'</span>'; } };
 window.mark=async(runId,itemId,status)=>{ try{ await api(`/test-runs/${runId}/items/${itemId}/result`,{method:'POST',body:JSON.stringify({status})}); trDetail(runId); }catch(e){ alert(e.message); } };
 window.trFinish=async(id)=>{ try{ await api(`/test-runs/${id}/finish`,{method:'POST',body:'{}'}); trDetail(id); }catch(e){ alert(e.message); } };
 
@@ -454,6 +494,16 @@ views.traceability=async()=>{
     ${items.map(r=>`<tr style="cursor:pointer" onclick="reqDetail('${r.requirementId}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td>${r.implementationPercent||0}%</td><td>${r.linkedTestCasesCount||0}</td><td>${pct(r.automationCoveragePercent)}</td><td class="muted">${esc(r.lastValidationStatus||'—')}</td><td><span class="pill${r.coverageStatus==='NotCovered'?' crit':(/Covered|Automated/.test(r.coverageStatus)?' ok':' warn')}">${esc(r.coverageStatus)}</span></td></tr>`).join('')||'<tr><td colspan=8 class="muted">нет требований</td></tr>'}
   </tbody></table></div>`;
 };
+
+// ---- Trash ----
+views.trash=async()=>{
+  $('main').innerHTML='<h1>🗑 Корзина</h1><p class="muted">Удалённые сущности (soft delete). Восстановление возвращает их в проект.</p><div id="trashList"><span class="spin"></span></div>';
+  const items=await loadList(`/projects/${PID}/trash`);
+  $('trashList').innerHTML=`<table><thead><tr><th>ID</th><th>Тип</th><th>Название</th><th>Удалено</th><th></th></tr></thead><tbody>
+    ${items.map(it=>`<tr><td class="gid">${esc(it.globalId||'')}</td><td class="muted">${esc(it.type)}</td><td>${esc(it.title)}</td><td class="muted">${it.deletedAt?new Date(it.deletedAt).toLocaleString():''}</td><td><button class="ghost" onclick="trashRestore('${it.entity}','${it.id}')">♻️ Восстановить</button></td></tr>`).join('')||'<tr><td colspan=5 class="muted">корзина пуста</td></tr>'}
+  </tbody></table>`;
+};
+window.trashRestore=async(entity,id)=>{ try{ await api(`/${entity}/${id}/restore`,{method:'POST',body:'{}'}); views.trash(); }catch(e){ alert(e.message); } };
 
 // ---- Global search ----
 let searchT;

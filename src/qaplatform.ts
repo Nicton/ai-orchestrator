@@ -257,6 +257,19 @@ export async function registerQaApi(app: FastifyInstance) {
     await cfg.m.update({ where: { id: req.params.id }, data: { isDeleted: false } }).catch(() => null);
     return reply.send({ ok: true });
   });
+  // Trash: deleted entities across versioned models for a project (for restore UI)
+  app.get('/api/qa/projects/:projectId/trash', async (req: any, reply) => {
+    const u = await A(req, reply); if (!u) return;
+    const p = req.params.projectId;
+    const nameField: Record<string, string> = { requirements: 'title', 'test-cases': 'title', checklists: 'title', 'shared-steps': 'title', 'automated-tests': 'name', 'test-plans': 'title', 'test-runs': 'title' };
+    const out: any[] = [];
+    for (const [entity, cfg] of Object.entries(MODEL)) {
+      const rows = await cfg.m.findMany({ where: { projectId: p, isDeleted: true }, orderBy: { updatedAt: 'desc' }, take: 200 }).catch(() => []);
+      for (const r of rows) out.push({ entity, type: cfg.type, id: r.id, globalId: r.globalId, title: r[nameField[entity]] || '', deletedAt: r.deletedAt || r.updatedAt });
+    }
+    out.sort((a, b) => String(b.deletedAt || '').localeCompare(String(a.deletedAt || '')));
+    return reply.send({ items: out });
+  });
   app.get('/api/qa/:entity/:id/versions', async (req: any, reply) => {
     const u = await A(req, reply); if (!u) return;
     const cfg = MODEL[req.params.entity]; if (!cfg) return reply.code(404).send({ error: 'unknown entity' });
