@@ -139,6 +139,12 @@ function route(){
 function pri(p){ return `<span class="pill${p==='Critical'?' crit':''}">${esc(p||'')}</span>`; }
 function pct(n){ return `<span class="pill${n>=100?' ok':(n>0?' warn':'')}">${n||0}%</span>`; }
 async function loadList(path){ try{ return (await api(path)).items||[]; }catch(e){ $('main').innerHTML='<p class="err">'+esc(e.message)+'</p>'; return []; } }
+// ---- sections (nested up to 15 levels) ----
+const SEC_PATH={req:'requirement-sections',test:'test-sections'};
+async function secList(kind){ try{ return (await api(`/projects/${PID}/${SEC_PATH[kind]}/tree`)).items||[]; }catch(_){ return []; } }
+function secOptions(items,sel){ const byP={}; items.forEach(s=>{ (byP[s.parentId||'']=byP[s.parentId||'']||[]).push(s); }); const out=['<option value="">— без секции —</option>']; const walk=(pid,d)=>{ (byP[pid||'']||[]).forEach(s=>{ out.push(`<option value="${s.id}"${s.id===sel?' selected':''}>${'  '.repeat(d)}${d?'└ ':''}${esc(s.name)}</option>`); walk(s.id,d+1); }); }; walk('',0); return out.join(''); }
+async function newSection(kind){ const name=prompt('Название секции:'); if(!name)return; const items=await secList(kind); const parent=items.length?prompt('ID родительской секции (пусто = корень). Доступные:\n'+items.map(s=>s.id+' — '+s.name).join('\n')):''; try{ await api(`/projects/${PID}/${SEC_PATH[kind]}`,{method:'POST',body:JSON.stringify({name,parentId:parent||undefined})}); }catch(e){ alert(e.message); } }
+async function fillSec(kind,selectId,sel){ const items=await secList(kind); const el=$(selectId); if(el) el.innerHTML=secOptions(items,sel); }
 
 // ---- Dashboard ----
 views.dashboard=async()=>{
@@ -161,10 +167,13 @@ views.dashboard=async()=>{
 
 // ---- Requirements ----
 views.requirements=async()=>{
-  $('main').innerHTML='<h1>📋 Requirements</h1><div class="bar"><button class="pri" id="addReq">+ Requirement</button><button class="ghost" id="impJira">⬇️ Импорт из Jira</button></div><div id="reqList"><span class="spin"></span></div>';
+  $('main').innerHTML='<h1>📋 Requirements</h1><div class="bar"><button class="pri" id="addReq">+ Requirement</button><button class="ghost" id="impJira">⬇️ Импорт из Jira</button><select class="f" id="reqSecFilter" style="width:auto"></select><button class="ghost" id="newSec">+ секция</button></div><div id="reqList"><span class="spin"></span></div>';
   $('addReq').onclick=reqForm;
   $('impJira').onclick=jiraImport;
-  const items=await loadList(`/projects/${PID}/requirements?pageSize=500`);
+  await fillSec('req','reqSecFilter',window._reqSec||''); $('reqSecFilter').insertAdjacentHTML('afterbegin','<option value="">все секции</option>'); $('reqSecFilter').value=window._reqSec||'';
+  $('reqSecFilter').onchange=e=>{ window._reqSec=e.target.value; views.requirements(); };
+  $('newSec').onclick=async()=>{ await newSection('req'); views.requirements(); };
+  const items=await loadList(`/projects/${PID}/requirements?pageSize=500${window._reqSec?'&sectionId='+window._reqSec:''}`);
   $('reqList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Impl%</th><th>Type</th></tr></thead><tbody>
     ${items.map(r=>`<tr style="cursor:pointer" onclick="reqDetail('${r.id}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td><span class="pill">${esc(r.status)}</span></td><td>${pct(r.implementationPercent)}</td><td class="muted">${esc(r.type)}</td></tr>`).join('')||'<tr><td colspan=6 class="muted">пусто</td></tr>'}
   </tbody></table>`;
@@ -175,8 +184,10 @@ function reqForm(){
   <div class="bar"><div><label class="fld">Priority</label><select class="f" id="rP"><option>Critical</option><option>High</option><option selected>Medium</option><option>Low</option></select></div>
   <div><label class="fld">Type</label><select class="f" id="rTy"><option>Functional</option><option>Business</option><option>NonFunctional</option><option>UI</option><option>API</option><option>Integration</option><option>Security</option><option>Performance</option><option>Data</option><option>Permission</option><option>Reporting</option><option>Other</option></select></div>
   <div><label class="fld">Status</label><select class="f" id="rS"><option>Draft</option><option>Approved</option><option>Implemented</option><option>PartiallyImplemented</option><option>NeedsUpdate</option><option>Deprecated</option><option>Rejected</option></select></div></div>
+  <label class="fld">Section</label><select class="f" id="rSec"></select>
   <div class="err" id="rErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="rSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
-  $('rSave').onclick=async()=>{ try{ await api(`/projects/${PID}/requirements`,{method:'POST',body:JSON.stringify({title:$('rT').value,description:$('rD').value,priority:$('rP').value,type:$('rTy').value,status:$('rS').value})}); closeModal(); views.requirements(); }catch(e){ $('rErr').textContent=e.message; } };
+  fillSec('req','rSec');
+  $('rSave').onclick=async()=>{ try{ await api(`/projects/${PID}/requirements`,{method:'POST',body:JSON.stringify({title:$('rT').value,description:$('rD').value,priority:$('rP').value,type:$('rTy').value,status:$('rS').value,sectionId:$('rSec').value||undefined})}); closeModal(); views.requirements(); }catch(e){ $('rErr').textContent=e.message; } };
 }
 window.reqDetail=async(id)=>{
   try{ const r=await api(`/requirements/${id}`); const c=r.coverage||{};
@@ -226,9 +237,12 @@ function jiraImport(){
 
 // ---- Test Cases ----
 views.testcases=async()=>{
-  $('main').innerHTML='<h1>🧪 Test Cases</h1><div class="bar"><button class="pri" id="addTc">+ Test Case</button></div><div id="tcList"><span class="spin"></span></div>';
+  $('main').innerHTML='<h1>🧪 Test Cases</h1><div class="bar"><button class="pri" id="addTc">+ Test Case</button><select class="f" id="tcSecFilter" style="width:auto"></select><button class="ghost" id="newSecT">+ секция</button></div><div id="tcList"><span class="spin"></span></div>';
   $('addTc').onclick=tcForm;
-  const items=await loadList(`/projects/${PID}/test-cases?pageSize=500`);
+  await fillSec('test','tcSecFilter',window._tcSec||''); $('tcSecFilter').insertAdjacentHTML('afterbegin','<option value="">все секции</option>'); $('tcSecFilter').value=window._tcSec||'';
+  $('tcSecFilter').onchange=e=>{ window._tcSec=e.target.value; views.testcases(); };
+  $('newSecT').onclick=async()=>{ await newSection('test'); views.testcases(); };
+  const items=await loadList(`/projects/${PID}/test-cases?pageSize=500${window._tcSec?'&sectionId='+window._tcSec:''}`);
   $('tcList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Type</th><th>Automation</th></tr></thead><tbody>
     ${items.map(t=>`<tr style="cursor:pointer" onclick="tcDetail('${t.id}')"><td class="gid">${esc(t.globalId)}</td><td>${esc(t.title)}</td><td>${pri(t.priority)}</td><td class="muted">${esc(t.type)}</td><td>${pct(t.automationCoveragePercent)} <span class="muted">${esc(t.automationStatus)}</span></td></tr>`).join('')||'<tr><td colspan=5 class="muted">пусто</td></tr>'}
   </tbody></table>`;
@@ -238,11 +252,13 @@ function tcForm(){
   tcSteps=[{action:'',expectedResult:''}];
   openModal(`<h3>Новый test case</h3><label class="fld">Title</label><input type="text" id="tT">
   <div class="bar"><div><label class="fld">Priority</label><select class="f" id="tP"><option>Critical</option><option>High</option><option selected>Medium</option><option>Low</option></select></div>
-  <div><label class="fld">Type</label><select class="f" id="tTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Integration</option><option>UI</option><option>API</option><option>Security</option><option>Performance</option><option>Other</option></select></div></div>
+  <div><label class="fld">Type</label><select class="f" id="tTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Integration</option><option>UI</option><option>API</option><option>Security</option><option>Performance</option><option>Other</option></select></div>
+  <div style="flex:1"><label class="fld">Section</label><select class="f" id="tSec"></select></div></div>
   <label class="fld">Steps</label><div id="stepsBox"></div><button class="ghost" id="addStep">+ шаг</button>
   <div class="err" id="tErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  fillSec('test','tSec');
   renderSteps(); $('addStep').onclick=()=>{ tcSteps.push({action:'',expectedResult:''}); renderSteps(); };
-  $('tSave').onclick=async()=>{ try{ collectSteps(); await api(`/projects/${PID}/test-cases`,{method:'POST',body:JSON.stringify({title:$('tT').value,priority:$('tP').value,type:$('tTy').value,steps:tcSteps.filter(s=>s.action)})}); closeModal(); views.testcases(); }catch(e){ $('tErr').textContent=e.message; } };
+  $('tSave').onclick=async()=>{ try{ collectSteps(); await api(`/projects/${PID}/test-cases`,{method:'POST',body:JSON.stringify({title:$('tT').value,priority:$('tP').value,type:$('tTy').value,sectionId:$('tSec').value||undefined,steps:tcSteps.filter(s=>s.action)})}); closeModal(); views.testcases(); }catch(e){ $('tErr').textContent=e.message; } };
 }
 function renderSteps(){ $('stepsBox').innerHTML=tcSteps.map((s,i)=>`<div class="steprow"><input type="text" placeholder="Action" value="${esc(s.action)}" data-a="${i}"><input type="text" placeholder="Expected" value="${esc(s.expectedResult)}" data-e="${i}"></div>`).join(''); }
 function collectSteps(){ document.querySelectorAll('[data-a]').forEach(el=>tcSteps[+el.dataset.a].action=el.value); document.querySelectorAll('[data-e]').forEach(el=>tcSteps[+el.dataset.e].expectedResult=el.value); }
