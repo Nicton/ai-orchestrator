@@ -1,0 +1,37 @@
+{
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "Prometheus", "description": "Prometheus scraping the QA Platform /metrics endpoint", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus" }
+  ],
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "QA Platform — Coverage & Execution",
+  "uid": "qa-platform",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-7d", "to": "now" },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      { "name": "datasource", "type": "datasource", "query": "prometheus", "current": {}, "hide": 0, "label": "Datasource" }
+    ]
+  },
+  "panels": [
+    { "type": "row", "title": "Requirements", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    { "type": "stat", "title": "Requirements total", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 }, "targets": [{ "expr": "tms_requirements_total", "refId": "A" }] },
+    { "type": "stat", "title": "Implemented", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 }, "targets": [{ "expr": "tms_requirements_implemented_total", "refId": "A" }] },
+    { "type": "stat", "title": "Partially implemented", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 }, "targets": [{ "expr": "tms_requirements_partially_implemented_total", "refId": "A" }] },
+    { "type": "stat", "title": "Not covered by tests", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 }, "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }, "color": { "mode": "thresholds" } } }, "targets": [{ "expr": "tms_requirements_not_covered_total", "refId": "A" }] },
+    { "type": "gauge", "title": "Requirement coverage %", "datasource": "${datasource}", "gridPos": { "h": 6, "w": 6, "x": 16, "y": 1 }, "fieldConfig": { "defaults": { "min": 0, "max": 100, "unit": "percent", "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 50 }, { "color": "green", "value": 80 }] } } }, "targets": [{ "expr": "tms_requirement_coverage_percent", "refId": "A" }] },
+    { "type": "row", "title": "Automation", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 } },
+    { "type": "stat", "title": "Test cases", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 0, "y": 8 }, "targets": [{ "expr": "tms_test_cases_total", "refId": "A" }] },
+    { "type": "stat", "title": "Automated TCs", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 4, "y": 8 }, "targets": [{ "expr": "tms_test_cases_automated_total", "refId": "A" }] },
+    { "type": "stat", "title": "Automated tests", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 8, "y": 8 }, "targets": [{ "expr": "tms_automated_tests_total", "refId": "A" }] },
+    { "type": "gauge", "title": "Automation coverage %", "datasource": "${datasource}", "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 }, "fieldConfig": { "defaults": { "min": 0, "max": 100, "unit": "percent", "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 50 }, { "color": "green", "value": 80 }] } } }, "targets": [{ "expr": "tms_automation_coverage_percent", "refId": "A" }] },
+    { "type": "row", "title": "Execution", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 } },
+    { "type": "stat", "title": "Passed", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 0, "y": 15 }, "fieldConfig": { "defaults": { "color": { "fixedColor": "green", "mode": "fixed" } } }, "targets": [{ "expr": "tms_test_run_items_passed_total", "refId": "A" }] },
+    { "type": "stat", "title": "Failed", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 4, "y": 15 }, "fieldConfig": { "defaults": { "color": { "fixedColor": "red", "mode": "fixed" } } }, "targets": [{ "expr": "tms_test_run_items_failed_total", "refId": "A" }] },
+    { "type": "stat", "title": "Blocked", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 8, "y": 15 }, "targets": [{ "expr": "tms_test_run_items_blocked_total", "refId": "A" }] },
+    { "type": "stat", "title": "Hanging", "datasource": "${datasource}", "gridPos": { "h": 4, "w": 4, "x": 12, "y": 15 }, "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }, "color": { "mode": "thresholds" } } }, "targets": [{ "expr": "tms_hanging_tests_total", "refId": "A" }] },
+    { "type": "timeseries", "title": "Pass / Fail over time", "datasource": "${datasource}", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 19 }, "targets": [{ "expr": "tms_test_run_items_passed_total", "legendFormat": "passed", "refId": "A" }, { "expr": "tms_test_run_items_failed_total", "legendFormat": "failed", "refId": "B" }] }
+  ]
+}

@@ -103,6 +103,16 @@ async function recomputeTouched(pairs: Array<[string, string | null | undefined]
   for (const id of tcIds) await recomputeTestCase(id);
 }
 
+// Accept either a cuid or a human globalId (REQ-12) when linking — resolve to cuid.
+async function resolveEntityId(projectId: string, type: string, val: string): Promise<string> {
+  if (!val || !/^[A-Za-z]+-\d+$/.test(val)) return val;
+  const gid = val.toUpperCase();
+  const m: any = { Requirement: prisma.qaRequirement, TestCase: prisma.qaTestCase, Checklist: prisma.qaChecklist, AutomatedTest: prisma.qaAutomatedTest, SharedStep: prisma.qaSharedStep, TestPlan: prisma.qaTestPlan, TestRun: prisma.qaTestRun }[type];
+  if (!m) return val;
+  const r = await m.findFirst({ where: { projectId, globalId: gid } });
+  return r?.id || val;
+}
+
 async function linkedOfType(projectId: string, type: string, id: string, otherType: string) {
   const links = await prisma.qaEntityLink.findMany({ where: { projectId, isDeleted: false, OR: [{ sourceType: type, sourceId: id }, { targetType: type, targetId: id }] } });
   const ids = new Set<string>();
@@ -280,6 +290,9 @@ export async function registerQaApi(app: FastifyInstance) {
   };
   app.post('/api/qa/projects/:projectId/requirements', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.code(201).send(await reqCreate(req.params.projectId, req.body || {}, u)); });
   app.post('/api/qa/projects/:projectId/requirements/bulk', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const items = (req.body?.items || []); return reply.send(await runBulk(items, async (it) => { const r = await reqCreate(req.params.projectId, it, u); return { id: r.id, globalId: r.globalId, status: 'created' }; })); });
+  // Import requirements from Jira (by JQL or explicit keys) → Requirement + Jira source, dedup by externalId.
+  app.post('/api/qa/projects/:projectId/requirements/import-jira', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; try { return reply.send(await importJira(req.params.projectId, req.body || {}, u)); } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e).slice(0, 250) }); } });
+  app.get('/api/qa/jira/enabled', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send({ enabled: jiraCfg().enabled }); });
   app.get('/api/qa/projects/:projectId/requirements', async (req: any, reply) => {
     const u = await A(req, reply); if (!u) return; const q = req.query || {}; const { skip, take, page, pageSize } = listArgs(q);
     const where: any = { projectId: req.params.projectId, isDeleted: q.includeDeleted === 'true' ? undefined : false };
@@ -297,7 +310,17 @@ export async function registerQaApi(app: FastifyInstance) {
       prisma.qaAcceptanceCriterion.findMany({ where: { requirementId: row.id, isDeleted: false }, orderBy: { order: 'asc' } }),
     ]);
     const coverage = await requirementCoverage(row);
-    return reply.send({ ...row, sources, acceptanceCriteria, coverage });
+    // drill-down: resolve linked entities + recent run results for the impact view
+    const tcIds = await linkedOfType(row.projectId, 'Requirement', row.id, 'TestCase');
+    const clIds = await linkedOfType(row.projectId, 'Requirement', row.id, 'Checklist');
+    const atIds = await linkedOfType(row.projectId, 'Requirement', row.id, 'AutomatedTest');
+    const [linkedTestCases, linkedChecklists, linkedAutomatedTests, recentRuns] = await Promise.all([
+      tcIds.length ? prisma.qaTestCase.findMany({ where: { id: { in: tcIds } }, select: { id: true, globalId: true, title: true, automationCoveragePercent: true, isDeleted: true } }) : [],
+      clIds.length ? prisma.qaChecklist.findMany({ where: { id: { in: clIds } }, select: { id: true, globalId: true, title: true, isDeleted: true } }) : [],
+      atIds.length ? prisma.qaAutomatedTest.findMany({ where: { id: { in: atIds } }, select: { id: true, globalId: true, name: true, framework: true, lastRunStatus: true, isDeleted: true } }) : [],
+      tcIds.length ? prisma.qaTestRunItem.findMany({ where: { projectId: row.projectId, sourceType: 'TestCase', sourceId: { in: tcIds }, isDeleted: false, status: { not: 'NotRun' } }, orderBy: { executedAt: 'desc' }, take: 20, select: { titleSnapshot: true, status: true, executedAt: true, testRunId: true } }) : [],
+    ]);
+    return reply.send({ ...row, sources, acceptanceCriteria, coverage, linkedTestCases, linkedChecklists, linkedAutomatedTests, recentRuns });
   });
   const reqUpdate = async (id: string, b: any, u: U) => {
     const cur = await prisma.qaRequirement.findUnique({ where: { id } }); if (!cur) throw new Error('not found');
@@ -439,7 +462,10 @@ export async function registerQaApi(app: FastifyInstance) {
 
   // ===== Entity links =====
   const linkCreate = async (projectId: string, b: any, u: U) => {
-    const row = await prisma.qaEntityLink.create({ data: { projectId, sourceType: b.sourceType, sourceId: b.sourceId, targetType: b.targetType, targetId: b.targetId, targetStepId: b.targetStepId || null, linkType: b.linkType || 'covers', coverageType: b.coverageType || null, coverageWeight: b.coverageWeight ?? null, createdBy: u.name } });
+    const sourceId = await resolveEntityId(projectId, b.sourceType, b.sourceId);
+    const targetId = await resolveEntityId(projectId, b.targetType, b.targetId);
+    const row = await prisma.qaEntityLink.create({ data: { projectId, sourceType: b.sourceType, sourceId, targetType: b.targetType, targetId, targetStepId: b.targetStepId || null, linkType: b.linkType || 'covers', coverageType: b.coverageType || null, coverageWeight: b.coverageWeight ?? null, createdBy: u.name } });
+    b = { ...b, sourceId, targetId };
     await recomputeTouched([[b.sourceType, b.sourceId], [b.targetType, b.targetId], ['TestStep', b.targetStepId]]);
     return row;
   };
@@ -545,11 +571,22 @@ export async function registerQaApi(app: FastifyInstance) {
     ]);
     const passed = await prisma.qaTestRunItem.count({ where: { projectId: p, isDeleted: false, status: 'Passed' } });
     const failed = await prisma.qaTestRunItem.count({ where: { projectId: p, isDeleted: false, status: 'Failed' } });
+    const blocked = await prisma.qaTestRunItem.count({ where: { projectId: p, isDeleted: false, status: 'Blocked' } });
+    const skipped = await prisma.qaTestRunItem.count({ where: { projectId: p, isDeleted: false, status: 'Skipped' } });
     const hanging = await prisma.qaTestRunItem.count({ where: { projectId: p, isDeleted: false, hangingStatus: { not: 'Normal' } } });
+    // coverage gauges
+    const tcsForCov = await prisma.qaTestCase.findMany({ where: { projectId: p, isDeleted: false }, select: { automationCoveragePercent: true } });
+    const autoCov = tcsForCov.length ? Math.round(tcsForCov.reduce((a, b) => a + (b.automationCoveragePercent || 0), 0) / tcsForCov.length) : 0;
+    const reqsForCov = await prisma.qaRequirement.findMany({ where: { projectId: p, isDeleted: false }, select: { id: true } });
+    let reqCovered = 0; for (const r of reqsForCov) { const ids = await linkedOfType(p, 'Requirement', r.id, 'TestCase'); if (ids.length) reqCovered++; }
+    const reqCovPct = reqsForCov.length ? Math.round((reqCovered / reqsForCov.length) * 100) : 0;
     const lines = [
       `tms_requirements_total ${reqTotal}`, `tms_requirements_implemented_total ${reqImpl}`, `tms_requirements_partially_implemented_total ${reqPart}`,
+      `tms_requirements_not_covered_total ${reqsForCov.length - reqCovered}`,
       `tms_test_cases_total ${tcTotal}`, `tms_test_cases_automated_total ${tcAuto}`, `tms_automated_tests_total ${atTotal}`,
-      `tms_test_runs_total ${runTotal}`, `tms_test_run_items_passed_total ${passed}`, `tms_test_run_items_failed_total ${failed}`, `tms_hanging_tests_total ${hanging}`,
+      `tms_test_runs_total ${runTotal}`, `tms_test_run_items_passed_total ${passed}`, `tms_test_run_items_failed_total ${failed}`,
+      `tms_test_run_items_blocked_total ${blocked}`, `tms_test_run_items_skipped_total ${skipped}`, `tms_hanging_tests_total ${hanging}`,
+      `tms_automation_coverage_percent ${autoCov}`, `tms_requirement_coverage_percent ${reqCovPct}`,
     ];
     reply.header('Content-Type', 'text/plain; version=0.0.4');
     return reply.send(lines.join('\n') + '\n');
@@ -588,6 +625,50 @@ export async function registerQaApi(app: FastifyInstance) {
 
 // ----- helpers used above (module scope, after registration for hoisting) -----
 function clampPct(v: any) { const n = parseInt(v, 10); if (isNaN(n)) return 0; return Math.max(0, Math.min(100, n)); }
+
+// --- Jira import (reuses the app's JIRA_* creds) → Requirements + Jira sources ---
+function jiraCfg() {
+  const baseUrl = String(process.env.JIRA_BASE_URL || 'https://shiptify.atlassian.net').replace(/\/$/, '');
+  const email = String(process.env.JIRA_EMAIL || '').trim();
+  const token = String(process.env.JIRA_API_TOKEN || '').trim();
+  return { baseUrl, email, token, enabled: !!(baseUrl && email && token) };
+}
+async function jiraGet(apiPath: string) {
+  const { baseUrl, email, token } = jiraCfg();
+  const res = await fetch(`${baseUrl}${apiPath}`, { headers: { Authorization: 'Basic ' + Buffer.from(`${email}:${token}`).toString('base64'), Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`Jira ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+function jiraAdfText(node: any): string {
+  if (!node) return ''; if (typeof node === 'string') return node;
+  if (Array.isArray(node)) return node.map(jiraAdfText).join('');
+  if (node.type === 'text') return node.text || ''; if (node.type === 'hardBreak') return '\n';
+  if (node.content) { const inner = jiraAdfText(node.content); return /paragraph|heading|listItem/.test(node.type) ? inner + '\n' : inner; }
+  return '';
+}
+function mapJiraPriority(p: string) { const s = (p || '').toLowerCase(); if (/highest|critical|blocker/.test(s)) return 'Critical'; if (/high/.test(s)) return 'High'; if (/low|lowest|minor|trivial/.test(s)) return 'Low'; return 'Medium'; }
+async function importJira(projectId: string, opts: { jql?: string; keys?: string[]; maxResults?: number }, u: U) {
+  const cfg = jiraCfg(); if (!cfg.enabled) throw new Error('Jira не настроена (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN)');
+  let issues: any[] = [];
+  if (opts.keys && opts.keys.length) { for (const k of opts.keys.slice(0, 100)) { try { issues.push(await jiraGet(`/rest/api/2/issue/${encodeURIComponent(k)}?fields=summary,description,priority,issuetype,labels,status`)); } catch { /* skip */ } } }
+  else { const jql = opts.jql || 'ORDER BY created DESC'; const data = await jiraGet(`/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=${Math.min(100, opts.maxResults || 50)}&fields=summary,description,priority,issuetype,labels,status`); issues = data.issues || []; }
+  const by = u.name || 'API Agent';
+  const results: any[] = []; let succeeded = 0; let failed = 0;
+  for (const it of issues) {
+    try {
+      const key = it.key; const f = it.fields || {};
+      const existing = await prisma.qaRequirementSource.findFirst({ where: { projectId, type: 'Jira', externalId: key, isDeleted: false } });
+      if (existing) { results.push({ key, status: 'skipped', reason: 'already imported', requirementId: existing.requirementId }); succeeded++; continue; }
+      const gid = await nextGlobalId(projectId, 'REQ');
+      const desc = typeof f.description === 'string' ? f.description : jiraAdfText(f.description);
+      const req = await prisma.qaRequirement.create({ data: { globalId: gid, projectId, title: f.summary || key, description: (desc || '').slice(0, 8000), priority: mapJiraPriority(f.priority?.name), type: 'Functional', status: 'Draft', createdBy: by, updatedBy: by } });
+      await prisma.qaRequirementSource.create({ data: { projectId, requirementId: req.id, type: 'Jira', externalId: key, url: `${cfg.baseUrl}/browse/${key}`, title: f.summary || key, createdBy: by } });
+      await snapshot('Requirement', req, by, `imported from Jira ${key}`);
+      results.push({ key, status: 'created', requirementId: req.id, globalId: req.globalId }); succeeded++;
+    } catch (e: any) { results.push({ key: it.key, status: 'error', error: String(e?.message || e).slice(0, 200) }); failed++; }
+  }
+  return { total: issues.length, succeeded, failed, results };
+}
 function stripUndef(b: any, fields: string[]) { const o: any = {}; for (const f of fields) if (b?.[f] !== undefined) o[f] = b[f]; return o; }
 
 async function atUpsert(projectId: string, b: any, u: U, allowUpdate: boolean) {

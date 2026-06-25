@@ -161,8 +161,9 @@ views.dashboard=async()=>{
 
 // ---- Requirements ----
 views.requirements=async()=>{
-  $('main').innerHTML='<h1>📋 Requirements</h1><div class="bar"><button class="pri" id="addReq">+ Requirement</button></div><div id="reqList"><span class="spin"></span></div>';
+  $('main').innerHTML='<h1>📋 Requirements</h1><div class="bar"><button class="pri" id="addReq">+ Requirement</button><button class="ghost" id="impJira">⬇️ Импорт из Jira</button></div><div id="reqList"><span class="spin"></span></div>';
   $('addReq').onclick=reqForm;
+  $('impJira').onclick=jiraImport;
   const items=await loadList(`/projects/${PID}/requirements?pageSize=500`);
   $('reqList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Impl%</th><th>Type</th></tr></thead><tbody>
     ${items.map(r=>`<tr style="cursor:pointer" onclick="reqDetail('${r.id}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td><span class="pill">${esc(r.status)}</span></td><td>${pct(r.implementationPercent)}</td><td class="muted">${esc(r.type)}</td></tr>`).join('')||'<tr><td colspan=6 class="muted">пусто</td></tr>'}
@@ -179,19 +180,49 @@ function reqForm(){
 }
 window.reqDetail=async(id)=>{
   try{ const r=await api(`/requirements/${id}`); const c=r.coverage||{};
+    const tcRows=(r.linkedTestCases||[]).map(t=>`<tr><td class="gid">${esc(t.globalId)}</td><td>${esc(t.title)}${t.isDeleted?' <span class="pill warn">deleted</span>':''}</td><td>${pct(t.automationCoveragePercent)}</td></tr>`).join('');
+    const atRows=(r.linkedAutomatedTests||[]).map(a=>`<tr><td class="gid">${esc(a.globalId)}</td><td>${esc(a.name)}${a.isDeleted?' <span class="pill warn">deleted</span>':''}</td><td class="muted">${esc(a.framework||'')} · ${esc(a.lastRunStatus||'—')}</td></tr>`).join('');
+    const runRows=(r.recentRuns||[]).map(x=>`<tr><td>${esc(x.titleSnapshot||'')}</td><td><span class="pill">${esc(x.status)}</span></td><td class="muted">${x.executedAt?new Date(x.executedAt).toLocaleString():''}</td></tr>`).join('');
     openModal(`<h3>${esc(r.globalId)} · ${esc(r.title)}</h3>
     <p class="muted">${esc(r.description||'')}</p>
-    <div class="bar">${pri(r.priority)}<span class="pill">${esc(r.status)}</span>${pct(r.implementationPercent)}<span class="pill">${esc(r.type)}</span></div>
+    <div class="bar">${pri(r.priority)}<span class="pill">${esc(r.status)}</span>${pct(r.implementationPercent)}<span class="pill">${esc(r.type)}</span><button class="ghost" onclick="showVersions('requirements','${id}')">🕓 Версии</button></div>
     <h2>Coverage</h2><div class="cards"><div class="card"><div class="v">${c.linkedTestCasesCount||0}</div><div class="l">test cases</div></div><div class="card"><div class="v">${c.automationCoveragePercent||0}%</div><div class="l">automation</div></div><div class="card"><div class="v">${esc(c.lastValidationStatus||'—')}</div><div class="l">last validation</div></div></div>
-    <h2>Sources (${(r.sources||[]).length})</h2><div class="muted">${(r.sources||[]).map(s=>`${esc(s.type)}: ${esc(s.title||s.url||s.externalId||'')}`).join('<br>')||'—'}</div>
-    <h2>Acceptance criteria</h2><div class="muted">${(r.acceptanceCriteria||[]).map(a=>'• '+esc(a.text)).join('<br>')||'—'}</div>
+    <h2>Linked test cases</h2><table><tbody>${tcRows||'<tr><td class="muted">нет</td></tr>'}</tbody></table>
+    <h2>Linked automated tests</h2><table><tbody>${atRows||'<tr><td class="muted">нет</td></tr>'}</tbody></table>
+    ${runRows?`<h2>Recent runs</h2><table><tbody>${runRows}</tbody></table>`:''}
+    <h2>Sources (${(r.sources||[]).length})</h2><div class="muted" id="srcList">${(r.sources||[]).map(s=>`${esc(s.type)}: ${esc(s.title||s.url||s.externalId||'')}`).join('<br>')||'—'}</div>
+    <div class="bar"><select class="f" id="sType" style="width:auto"><option>Jira</option><option>Confluence</option><option>Presentation</option><option>Document</option><option>MeetingNotes</option><option>CodeAnalysis</option><option>Other</option></select><input type="text" id="sTitle" placeholder="title / url / externalId" style="flex:1"><button class="ghost" id="addSrc">+ источник</button></div>
+    <h2>Acceptance criteria</h2><div class="muted" id="acList">${(r.acceptanceCriteria||[]).map(a=>'• '+esc(a.text)).join('<br>')||'—'}</div>
+    <div class="bar"><input type="text" id="acText" placeholder="новый критерий" style="flex:1"><button class="ghost" id="addAc">+ критерий</button></div>
     <h2>Implementation</h2><div class="bar"><select class="f" id="iS" style="width:auto"><option>NotStarted</option><option>PartiallyImplemented</option><option>Implemented</option><option>Deprecated</option><option>Unknown</option></select>
     <input type="text" id="iP" value="${r.implementationPercent||0}" style="width:80px"><button class="pri" id="iSave">Сохранить</button></div>
-    <div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
+    <div class="err" id="rdErr"></div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
     $('iS').value=r.implementationStatus||'Unknown';
-    $('iSave').onclick=async()=>{ await api(`/requirements/${id}`,{method:'PATCH',body:JSON.stringify({implementationStatus:$('iS').value,implementationPercent:parseInt($('iP').value,10)||0})}); closeModal(); views.requirements(); };
+    $('iSave').onclick=async()=>{ await api(`/requirements/${id}`,{method:'PATCH',body:JSON.stringify({implementationStatus:$('iS').value,implementationPercent:parseInt($('iP').value,10)||0})}); closeModal(); if(curView()==='traceability') views.traceability(); else views.requirements(); };
+    $('addSrc').onclick=async()=>{ try{ await api(`/requirements/${id}/sources`,{method:'POST',body:JSON.stringify({type:$('sType').value,title:$('sTitle').value,url:/^https?:/.test($('sTitle').value)?$('sTitle').value:undefined,externalId:/^[A-Z]+-\d+$/.test($('sTitle').value)?$('sTitle').value:undefined})}); reqDetail(id); }catch(e){ $('rdErr').textContent=e.message; } };
+    $('addAc').onclick=async()=>{ try{ await api(`/requirements/${id}/acceptance-criteria`,{method:'POST',body:JSON.stringify({text:$('acText').value})}); reqDetail(id); }catch(e){ $('rdErr').textContent=e.message; } };
   }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
 };
+window.showVersions=async(entity,id)=>{
+  try{ const d=await api(`/${entity}/${id}/versions`);
+    openModal(`<h3>🕓 Версии</h3><table><thead><tr><th>v</th><th>Когда</th><th>Автор</th><th>Комментарий</th><th></th></tr></thead><tbody>
+    ${(d.items||[]).map(v=>`<tr><td>${v.versionNumber}</td><td class="muted">${new Date(v.createdAt).toLocaleString()}</td><td class="muted">${esc(v.createdBy||'')}</td><td>${esc(v.comment||v.changeReason||'')}</td><td><button class="ghost" onclick="restoreVer('${entity}','${id}',${v.versionNumber})">Restore</button></td></tr>`).join('')||'<tr><td colspan=5 class="muted">нет версий</td></tr>'}
+    </tbody></table><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
+  }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
+};
+window.restoreVer=async(entity,id,n)=>{ if(!confirm('Восстановить версию '+n+' как актуальную?'))return; try{ await api(`/${entity}/${id}/versions/${n}/restore`,{method:'POST',body:'{}'}); closeModal(); alert('Восстановлено как новая версия'); }catch(e){ alert(e.message); } };
+function jiraImport(){
+  openModal(`<h3>⬇️ Импорт требований из Jira</h3><label class="fld">Ключи задач (через запятую) — или оставьте пустым и задайте JQL</label><input type="text" id="jKeys" placeholder="TD-1203, AUTH-1">
+  <label class="fld">JQL (если ключи не заданы)</label><input type="text" id="jJql" placeholder='project = TD AND status = "Ready for QA" ORDER BY created DESC'>
+  <label class="fld">Лимит</label><input type="text" id="jMax" value="50" style="width:90px">
+  <div class="err" id="jErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="jRun">Импортировать</button><button class="ghost" onclick="closeModal()">Отмена</button></div><div id="jOut" class="muted" style="margin-top:10px"></div>`);
+  $('jRun').onclick=async()=>{ $('jErr').textContent=''; $('jOut').innerHTML='<span class="spin"></span> импорт…';
+    try{ const keys=$('jKeys').value.split(',').map(s=>s.trim()).filter(Boolean); const body=keys.length?{keys}:{jql:$('jJql').value,maxResults:parseInt($('jMax').value,10)||50};
+      const r=await api(`/projects/${PID}/requirements/import-jira`,{method:'POST',body:JSON.stringify(body)});
+      $('jOut').innerHTML=`Готово: создано ${r.results.filter(x=>x.status==='created').length}, пропущено ${r.results.filter(x=>x.status==='skipped').length}, ошибок ${r.failed}.`;
+      setTimeout(()=>{ closeModal(); views.requirements(); },1500);
+    }catch(e){ $('jErr').textContent=e.message; $('jOut').innerHTML=''; } };
+}
 
 // ---- Test Cases ----
 views.testcases=async()=>{
@@ -217,16 +248,19 @@ function renderSteps(){ $('stepsBox').innerHTML=tcSteps.map((s,i)=>`<div class="
 function collectSteps(){ document.querySelectorAll('[data-a]').forEach(el=>tcSteps[+el.dataset.a].action=el.value); document.querySelectorAll('[data-e]').forEach(el=>tcSteps[+el.dataset.e].expectedResult=el.value); }
 window.tcDetail=async(id)=>{
   try{ const t=await api(`/test-cases/${id}`); const c=t.coverage||{};
+    const stepOpts=(t.steps||[]).map((s,i)=>`<option value="${s.id}">шаг ${i+1}: ${esc(s.action).slice(0,40)}</option>`).join('');
     openModal(`<h3>${esc(t.globalId)} · ${esc(t.title)}</h3>
-    <div class="bar">${pri(t.priority)}<span class="pill">${esc(t.type)}</span>${pct(c.automationCoveragePercent)}<span class="pill">${esc(c.coveragePrecision)}</span></div>
+    <div class="bar">${pri(t.priority)}<span class="pill">${esc(t.type)}</span>${pct(c.automationCoveragePercent)}<span class="pill">${esc(c.coveragePrecision)}</span><button class="ghost" onclick="showVersions('test-cases','${id}')">🕓 Версии</button></div>
+    <p class="muted">Покрытие шагов: ${c.coveredSteps||0}/${c.totalSteps||0}. Линкуй автотест либо на весь кейс (Full), либо на конкретные шаги (точнее).</p>
     <h2>Steps (${(t.steps||[]).length})</h2><table><tbody>${(t.steps||[]).map((s,i)=>`<tr><td>${i+1}</td><td>${esc(s.action)}</td><td class="muted">${esc(s.expectedResult||'')}</td></tr>`).join('')||'<tr><td class="muted">нет</td></tr>'}</tbody></table>
-    <h2>Links</h2>
-    <div class="bar"><input type="text" id="lReq" placeholder="REQ-id (cuid) для линка requirement" style="flex:1"><button class="ghost" id="linkReq">Link Requirement</button></div>
-    <div class="bar"><input type="text" id="lAt" placeholder="AT-id (cuid) для линка automated test" style="flex:1"><button class="ghost" id="linkAt">Link Automated</button></div>
-    <div class="muted">linked requirements: ${(t.linkedRequirementIds||[]).length} · automated: ${(t.linkedAutomatedTestIds||[]).length}</div>
+    <h2>Links (req: ${(t.linkedRequirementIds||[]).length} · automated: ${(t.linkedAutomatedTestIds||[]).length})</h2>
+    <div class="bar"><input type="text" id="lReq" placeholder="REQ-1 или cuid" style="flex:1"><button class="ghost" id="linkReq">Link Requirement</button></div>
+    <div class="bar"><input type="text" id="lAt" placeholder="AT-1 или cuid" style="flex:1"><button class="ghost" id="linkAt">Link Automated (весь кейс)</button></div>
+    <div class="bar"><input type="text" id="lAtS" placeholder="AT-1 или cuid" style="flex:1"><select class="f" id="lStep" style="width:auto">${stepOpts}</select><button class="ghost" id="linkAtStep">Link → шаг</button></div>
     <div class="err" id="tdErr"></div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`);
     $('linkReq').onclick=async()=>{ try{ await api(`/projects/${PID}/links`,{method:'POST',body:JSON.stringify({sourceType:'Requirement',sourceId:$('lReq').value.trim(),targetType:'TestCase',targetId:id,linkType:'covers'})}); tcDetail(id); }catch(e){ $('tdErr').textContent=e.message; } };
     $('linkAt').onclick=async()=>{ try{ await api(`/projects/${PID}/links`,{method:'POST',body:JSON.stringify({sourceType:'AutomatedTest',sourceId:$('lAt').value.trim(),targetType:'TestCase',targetId:id,linkType:'covers',coverageType:'Full'})}); tcDetail(id); }catch(e){ $('tdErr').textContent=e.message; } };
+    $('linkAtStep').onclick=async()=>{ try{ await api(`/projects/${PID}/links`,{method:'POST',body:JSON.stringify({sourceType:'AutomatedTest',sourceId:$('lAtS').value.trim(),targetType:'TestStep',targetId:$('lStep').value,linkType:'covers',coverageType:'StepLevel'})}); tcDetail(id); }catch(e){ $('tdErr').textContent=e.message; } };
   }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); }
 };
 
@@ -273,16 +307,28 @@ views.testplans=async()=>{
 async function tpForm(){
   const tcs=await loadList(`/projects/${PID}/test-cases?pageSize=1000`);
   const cls=await loadList(`/projects/${PID}/checklists`);
+  const tcLabel=t=>`<label class="selRow" data-pri="${esc(t.priority)}" data-typ="${esc(t.type)}" data-auto="${esc(t.automationStatus)}" data-text="${esc((t.globalId+' '+t.title).toLowerCase())}" style="display:block;font-size:13px"><input type="checkbox" class="selItem" data-type="TestCase" value="${t.id}"> ${esc(t.globalId)} ${esc(t.title)} <span class="muted">${esc(t.priority)}·${esc(t.type)}·${t.automationCoveragePercent||0}%</span></label>`;
+  const clLabel=c=>`<label class="selRow" data-pri="" data-typ="${esc(c.type)}" data-auto="" data-text="${esc((c.globalId+' '+c.title).toLowerCase())}" style="display:block;font-size:13px"><input type="checkbox" class="selItem" data-type="Checklist" value="${c.id}"> ${esc(c.globalId)} ${esc(c.title)} <span class="muted">checklist·${esc(c.type)}</span></label>`;
   openModal(`<h3>Новый test plan</h3><label class="fld">Title</label><input type="text" id="tpT"><label class="fld">Type</label><select class="f" id="tpTy"><option>Smoke</option><option>Regression</option><option>Release</option><option>Feature</option><option selected>Custom</option></select>
-  <div class="bar"><button class="ghost" id="selAll">Select All</button><span class="muted" id="selCnt">0</span></div>
-  <div style="max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px">
-    <b>Test Cases</b><br>${tcs.map(t=>`<label style="display:block;font-size:13px"><input type="checkbox" class="selItem" data-type="TestCase" value="${t.id}"> ${esc(t.globalId)} ${esc(t.title)}</label>`).join('')}
-    <b>Checklists</b><br>${cls.map(c=>`<label style="display:block;font-size:13px"><input type="checkbox" class="selItem" data-type="Checklist" value="${c.id}"> ${esc(c.globalId)} ${esc(c.title)}</label>`).join('')}
+  <div class="bar" style="margin-top:8px">
+    <select class="f" id="fPri" style="width:auto"><option value="">priority: любой</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select>
+    <select class="f" id="fTyp" style="width:auto"><option value="">type: любой</option><option>Smoke</option><option>Regression</option><option>Functional</option><option>Integration</option><option>UI</option><option>API</option><option>Security</option><option>Performance</option></select>
+    <select class="f" id="fAuto" style="width:auto"><option value="">automation: любой</option><option>NotAutomated</option><option>PartiallyAutomated</option><option>Automated</option></select>
+    <input type="text" id="fText" placeholder="поиск" style="flex:1;min-width:120px">
+  </div>
+  <div class="bar"><button class="ghost" id="selAll">Select All (отфильтрованные)</button><button class="ghost" id="selNone">Снять</button><span class="muted" id="selCnt">0 выбрано</span></div>
+  <div id="selBox" style="max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px">
+    <b>Test Cases</b><br>${tcs.map(tcLabel).join('')}
+    <b>Checklists</b><br>${cls.map(clLabel).join('')}
   </div><div class="err" id="tpErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tpSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
   const upd=()=>$('selCnt').textContent=document.querySelectorAll('.selItem:checked').length+' выбрано';
+  const applyFilter=()=>{ const p=$('fPri').value,ty=$('fTyp').value,au=$('fAuto').value,tx=$('fText').value.toLowerCase().trim();
+    document.querySelectorAll('.selRow').forEach(row=>{ const ok=(!p||row.dataset.pri===p)&&(!ty||row.dataset.typ===ty)&&(!au||row.dataset.auto===au)&&(!tx||row.dataset.text.includes(tx)); row.style.display=ok?'block':'none'; }); };
+  ['fPri','fTyp','fAuto','fText'].forEach(idf=>$(idf).addEventListener('input',applyFilter));
   document.querySelectorAll('.selItem').forEach(c=>c.addEventListener('change',upd));
-  $('selAll').onclick=()=>{ document.querySelectorAll('.selItem').forEach(c=>c.checked=true); upd(); };
-  $('tpSave').onclick=async()=>{ try{ const items=[...document.querySelectorAll('.selItem:checked')].map(c=>({sourceType:c.dataset.type,sourceId:c.value})); await api(`/projects/${PID}/test-plans`,{method:'POST',body:JSON.stringify({title:$('tpT').value,type:$('tpTy').value,items})}); closeModal(); views.testplans(); }catch(e){ $('tpErr').textContent=e.message; } };
+  $('selAll').onclick=()=>{ document.querySelectorAll('.selRow').forEach(row=>{ if(row.style.display!=='none') row.querySelector('.selItem').checked=true; }); upd(); };
+  $('selNone').onclick=()=>{ document.querySelectorAll('.selItem').forEach(c=>c.checked=false); upd(); };
+  $('tpSave').onclick=async()=>{ try{ const items=[...document.querySelectorAll('.selItem:checked')].map(c=>({sourceType:c.dataset.type,sourceId:c.value})); if(!items.length){ $('tpErr').textContent='выберите хотя бы один пункт'; return; } await api(`/projects/${PID}/test-plans`,{method:'POST',body:JSON.stringify({title:$('tpT').value,type:$('tpTy').value,items})}); closeModal(); views.testplans(); }catch(e){ $('tpErr').textContent=e.message; } };
 }
 window.tpRun=async(id,title)=>{ try{ const run=await api(`/test-plans/${id}/runs`,{method:'POST',body:JSON.stringify({title:'Run: '+title})}); await api(`/test-runs/${run.id}/start`,{method:'POST',body:'{}'}); location.hash='#/testruns'; }catch(e){ alert(e.message); } };
 
@@ -307,7 +353,7 @@ views.traceability=async()=>{
   $('main').innerHTML='<h1>🕸 Traceability Matrix</h1><div id="trc"><span class="spin"></span></div>';
   const items=await loadList(`/projects/${PID}/traceability`);
   $('trc').innerHTML=`<div style="overflow:auto"><table><thead><tr><th>Req</th><th>Title</th><th>Priority</th><th>Impl</th><th>TCs</th><th>Auto%</th><th>Last</th><th>Coverage</th></tr></thead><tbody>
-    ${items.map(r=>`<tr><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td>${r.implementationPercent||0}%</td><td>${r.linkedTestCasesCount||0}</td><td>${pct(r.automationCoveragePercent)}</td><td class="muted">${esc(r.lastValidationStatus||'—')}</td><td><span class="pill${r.coverageStatus==='NotCovered'?' crit':(/Covered|Automated/.test(r.coverageStatus)?' ok':' warn')}">${esc(r.coverageStatus)}</span></td></tr>`).join('')||'<tr><td colspan=8 class="muted">нет требований</td></tr>'}
+    ${items.map(r=>`<tr style="cursor:pointer" onclick="reqDetail('${r.requirementId}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td>${pri(r.priority)}</td><td>${r.implementationPercent||0}%</td><td>${r.linkedTestCasesCount||0}</td><td>${pct(r.automationCoveragePercent)}</td><td class="muted">${esc(r.lastValidationStatus||'—')}</td><td><span class="pill${r.coverageStatus==='NotCovered'?' crit':(/Covered|Automated/.test(r.coverageStatus)?' ok':' warn')}">${esc(r.coverageStatus)}</span></td></tr>`).join('')||'<tr><td colspan=8 class="muted">нет требований</td></tr>'}
   </tbody></table></div>`;
 };
 
