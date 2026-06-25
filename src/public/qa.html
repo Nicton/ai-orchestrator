@@ -323,10 +323,13 @@ function tcForm(ex){
   <div><label class="fld">Type</label><select class="f" id="tTy">${opts(['Smoke','Regression','Functional','Integration','UI','API','Security','Performance','Other'],editing?ex.type:'Functional')}</select></div>
   <div><label class="fld">Status</label><select class="f" id="tSt">${opts(['Draft','Ready','NeedsUpdate','Deprecated'],editing?ex.status:'Draft')}</select></div>
   <div style="flex:1"><label class="fld">Section</label><select class="f" id="tSec"></select></div></div>
-  <label class="fld">Steps</label><div id="stepsBox"></div><button class="ghost" id="addStep">+ шаг</button>
+  <label class="fld">Steps</label><div id="stepsBox"></div>
+  <div class="bar" style="margin-top:6px"><button class="ghost" id="addStep">+ шаг</button><select class="f" id="ssSel" style="flex:1"><option value="">— shared step —</option></select><button class="ghost" id="insSS">+ вставить Shared Step</button></div>
   <div class="err" id="tErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tSave">${editing?'Сохранить':'Создать'}</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
   fillSec('test','tSec',editing?(ex.sectionId||''):(window._tcSec||''));
   renderSteps(); $('addStep').onclick=()=>{ tcSteps.push({action:'',expectedResult:''}); renderSteps(); };
+  loadList(`/projects/${PID}/shared-steps`).then(ss=>{ const el=$('ssSel'); if(el) el.innerHTML='<option value="">— shared step —</option>'+ss.map(s=>`<option value="${s.id}">${esc(s.globalId)} · ${esc(s.title)}</option>`).join(''); });
+  $('insSS').onclick=async()=>{ const id=$('ssSel').value; if(!id) return; collectSteps(); try{ const s=await api('/shared-steps/'+id); for(const it of (s.steps||[])) tcSteps.push({action:`[${s.globalId}] ${it.action}`,expectedResult:it.expectedResult||''}); renderSteps(); }catch(e){ $('tErr').textContent=e.message; } };
   $('tSave').onclick=async()=>{ try{ collectSteps(); const body={title:$('tT').value,preconditions:$('tPre').value,priority:$('tP').value,type:$('tTy').value,status:$('tSt').value,sectionId:$('tSec').value||null,steps:tcSteps.filter(s=>s.action)};
     if(editing) await api('/test-cases/'+ex.id,{method:'PATCH',body:JSON.stringify(body)}); else await api(`/projects/${PID}/test-cases`,{method:'POST',body:JSON.stringify(body)});
     closeModal(); views.testcases(); }catch(e){ $('tErr').textContent=e.message; } };

@@ -180,6 +180,24 @@ export async function registerQaApi(app: FastifyInstance) {
     return requireAuth(req, reply) as any;
   };
 
+  // ===== Hanging-test detection (§13.9): mark Running items with a stale heartbeat
+  // as PossiblyHanging, then TimedOut (→ Failed) after 3× the timeout. =====
+  const HANG_MS = Number(process.env.QA_HANG_TIMEOUT_MS) || 5 * 60 * 1000;
+  const hangTimer = setInterval(async () => {
+    try {
+      const now = Date.now();
+      const running = await prisma.qaTestRunItem.findMany({ where: { status: 'Running', isDeleted: false }, select: { id: true, lastHeartbeatAt: true, startedAt: true, timeoutMs: true, hangingStatus: true } });
+      for (const it of running) {
+        const t = it.timeoutMs || HANG_MS;
+        const last = (it.lastHeartbeatAt || it.startedAt)?.getTime() || now;
+        const idle = now - last;
+        if (idle > 3 * t && it.hangingStatus !== 'TimedOut') await prisma.qaTestRunItem.update({ where: { id: it.id }, data: { hangingStatus: 'TimedOut', status: 'Failed', finishedAt: new Date(), failureMessage: 'Timed out — no heartbeat/finish within timeout' } });
+        else if (idle > t && it.hangingStatus === 'Normal') await prisma.qaTestRunItem.update({ where: { id: it.id }, data: { hangingStatus: 'PossiblyHanging' } });
+      }
+    } catch { /* sweep errors are non-fatal */ }
+  }, 60000);
+  if (typeof hangTimer.unref === 'function') hangTimer.unref();
+
   // ===== Projects =====
   app.get('/api/qa/projects', async (req: any, reply) => {
     const u = await A(req, reply); if (!u) return;
@@ -511,6 +529,10 @@ export async function registerQaApi(app: FastifyInstance) {
   app.post('/api/qa/test-runs/:runId/items/:itemId/result', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await applyResult(req.params.runId, req.params.itemId, req.body || {}, u, 'Manual')); });
   app.post('/api/qa/test-runs/:runId/results/bulk', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await runBulk(req.body?.items || [], async (it: any) => { const r = await resultByExternalOrItem(req.params.runId, it, u); return { itemId: r?.id || null, status: it.status }; })); });
   app.post('/api/qa/test-runs/:runId/events', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await ingestEvent(req.params.runId, req.body || {})); });
+  app.post('/api/qa/test-runs/:runId/steps/start', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await ingestEvent(req.params.runId, { ...req.body, eventType: 'StepStarted' })); });
+  app.post('/api/qa/test-runs/:runId/steps/finish', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await ingestEvent(req.params.runId, { ...req.body, eventType: 'StepFinished' })); });
+  // step results for a run item (live step-level view)
+  app.get('/api/qa/test-run-items/:id/steps', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const rows = await prisma.qaTestRunStepResult.findMany({ where: { testRunItemId: req.params.id }, orderBy: { stepOrder: 'asc' } }); return reply.send({ items: rows }); });
   app.post('/api/qa/test-runs/:runId/events/bulk', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send(await runBulk(req.body?.events || req.body?.items || [], async (e: any) => { await ingestEvent(req.params.runId, e); return { eventId: e.eventId || null }; })); });
 
   // ===== Coverage =====
@@ -571,6 +593,48 @@ export async function registerQaApi(app: FastifyInstance) {
     const items = await prisma.qaTestRunItem.findMany({ where: { projectId: p, isDeleted: false }, select: { status: true, hangingStatus: true, durationMs: true } });
     const by = (s: string) => items.filter((i) => i.status === s).length;
     return reply.send({ recentRuns: runs, passed: by('Passed'), failed: by('Failed'), blocked: by('Blocked'), skipped: by('Skipped'), notRun: by('NotRun'), hanging: items.filter((i) => i.hangingStatus !== 'Normal').length });
+  });
+  app.get('/api/qa/projects/:projectId/dashboard/requirements', async (req: any, reply) => {
+    const u = await A(req, reply); if (!u) return; const p = req.params.projectId;
+    const reqs = await prisma.qaRequirement.findMany({ where: { projectId: p, isDeleted: false } });
+    const cnt = (f: (r: any) => boolean) => reqs.filter(f).length;
+    let noSources = 0; let noTests = 0; let noAuto = 0; let criticalUncovered = 0;
+    for (const r of reqs) {
+      const [src, tcIds, atIds] = await Promise.all([
+        prisma.qaRequirementSource.count({ where: { requirementId: r.id, isDeleted: false } }),
+        linkedOfType(p, 'Requirement', r.id, 'TestCase'), linkedOfType(p, 'Requirement', r.id, 'AutomatedTest'),
+      ]);
+      if (!src) noSources++; if (!tcIds.length) { noTests++; if (r.priority === 'Critical') criticalUncovered++; } if (!atIds.length) noAuto++;
+    }
+    const byStatus: any = {}; const byPriority: any = {}; const byType: any = {};
+    for (const r of reqs) { byStatus[r.status] = (byStatus[r.status] || 0) + 1; byPriority[r.priority] = (byPriority[r.priority] || 0) + 1; byType[r.type] = (byType[r.type] || 0) + 1; }
+    const avgImpl = reqs.length ? Math.round(reqs.reduce((a, b) => a + (b.implementationPercent || 0), 0) / reqs.length) : 0;
+    return reply.send({ total: reqs.length, byStatus, byPriority, byType, implementationPercentAvg: avgImpl, withoutSources: noSources, withoutTestCases: noTests, withoutAutomation: noAuto, criticalUncovered });
+  });
+  app.get('/api/qa/projects/:projectId/dashboard/automation', async (req: any, reply) => {
+    const u = await A(req, reply); if (!u) return; const p = req.params.projectId;
+    const [tcs, ats] = await Promise.all([
+      prisma.qaTestCase.findMany({ where: { projectId: p, isDeleted: false }, select: { automationStatus: true, automationCoveragePercent: true, sectionId: true } }),
+      prisma.qaAutomatedTest.findMany({ where: { projectId: p, isDeleted: false }, select: { status: true } }),
+    ]);
+    const avg = tcs.length ? Math.round(tcs.reduce((a, b) => a + (b.automationCoveragePercent || 0), 0) / tcs.length) : 0;
+    const atBy = (s: string) => ats.filter((a) => a.status === s).length;
+    return reply.send({ automatedTestsTotal: ats.length, active: atBy('Active'), flaky: atBy('Flaky'), deprecated: atBy('Deprecated'), testCasesTotal: tcs.length, automated: tcs.filter((t) => t.automationStatus === 'Automated').length, partiallyAutomated: tcs.filter((t) => t.automationStatus === 'PartiallyAutomated').length, notAutomated: tcs.filter((t) => t.automationStatus === 'NotAutomated').length, averageCoveragePercent: avg });
+  });
+  app.get('/api/qa/projects/:projectId/dashboard/traceability', async (req: any, reply) => {
+    const u = await A(req, reply); if (!u) return; const p = req.params.projectId;
+    const reqs = await prisma.qaRequirement.findMany({ where: { projectId: p, isDeleted: false } });
+    const byCoverage: any = { NotCovered: 0, CoveredByManualTests: 0, PartiallyAutomated: 0, CoveredByAutomatedTests: 0, FailedLastRun: 0 };
+    for (const r of reqs) {
+      const cov = await requirementCoverage(r);
+      let cs = 'NotCovered';
+      if (cov.lastValidationStatus === 'Failed' || cov.lastValidationStatus === 'PartiallyFailed') cs = 'FailedLastRun';
+      else if (cov.automationCoveragePercent >= 100) cs = 'CoveredByAutomatedTests';
+      else if (cov.automationCoveragePercent > 0) cs = 'PartiallyAutomated';
+      else if (cov.linkedTestCasesCount > 0) cs = 'CoveredByManualTests';
+      byCoverage[cs] = (byCoverage[cs] || 0) + 1;
+    }
+    return reply.send({ total: reqs.length, byCoverage });
   });
 
   // ===== Prometheus metrics =====
@@ -828,6 +892,21 @@ async function ingestEvent(runId: string, e: any) {
     if (item) await prisma.qaTestRunItem.update({ where: { id: item.id }, data: { status: e.status || 'Passed', finishedAt: new Date(), durationMs: e.durationMs ?? item.durationMs, failureMessage: e.failureMessage || null, hangingStatus: 'Normal' } });
   } else if (e.eventType === 'Heartbeat' && e.externalTestId) {
     await prisma.qaTestRunItem.updateMany({ where: { testRunId: runId, externalTestId: e.externalTestId }, data: { lastHeartbeatAt: new Date() } });
+  } else if ((e.eventType === 'StepStarted' || e.eventType === 'StepFinished') && e.externalTestId) {
+    const item = await prisma.qaTestRunItem.findFirst({ where: { testRunId: runId, externalTestId: e.externalTestId } });
+    if (item) {
+      await prisma.qaTestRunItem.update({ where: { id: item.id }, data: { lastHeartbeatAt: new Date() } });
+      const key = e.externalStepId || e.title || '';
+      if (e.eventType === 'StepStarted') {
+        const cnt = await prisma.qaTestRunStepResult.count({ where: { testRunItemId: item.id } });
+        await prisma.qaTestRunStepResult.create({ data: { projectId: run.projectId, testRunItemId: item.id, stepOrder: cnt, title: e.title || `Step ${cnt + 1}`, status: 'Running', startedAt: new Date(), resultSource: 'Automated', externalStepId: e.externalStepId || null } });
+      } else {
+        // StepFinished — update the matching (or latest Running) step result
+        const existing = await prisma.qaTestRunStepResult.findFirst({ where: { testRunItemId: item.id, ...(e.externalStepId ? { externalStepId: e.externalStepId } : (key ? { title: key } : { status: 'Running' })) }, orderBy: { stepOrder: 'desc' } });
+        if (existing) await prisma.qaTestRunStepResult.update({ where: { id: existing.id }, data: { status: e.status || 'Passed', finishedAt: new Date(), durationMs: e.durationMs ?? null, errorMessage: e.errorMessage || e.failureMessage || null } });
+        else { const cnt = await prisma.qaTestRunStepResult.count({ where: { testRunItemId: item.id } }); await prisma.qaTestRunStepResult.create({ data: { projectId: run.projectId, testRunItemId: item.id, stepOrder: cnt, title: e.title || `Step ${cnt + 1}`, status: e.status || 'Passed', finishedAt: new Date(), durationMs: e.durationMs ?? null, errorMessage: e.errorMessage || e.failureMessage || null, resultSource: 'Automated', externalStepId: e.externalStepId || null } }); }
+      }
+    }
   }
   return { ok: true };
 }
