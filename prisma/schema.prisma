@@ -1046,12 +1046,14 @@ model QaAcceptanceCriterion {
 }
 
 model QaTestSection {
-  id          String   @id @default(cuid())
-  projectId   String
-  parentId    String?
-  name        String
-  description String?
-  order       Int      @default(0)
+  id             String  @id @default(cuid())
+  projectId      String
+  parentId       String?
+  name           String
+  description    String?
+  externalId     String?
+  externalSource String?
+  order          Int     @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdBy   String?
@@ -1074,6 +1076,8 @@ model QaTestCase {
   automationStatus          String    @default("NotAutomated")
   automationCoveragePercent Int       @default(0)
   coveragePrecision         String    @default("Unknown")
+  externalId                String?
+  externalSource            String?
   currentVersionNumber      Int       @default(1)
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
@@ -1083,6 +1087,7 @@ model QaTestCase {
   deletedAt                 DateTime?
   @@index([projectId, isDeleted])
   @@index([globalId])
+  @@index([projectId, externalSource, externalId])
 }
 
 model QaTestStep {

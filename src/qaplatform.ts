@@ -293,6 +293,9 @@ export async function registerQaApi(app: FastifyInstance) {
   // Import requirements from Jira (by JQL or explicit keys) → Requirement + Jira source, dedup by externalId.
   app.post('/api/qa/projects/:projectId/requirements/import-jira', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; try { return reply.send(await importJira(req.params.projectId, req.body || {}, u)); } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e).slice(0, 250) }); } });
   app.get('/api/qa/jira/enabled', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send({ enabled: jiraCfg().enabled }); });
+  // Import a Qase project (suites → test sections, cases+steps → test cases). Needs QASE_API_TOKEN.
+  app.post('/api/qa/projects/:projectId/import-qase', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; try { return reply.send(await importQase(req.params.projectId, req.body || {}, u)); } catch (e: any) { return reply.code(400).send({ error: String(e?.message || e).slice(0, 300) }); } });
+  app.get('/api/qa/qase/enabled', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; return reply.send({ enabled: qaseCfg().enabled }); });
   app.get('/api/qa/projects/:projectId/requirements', async (req: any, reply) => {
     const u = await A(req, reply); if (!u) return; const q = req.query || {}; const { skip, take, page, pageSize } = listArgs(q);
     const where: any = { projectId: req.params.projectId, isDeleted: q.includeDeleted === 'true' ? undefined : false };
@@ -683,6 +686,59 @@ async function atUpsert(projectId: string, b: any, u: U, allowUpdate: boolean) {
   const gid = await nextGlobalId(projectId, 'AT');
   const row = await prisma.qaAutomatedTest.create({ data: { globalId: gid, projectId, externalId: b.externalId || null, name: b.name || b.fullName || b.testName || 'Automated test', description: b.description || null, framework: b.framework || 'Other', suiteName: b.suiteName || null, filePath: b.filePath || null, testName: b.testName || null, fullName: b.fullName || null, tags: b.tags || [], status: b.status || 'Active', createdBy: by, updatedBy: by } });
   return row;
+}
+
+// --- Qase import (suites → sections, cases+steps → test cases). Needs QASE_API_TOKEN ---
+function qaseCfg() {
+  const token = String(process.env.QASE_API_TOKEN || '').trim();
+  const api = String(process.env.QASE_API || 'https://api.qase.io/v1').replace(/\/$/, '');
+  const project = String(process.env.QASE_PROJECT || '').trim();
+  return { token, api, project, enabled: !!token };
+}
+async function qaseGet(apiPath: string) {
+  const { api, token } = qaseCfg();
+  const res = await fetch(`${api}${apiPath}`, { headers: { Token: token, Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`Qase ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+function qasePriority(p: any) { return ({ 1: 'High', 2: 'Medium', 3: 'Low' } as any)[p] || 'Medium'; }
+async function importQase(projectId: string, opts: { projectCode?: string; limit?: number }, u: U) {
+  const cfg = qaseCfg(); if (!cfg.enabled) throw new Error('Qase не настроена: задайте QASE_API_TOKEN в env сервера (Qase → Settings → API tokens). Логин/пароль для API не подходят.');
+  const code = (opts.projectCode || cfg.project || 'MA').toUpperCase();
+  const by = u.name || 'API Agent';
+  // 1) suites → sections (paginated)
+  const suites: any[] = [];
+  for (let offset = 0; offset < 5000; offset += 100) { const d = await qaseGet(`/suite/${code}?limit=100&offset=${offset}`); const ents = d?.result?.entities || []; suites.push(...ents); if (ents.length < 100) break; }
+  const suiteById = new Map<number, any>(suites.map((s: any) => [s.id, s]));
+  const secMap = new Map<number, string>();
+  const ensureSection = async (qid: number | null | undefined): Promise<string | null> => {
+    if (qid == null) return null;
+    if (secMap.has(qid)) return secMap.get(qid)!;
+    const s = suiteById.get(qid); if (!s) return null;
+    const parentOur = s.parent_id ? await ensureSection(s.parent_id) : null;
+    const existing = await prisma.qaTestSection.findFirst({ where: { projectId, externalSource: 'qase', externalId: String(qid) } });
+    const ourId = existing ? existing.id : (await prisma.qaTestSection.create({ data: { projectId, parentId: parentOur, name: s.title || `Suite ${qid}`, description: s.description || null, externalId: String(qid), externalSource: 'qase', createdBy: by, updatedBy: by } })).id;
+    secMap.set(qid, ourId); return ourId;
+  };
+  for (const s of suites) await ensureSection(s.id);
+  // 2) cases → test cases (+steps), bounded by limit
+  const limit = Math.min(5000, opts.limit || 500);
+  const cases: any[] = [];
+  for (let offset = 0; offset < limit; offset += 100) { const take = Math.min(100, limit - offset); const d = await qaseGet(`/case/${code}?limit=${take}&offset=${offset}`); const ents = d?.result?.entities || []; cases.push(...ents); if (ents.length < take) break; }
+  let created = 0; let skipped = 0;
+  for (const c of cases) {
+    const exists = await prisma.qaTestCase.findFirst({ where: { projectId, externalSource: 'qase', externalId: String(c.id) } });
+    if (exists) { skipped++; continue; }
+    const sectionId = c.suite_id ? await ensureSection(c.suite_id) : null;
+    let steps: any[] = Array.isArray(c.steps) ? c.steps : [];
+    if (!steps.length) { try { const det = await qaseGet(`/case/${code}/${c.id}`); steps = det?.result?.steps || []; } catch { steps = []; } }
+    const gid = await nextGlobalId(projectId, 'TC');
+    const tc = await prisma.qaTestCase.create({ data: { globalId: gid, projectId, sectionId, title: c.title || `Case ${c.id}`, description: c.description || null, preconditions: c.preconditions || null, priority: qasePriority(c.priority), type: 'Functional', status: 'Ready', externalId: String(c.id), externalSource: 'qase', createdBy: by, updatedBy: by } });
+    let o = 0; for (const st of steps) await prisma.qaTestStep.create({ data: { projectId, testCaseId: tc.id, order: o++, action: st.action || st.action_text || '', expectedResult: st.expected_result || st.expected || null } });
+    await snapshot('TestCase', tc, by, `imported from Qase ${code}-${c.id}`);
+    created++;
+  }
+  return { project: code, sections: secMap.size, casesTotal: cases.length, casesCreated: created, casesSkipped: skipped };
 }
 
 async function addPlanItems(tp: { id: string; projectId: string }, items: any[]) {

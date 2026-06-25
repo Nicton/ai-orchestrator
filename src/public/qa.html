@@ -31,6 +31,12 @@
   th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);background:var(--bg-soft)}
   tr:hover td{background:var(--bg-soft)}
   .gid{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--blue-dark)}
+  .qrow{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:6px;font-size:13px}
+  .qrow:hover{background:var(--bg-soft)}
+  .qrow.sel{background:color-mix(in srgb,var(--blue) 14%,transparent)}
+  .qtog{width:14px;flex:0 0 14px;text-align:center;color:var(--muted);cursor:pointer;font-size:11px;user-select:none}
+  .qname{flex:1;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qcount{flex:0 0 auto;background:var(--bg-soft);border:1px solid var(--line);border-radius:9px;padding:0 7px;font-size:11px;color:var(--muted)}
   .pill{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;font-weight:600;background:var(--bg-soft);border:1px solid var(--line)}
   .pill.crit{background:#fde8e8;color:#b42318;border-color:#f4b9b9}
   .pill.ok{background:#e9f6ec;color:#1f9d57;border-color:#bfe6cb}
@@ -235,18 +241,56 @@ function jiraImport(){
     }catch(e){ $('jErr').textContent=e.message; $('jOut').innerHTML=''; } };
 }
 
-// ---- Test Cases ----
+// ---- Test Library (Qase-like tree: sections → test cases + checklists) ----
 views.testcases=async()=>{
-  $('main').innerHTML='<h1>🧪 Test Cases</h1><div class="bar"><button class="pri" id="addTc">+ Test Case</button><select class="f" id="tcSecFilter" style="width:auto"></select><button class="ghost" id="newSecT">+ секция</button></div><div id="tcList"><span class="spin"></span></div>';
-  $('addTc').onclick=tcForm;
-  await fillSec('test','tcSecFilter',window._tcSec||''); $('tcSecFilter').insertAdjacentHTML('afterbegin','<option value="">все секции</option>'); $('tcSecFilter').value=window._tcSec||'';
-  $('tcSecFilter').onchange=e=>{ window._tcSec=e.target.value; views.testcases(); };
+  $('main').innerHTML='<h1>🌳 Test Library</h1><div class="bar"><button class="pri" id="addTc">+ Test Case</button><button class="ghost" id="addCl2">+ Checklist</button><button class="ghost" id="newSecT">+ Секция</button><button class="ghost" id="impQase">⬇️ Импорт из Qase</button></div><div style="display:flex;gap:16px;align-items:flex-start"><div id="qtree" style="width:330px;flex:0 0 330px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px;max-height:70vh;overflow:auto"></div><div id="qitems" style="flex:1;min-width:0"></div></div>';
+  $('addTc').onclick=tcForm; $('addCl2').onclick=clForm;
   $('newSecT').onclick=async()=>{ await newSection('test'); views.testcases(); };
-  const items=await loadList(`/projects/${PID}/test-cases?pageSize=500${window._tcSec?'&sectionId='+window._tcSec:''}`);
-  $('tcList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Priority</th><th>Type</th><th>Automation</th></tr></thead><tbody>
-    ${items.map(t=>`<tr style="cursor:pointer" onclick="tcDetail('${t.id}')"><td class="gid">${esc(t.globalId)}</td><td>${esc(t.title)}</td><td>${pri(t.priority)}</td><td class="muted">${esc(t.type)}</td><td>${pct(t.automationCoveragePercent)} <span class="muted">${esc(t.automationStatus)}</span></td></tr>`).join('')||'<tr><td colspan=5 class="muted">пусто</td></tr>'}
-  </tbody></table>`;
+  $('impQase').onclick=qaseImport;
+  $('qtree').innerHTML='<span class="spin"></span>';
+  const [secs,tcs,cls]=await Promise.all([secList('test'),loadList(`/projects/${PID}/test-cases?pageSize=3000`),loadList(`/projects/${PID}/checklists`)]);
+  window._lib={secs,tcs,cls};
+  if(!window._libExp) window._libExp=new Set();
+  if(window._tcSec===undefined) window._tcSec='';
+  renderTree(); renderItems();
 };
+function libChildren(pid){ return (window._lib.secs||[]).filter(s=>(s.parentId||'')===(pid||'')); }
+function libCount(secId){ const {tcs,cls}=window._lib; let n=tcs.filter(t=>(t.sectionId||'')===secId).length+cls.filter(c=>(c.sectionId||'')===secId).length; for(const ch of libChildren(secId)) n+=libCount(ch.id); return n; }
+function renderTree(){
+  const {tcs,cls}=window._lib; const total=tcs.length+cls.length;
+  let html=`<div class="qrow${window._tcSec===''?' sel':''}"><span class="qtog"></span><span class="qname" onclick="selSec('')">📂 Все</span><span class="qcount">${total}</span></div>`;
+  const node=(s,d)=>{ const kids=libChildren(s.id); const exp=window._libExp.has(s.id);
+    let h=`<div class="qrow${window._tcSec===s.id?' sel':''}" style="padding-left:${4+d*14}px">`+(kids.length?`<span class="qtog" onclick="togSec('${s.id}')">${exp?'▾':'▸'}</span>`:'<span class="qtog"></span>')+`<span class="qname" onclick="selSec('${s.id}')">📁 ${esc(s.name)}</span><span class="qcount">${libCount(s.id)}</span></div>`;
+    if(exp) for(const k of kids) h+=node(k,d+1);
+    return h; };
+  for(const s of libChildren('')) html+=node(s,0);
+  $('qtree').innerHTML=html;
+}
+window.selSec=id=>{ window._tcSec=id; renderTree(); renderItems(); };
+window.togSec=id=>{ if(window._libExp.has(id)) window._libExp.delete(id); else window._libExp.add(id); renderTree(); };
+function renderItems(){
+  const {tcs,cls,secs}=window._lib; const sel=window._tcSec; const sec=secs.find(s=>s.id===sel);
+  const cInSec=tcs.filter(t=>(t.sectionId||'')===sel); const clInSec=cls.filter(c=>(c.sectionId||'')===sel);
+  const title=sel===''?'Все (без секции)':(sec?esc(sec.name):'—');
+  let h=`<h2 style="margin-top:0">${title} <span class="muted">— ${cInSec.length} кейсов · ${clInSec.length} чек-листов</span></h2><table><thead><tr><th>ID</th><th>Название</th><th>Тип</th><th>Priority</th><th>Auto</th></tr></thead><tbody>`;
+  h+=clInSec.map(c=>`<tr style="cursor:pointer" onclick="clDetail('${c.id}')"><td class="gid">${esc(c.globalId)}</td><td>✅ ${esc(c.title)}</td><td class="muted">checklist·${esc(c.type)}</td><td></td><td></td></tr>`).join('');
+  h+=cInSec.map(t=>`<tr style="cursor:pointer" onclick="tcDetail('${t.id}')"><td class="gid">${esc(t.globalId)}</td><td>🧪 ${esc(t.title)}</td><td class="muted">${esc(t.type)}</td><td>${pri(t.priority)}</td><td>${pct(t.automationCoveragePercent)}</td></tr>`).join('');
+  if(!cInSec.length&&!clInSec.length) h+='<tr><td colspan=5 class="muted">пусто — добавьте тест-кейс/чек-лист или выберите секцию</td></tr>';
+  $('qitems').innerHTML=h+'</tbody></table>';
+}
+window.clDetail=async(id)=>{ try{ const c=await api(`/checklists/${id}`); openModal(`<h3>${esc(c.globalId)} · ${esc(c.title)}</h3><div class="bar"><span class="pill">${esc(c.type)}</span><button class="ghost" onclick="clExpand('${id}')">→ разложить на тест-кейсы</button><button class="ghost" onclick="showVersions('checklists','${id}')">🕓 Версии</button></div><h2>Items (${(c.items||[]).length})</h2><div class="muted">${(c.items||[]).map((it,i)=>`${i+1}. ${esc(it.title)}`).join('<br>')||'—'}</div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`); }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); } };
+function qaseImport(){
+  openModal(`<h3>⬇️ Импорт из Qase</h3><p class="muted">Импортирует сьюты Qase → секции, и кейсы со шагами → тест-кейсы. Нужен <b>Qase API token</b> (Qase → Settings → API tokens) в env сервера (<code>QASE_API_TOKEN</code>). Логин/пароль для API не подходят.</p>
+  <label class="fld">Код проекта Qase</label><input type="text" id="qProj" value="MA">
+  <label class="fld">Лимит кейсов (для пробного прогона)</label><input type="text" id="qLim" value="500" style="width:120px">
+  <div class="err" id="qErr"></div><div id="qOut" class="muted" style="margin-top:8px"></div>
+  <div class="bar" style="margin-top:12px"><button class="pri" id="qRun">Импортировать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  $('qRun').onclick=async()=>{ $('qErr').textContent=''; $('qOut').innerHTML='<span class="spin"></span> импорт (может занять время)…';
+    try{ const r=await api(`/projects/${PID}/import-qase`,{method:'POST',body:JSON.stringify({projectCode:$('qProj').value.trim(),limit:parseInt($('qLim').value,10)||500})});
+      $('qOut').innerHTML=`Готово: секций ${r.sections}, кейсов создано ${r.casesCreated}, пропущено ${r.casesSkipped}.`;
+      setTimeout(()=>{ closeModal(); views.testcases(); },1500);
+    }catch(e){ $('qErr').textContent=e.message; $('qOut').innerHTML=''; } };
+}
 let tcSteps=[];
 function tcForm(){
   tcSteps=[{action:'',expectedResult:''}];
@@ -256,7 +300,7 @@ function tcForm(){
   <div style="flex:1"><label class="fld">Section</label><select class="f" id="tSec"></select></div></div>
   <label class="fld">Steps</label><div id="stepsBox"></div><button class="ghost" id="addStep">+ шаг</button>
   <div class="err" id="tErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="tSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
-  fillSec('test','tSec');
+  fillSec('test','tSec',window._tcSec||'');
   renderSteps(); $('addStep').onclick=()=>{ tcSteps.push({action:'',expectedResult:''}); renderSteps(); };
   $('tSave').onclick=async()=>{ try{ collectSteps(); await api(`/projects/${PID}/test-cases`,{method:'POST',body:JSON.stringify({title:$('tT').value,priority:$('tP').value,type:$('tTy').value,sectionId:$('tSec').value||undefined,steps:tcSteps.filter(s=>s.action)})}); closeModal(); views.testcases(); }catch(e){ $('tErr').textContent=e.message; } };
 }
@@ -290,8 +334,9 @@ views.checklists=async()=>{
   </tbody></table>`;
 };
 function clForm(){
-  openModal(`<h3>Новый чек-лист</h3><label class="fld">Title</label><input type="text" id="cT"><label class="fld">Type</label><select class="f" id="cTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Other</option></select><label class="fld">Items (по строке)</label><textarea id="cI" rows="6" placeholder="Открыть страницу логина&#10;Ввести валидные данные&#10;Нажать Login"></textarea><div class="err" id="cErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="cSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
-  $('cSave').onclick=async()=>{ try{ const items=$('cI').value.split('\n').map(s=>s.trim()).filter(Boolean); await api(`/projects/${PID}/checklists`,{method:'POST',body:JSON.stringify({title:$('cT').value,type:$('cTy').value,items})}); closeModal(); views.checklists(); }catch(e){ $('cErr').textContent=e.message; } };
+  openModal(`<h3>Новый чек-лист</h3><label class="fld">Title</label><input type="text" id="cT"><label class="fld">Type</label><select class="f" id="cTy"><option>Smoke</option><option>Regression</option><option selected>Functional</option><option>Other</option></select><label class="fld">Section</label><select class="f" id="cSec"></select><label class="fld">Items (по строке)</label><textarea id="cI" rows="6" placeholder="Открыть страницу логина&#10;Ввести валидные данные&#10;Нажать Login"></textarea><div class="err" id="cErr"></div><div class="bar" style="margin-top:12px"><button class="pri" id="cSave">Создать</button><button class="ghost" onclick="closeModal()">Отмена</button></div>`);
+  fillSec('test','cSec',window._tcSec||'');
+  $('cSave').onclick=async()=>{ try{ const items=$('cI').value.split('\n').map(s=>s.trim()).filter(Boolean); await api(`/projects/${PID}/checklists`,{method:'POST',body:JSON.stringify({title:$('cT').value,type:$('cTy').value,sectionId:$('cSec').value||undefined,items})}); closeModal(); (curView()==='testcases'?views.testcases:views.checklists)(); }catch(e){ $('cErr').textContent=e.message; } };
 }
 window.clExpand=async(id)=>{ try{ const r=await api(`/checklists/${id}/expand-to-test-cases`,{method:'POST',body:'{}'}); alert('Создано test cases: '+r.total); }catch(e){ alert(e.message); } };
 
