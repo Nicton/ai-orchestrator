@@ -104,6 +104,14 @@
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// tiny markdown for grounded descriptions: escape first, then links/code/bold/bullets
+function mdLite(s){ let t=esc(s||'');
+  t=t.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  t=t.replace(/`([^`]+)`/g,'<code style="background:var(--bg-soft);padding:1px 4px;border-radius:4px;font-size:12px">$1</code>');
+  t=t.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  t=t.replace(/^\s*-\s+/gm,'• ');
+  t=t.replace(/\n/g,'<br>');
+  return t; }
 let PID=localStorage.getItem('qa_pid')||'';
 let projects=[];
 
@@ -266,7 +274,7 @@ window.reqDetail=async(id)=>{
     const atRows=(r.linkedAutomatedTests||[]).map(a=>`<tr><td class="gid">${esc(a.globalId)}</td><td>${esc(a.name)}${a.isDeleted?' <span class="pill warn">deleted</span>':''}</td><td class="muted">${esc(a.framework||'')} · ${esc(a.lastRunStatus||'—')}</td></tr>`).join('');
     const runRows=(r.recentRuns||[]).map(x=>`<tr><td>${esc(x.titleSnapshot||'')}</td><td><span class="pill">${esc(x.status)}</span></td><td class="muted">${x.executedAt?new Date(x.executedAt).toLocaleString():''}</td></tr>`).join('');
     openModal(`<h3>${esc(r.globalId)} · ${esc(r.title)}</h3>
-    <p class="muted">${esc(r.description||'')}</p>
+    <div class="muted" style="line-height:1.5">${mdLite(r.description||'')}</div>
     <div class="bar">${pri(r.priority)}<span class="pill">${esc(r.status)}</span>${pct(r.implementationPercent)}<span class="pill">${esc(r.type)}</span><button class="ghost" onclick="showVersions('requirements','${id}')">🕓 Версии</button></div>
     <h2>Coverage</h2><div class="cards"><div class="card"><div class="v">${c.linkedTestCasesCount||0}</div><div class="l">test cases</div></div><div class="card"><div class="v">${c.automationCoveragePercent||0}%</div><div class="l">automation</div></div><div class="card"><div class="v">${esc(c.lastValidationStatus||'—')}</div><div class="l">last validation</div></div></div>
     <h2>Linked test cases</h2><table><tbody>${tcRows||'<tr><td class="muted">нет</td></tr>'}</tbody></table>
