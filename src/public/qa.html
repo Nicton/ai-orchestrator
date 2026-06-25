@@ -108,7 +108,8 @@ let PID=localStorage.getItem('qa_pid')||'';
 let projects=[];
 
 async function api(path,opts){
-  const r=await fetch('/api/qa'+path,Object.assign({headers:{'content-type':'application/json'}},opts||{}));
+  opts=opts||{}; const headers=Object.assign({},opts.headers); if(opts.body!=null) headers['content-type']='application/json';
+  const r=await fetch('/api/qa'+path,Object.assign({},opts,{headers}));
   if(r.status===401){location.href='/login';throw new Error('auth');}
   const t=await r.text(); let j=null; try{j=t?JSON.parse(t):null;}catch(_){}
   if(!r.ok) throw new Error((j&&j.error&&(typeof j.error==='string'?j.error:JSON.stringify(j.error)))||t||('HTTP '+r.status));
