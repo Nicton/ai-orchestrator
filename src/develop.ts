@@ -595,8 +595,15 @@ export async function registerDevelopApi(app: FastifyInstance) {
     const raw = reply.raw;
     raw.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     const send = (event: string, data: any) => { try { raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* gone */ } };
-    const ping = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* noop */ } }, 15000);
-    const stage = (m: string) => send('stage', { msg: m });
+    const liveLog: string[] = [];
+    const stage = (m: string) => { liveLog.push(m); send('stage', { msg: m }); };
+    // Heartbeat + incremental log persistence: if the client connection drops mid-run
+    // (long pipeline behind the Cloudflare tunnel), the pipeline keeps running and the
+    // browser can recover the live progress + final result by polling /run/:id.
+    const ping = setInterval(() => {
+      try { raw.write(': ping\n\n'); } catch { /* noop */ }
+      prisma.devRun.update({ where: { id: row.id }, data: { log: liveLog.slice(-400) as any } }).catch(() => { /* noop */ });
+    }, 10000);
 
     try {
       const repos = (row.repos && row.repos.length ? row.repos : (row.repo ? [row.repo] : [])).filter(Boolean);

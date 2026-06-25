@@ -235,7 +235,7 @@ const I18N = {
     fbAsk:'Доволен результатом?', followLbl:'🔧 Доработать / исправить (новая итерация на той же ветке)', follow:'Отправить фикс',
     editPlan:'✏️ Редактировать план перед запуском', reviewLabel:'🔍 Само-ревью', gateFailedMsg:'❌ Build gate провален — MR помечен [BUILD FAILED], нужна правка', gateLimitedMsg:'⚠️ Build gate ограничен (на сервере нет зависимостей репозитория)',
     recognizing:'Распознаю речь…', analyzing:'анализ…', running:'выполняю пайплайн…',
-    descShort:'Опишите задачу подробнее', noRepo:'Выберите хотя бы один репозиторий', noMic:'Нет доступа к микрофону', netErr:'Сеть недоступна',
+    descShort:'Опишите задачу подробнее', noRepo:'Выберите хотя бы один репозиторий', noMic:'Нет доступа к микрофону', netErr:'Сеть недоступна', recovering:'Соединение прервалось — получаю результат с сервера…',
     fileBig:'Файл больше 30 МБ', imgBig:'Изображение больше 10 МБ', uploadErr:'Не удалось загрузить',
     analyzeErr:'Ошибка анализа', runErr:'Ошибка пайплайна', thinking:'…', done:'Готово.',
     history:'🕘 История', historyTitle:'История разработок', historyEmpty:'Пока пусто.', untitled:'Без названия',
@@ -257,7 +257,7 @@ const I18N = {
     fbAsk:'Happy with the result?', followLbl:'🔧 Refine / fix (new iteration on the same branch)', follow:'Send fix',
     editPlan:'✏️ Edit the plan before running', reviewLabel:'🔍 Self-review', gateFailedMsg:'❌ Build gate failed — MR flagged [BUILD FAILED], needs a fix', gateLimitedMsg:'⚠️ Build gate limited (repo dependencies not installed on the server)',
     recognizing:'Transcribing…', analyzing:'analysing…', running:'running pipeline…',
-    descShort:'Describe the task in more detail', noRepo:'Pick at least one repository', noMic:'No microphone access', netErr:'Network unavailable',
+    descShort:'Describe the task in more detail', noRepo:'Pick at least one repository', noMic:'No microphone access', netErr:'Network unavailable', recovering:'Connection dropped — fetching result from server…',
     fileBig:'File larger than 30 MB', imgBig:'Image larger than 10 MB', uploadErr:'Upload failed',
     analyzeErr:'Analysis error', runErr:'Pipeline error', thinking:'…', done:'Done.',
     history:'🕘 History', historyTitle:'Develop history', historyEmpty:'Nothing yet.', untitled:'Untitled',
@@ -279,7 +279,7 @@ const I18N = {
     fbAsk:'Satisfait du résultat ?', followLbl:'🔧 Corriger (nouvelle itération sur la même branche)', follow:'Envoyer',
     editPlan:'✏️ Modifier le plan avant lancement', reviewLabel:'🔍 Auto-revue', gateFailedMsg:'❌ Build gate échoué — MR marquée [BUILD FAILED], correction nécessaire', gateLimitedMsg:'⚠️ Build gate limité (dépendances du dépôt non installées sur le serveur)',
     recognizing:'Transcription…', analyzing:'analyse…', running:'pipeline en cours…',
-    descShort:'Décrivez la tâche plus en détail', noRepo:'Choisissez un dépôt', noMic:'Pas de micro', netErr:'Réseau indisponible',
+    descShort:'Décrivez la tâche plus en détail', noRepo:'Choisissez un dépôt', noMic:'Pas de micro', netErr:'Réseau indisponible', recovering:'Connexion interrompue — récupération du résultat…',
     fileBig:'Fichier > 30 Mo', imgBig:'Image > 10 Mo', uploadErr:'Échec du téléversement',
     analyzeErr:'Erreur d’analyse', runErr:'Erreur de pipeline', thinking:'…', done:'Terminé.',
     history:'🕘 Historique', historyTitle:'Historique', historyEmpty:'Rien pour le moment.', untitled:'Sans titre',
@@ -446,33 +446,57 @@ async function startRun(instruction){
   $('pipeLog').classList.remove('hidden'); $('pipeLog').textContent=''; let plog='';
   try{
     const res=await fetch('/api/develop/run/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ id:runId, instruction:instruction||undefined })});
-    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('runErr').textContent=tx||t('runErr'); throw new Error('http'); }
-    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null;
+    if(!res.ok||!res.body){ const tx=await res.text().catch(()=>''); $('runErr').textContent=tx||t('runErr'); return; }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='', result=null, gotError=false;
     while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
       const parts=buf.split('\n\n'); buf=parts.pop()||'';
       for(const block of parts){ const ev=(block.match(/^event: (.*)$/m)||[])[1]; const dm=block.match(/^data: (.*)$/m); if(!ev||!dm) continue; let data; try{data=JSON.parse(dm[1]);}catch(_){continue;}
         if(ev==='stage'){ plog+=(data.msg||'')+'\n'; $('pipeLog').textContent=plog; $('pipeLog').scrollTop=$('pipeLog').scrollHeight; }
         else if(ev==='result'){ result=data; }
-        else if(ev==='error'){ $('runErr').textContent=data.message||t('runErr'); }
+        else if(ev==='error'){ gotError=true; $('runErr').textContent=data.message||t('runErr'); }
       }
     }
-    if(result){
-      phase='done';
-      const mrs = result.mrUrls||[]; const reslist = result.results||[];
-      let html='';
-      if(mrs.length){ html=`<div class="mrbox">✅ ${esc(t('mrOpened'))}:<br>${mrs.map(m=>`• <b>${esc(m.repo)}</b>: <a href="${esc(m.mrUrl)}" target="_blank">${esc(m.mrUrl)}</a>`).join('<br>')}<br><span class="muted">${esc(result.branch||'')}</span></div>`; }
-      else { html=`<div class="warn">${esc(t('committedLocal'))} (${esc(result.branch||'')})</div>`; }
-      if(reslist.some(r=>r.note==='build-failed'||r.gateOk===false)){ html+=`<div class="warn">${esc(t('gateFailedMsg'))}</div>`; }
-      else if(reslist.some(r=>r.gateOk===null)){ html+=`<div class="warn">${esc(t('gateLimitedMsg'))}</div>`; }
-      const reviews = reslist.filter(r=>r.reviewText).map(r=>`**${r.repo}** ${r.reviewText}`).join('\n\n');
-      if(reviews){ html+=`<div style="margin-top:10px"><label class="fld">${esc(t('reviewLabel'))}</label><div class="planbox" style="max-height:22vh">${md(reviews)}</div></div>`; }
-      html += `<div class="planbox" style="max-height:36vh">${md(result.summary||'')}</div>`;
-      $('mrOut').innerHTML=html;
-      $('fbBox').classList.remove('hidden'); $('followBox').classList.remove('hidden');
-      addBubble('bot', (result.summary||t('done')) + (mrs.length?`\n\nMR: ${mrs.map(m=>m.mrUrl).join(' · ')}`:''));
-    }
-  }catch(_){ if(!$('runErr').textContent) $('runErr').textContent=t('netErr'); }
+    if(result) renderRunResult(result);
+    else if(!gotError) await recoverRun(); // connection dropped mid-run → pipeline still runs on server
+  }catch(_){ await recoverRun(); }
   finally{ busy=false; $('runBtn').disabled=false; $('followBtn').disabled=false; $('runStatus').textContent=''; }
+}
+function renderRunResult(result){
+  phase='done';
+  const mrs = result.mrUrls||[]; const reslist = result.results||[];
+  let html='';
+  if(mrs.length){ html=`<div class="mrbox">✅ ${esc(t('mrOpened'))}:<br>${mrs.map(m=>`• <b>${esc(m.repo||'')}</b>: <a href="${esc(m.mrUrl)}" target="_blank">${esc(m.mrUrl)}</a>`).join('<br>')}<br><span class="muted">${esc(result.branch||'')}</span></div>`; }
+  else { html=`<div class="warn">${esc(t('committedLocal'))} (${esc(result.branch||'')})</div>`; }
+  if(reslist.some(r=>r.note==='build-failed'||r.gateOk===false)){ html+=`<div class="warn">${esc(t('gateFailedMsg'))}</div>`; }
+  else if(reslist.some(r=>r.gateOk===null)){ html+=`<div class="warn">${esc(t('gateLimitedMsg'))}</div>`; }
+  const reviews = reslist.filter(r=>r.reviewText).map(r=>`**${r.repo}** ${r.reviewText}`).join('\n\n');
+  if(reviews){ html+=`<div style="margin-top:10px"><label class="fld">${esc(t('reviewLabel'))}</label><div class="planbox" style="max-height:22vh">${md(reviews)}</div></div>`; }
+  html += `<div class="planbox" style="max-height:36vh">${md(result.summary||'')}</div>`;
+  $('mrOut').innerHTML=html;
+  $('fbBox').classList.remove('hidden'); $('followBox').classList.remove('hidden');
+  addBubble('bot', (result.summary||t('done')) + (mrs.length?`\n\nMR: ${mrs.map(m=>m.mrUrl).join(' · ')}`:''));
+}
+// Recovery: the run/stream connection dropped but the backend pipeline keeps running and
+// persists its log + final result to the DevRun. Poll until terminal, showing live progress.
+async function recoverRun(){
+  if(!runId){ if(!$('runErr').textContent) $('runErr').textContent=t('netErr'); return false; }
+  $('runErr').textContent=''; $('runStatus').innerHTML='<span class="spin"></span> '+t('recovering');
+  const terminal=['MR_OPEN','PUSHED','PLANNED','ERROR','DONE'];
+  for(let i=0;i<360;i++){ // ~30 min @5s
+    await new Promise(r=>setTimeout(r,5000));
+    let r=null; try{ const d=await fetch('/api/develop/run/'+runId).then(x=>x.json()); r=d.run; }catch(_){ continue; }
+    if(!r) continue;
+    if(Array.isArray(r.log)&&r.log.length){ $('pipeLog').classList.remove('hidden'); $('pipeLog').textContent=r.log.join('\n'); $('pipeLog').scrollTop=$('pipeLog').scrollHeight; }
+    if(terminal.includes(r.status)){
+      const mrs=Array.isArray(r.mrUrls)?r.mrUrls:(r.mrUrl?[{repo:(reposSel[0]||''),mrUrl:r.mrUrl}]:[]);
+      const lastBot=[...(Array.isArray(r.messages)?r.messages:[])].reverse().find(m=>m.role==='assistant');
+      renderRunResult({ mrUrls:mrs, branch:r.branch, summary:lastBot?lastBot.content:t('done'), results:[] });
+      if(r.status==='ERROR'&&!mrs.length) $('runErr').textContent=t('runErr');
+      return true;
+    }
+  }
+  if(!$('runErr').textContent) $('runErr').textContent=t('netErr');
+  return false;
 }
 
 // feedback
