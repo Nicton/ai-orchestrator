@@ -107,7 +107,10 @@ export async function runClaudeAgent(
       '--model', useModel,
       '--permission-mode', 'bypassPermissions',
     ];
-    const proc = spawn('claude', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+    // IS_SANDBOX=1 lets Claude Code accept --permission-mode bypassPermissions while
+    // running as root in the container (otherwise it refuses for security). The
+    // container is the sandbox here, and the dev pipeline needs autonomous edits.
+    const proc = spawn('claude', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_TERMINAL_PROMPT: '0', IS_SANDBOX: '1' } });
     let stderr = '';
     let buf = '';
     let finalResult: any = null;
