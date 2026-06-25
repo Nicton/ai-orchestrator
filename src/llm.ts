@@ -172,6 +172,16 @@ function runClaudeCli(role: string, prompt: string, model?: string, onDelta?: (t
 
     const proc = spawn('claude', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
+    // Hard timeout — без него зависший claude CLI молча держит SSE открытым (стадии
+    // идут, результата/ошибки нет). По таймауту убиваем процесс и отдаём ошибку.
+    const timeoutMs = Number(process.env.CLAUDE_CLI_TIMEOUT_MS) || 6 * 60 * 1000;
+    let settled = false;
+    const killer = setTimeout(() => {
+      if (settled) return; settled = true;
+      try { proc.kill('SIGKILL'); } catch { /* noop */ }
+      reject(new Error(`claude CLI timed out after ${Math.round(timeoutMs / 1000)}s (model ${useModel})`));
+    }, timeoutMs);
+
     let stdout = '';
     let stderr = '';
     let buf = '';
@@ -206,6 +216,7 @@ function runClaudeCli(role: string, prompt: string, model?: string, onDelta?: (t
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
     proc.on('close', (code: number | null) => {
+      if (settled) return; settled = true; clearTimeout(killer);
       if (streaming && buf.trim()) handleLine(buf);
       if (code !== 0) {
         reject(new Error(`claude CLI exited with code ${code}: ${stderr.trim()}`));
@@ -254,6 +265,7 @@ function runClaudeCli(role: string, prompt: string, model?: string, onDelta?: (t
     });
 
     proc.on('error', (err: Error) => {
+      if (settled) return; settled = true; clearTimeout(killer);
       reject(new Error(`Failed to spawn claude CLI: ${err.message}`));
     });
   });

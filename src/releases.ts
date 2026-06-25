@@ -279,7 +279,15 @@ export async function registerReleasesApi(app: FastifyInstance) {
       const reports: Array<{ audience: string; bodyMd: string }> = [];
       for (const aud of ['qa', 'dev', 'business'] as const) {
         stage(`🤖 Отчёт «${aud.toUpperCase()}» (${config.answerModel})…`);
-        const bodyMd = await genReport(aud, digest, lang, (t) => send('delta', { audience: aud, text: t }));
+        let bodyMd: string;
+        try {
+          bodyMd = await genReport(aud, digest, lang, (t) => send('delta', { audience: aud, text: t }));
+        } catch (e: any) {
+          // не валим весь прогон из-за одного отчёта (таймаут/пустой ответ LLM)
+          const msg = String(e?.message || e).slice(0, 200);
+          stage(`⚠️ Отчёт «${aud.toUpperCase()}» не сгенерирован: ${msg}`);
+          bodyMd = `> ⚠️ Этот отчёт не удалось сгенерировать автоматически (${msg}).\n>\n> Нажмите «Сгенерировать заново» — остальные отчёты ниже доступны.`;
+        }
         reports.push({ audience: aud, bodyMd });
         send('report', { audience: aud, bodyMd });
       }
