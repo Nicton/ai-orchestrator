@@ -116,8 +116,11 @@ async function api(path,opts){
   return j;
 }
 function openModal(html){ $('modal').innerHTML=html; $('modalMask').classList.add('open'); }
-function closeModal(){ $('modalMask').classList.remove('open'); }
+function closeModal(){ $('modalMask').classList.remove('open'); if(window._modalGid){ window._modalGid=null; navTo(curView(),true); } }
 $('modalMask').addEventListener('click',e=>{ if(e.target===$('modalMask')) closeModal(); });
+// Deep-link helpers: modal URL carries the globalId (#/view/GLOBAL-ID) so reload reopens it.
+function navTo(hash,silent){ const h='#/'+String(hash).replace(/^#?\/?/,''); if(location.hash===h) return; if(silent) window._silentHash=true; location.hash=h; }
+function setModalUrl(view,gid){ window._modalGid=gid; navTo(view+'/'+encodeURIComponent(gid),true); }
 
 async function boot(){
   try{ const d=await api('/projects'); projects=d.items||[]; }catch(_){ projects=[]; }
@@ -137,14 +140,15 @@ $('newProjBtn').addEventListener('click',()=>{
 
 // ---- sidebar routing ----
 const views={};
-$('side').querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{ location.hash='#/'+a.getAttribute('view'||'data-view'); }));
-$('side').querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{ location.hash='#/'+a.getAttribute('data-view'); }));
-window.addEventListener('hashchange',route);
-function curView(){ return (location.hash||'#/dashboard').replace('#/',''); }
+$('side').querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{ window._modalGid=null; location.hash='#/'+a.getAttribute('data-view'); }));
+window.addEventListener('hashchange',()=>{ if(window._silentHash){ window._silentHash=false; return; } route(); });
+function curView(){ return ((location.hash||'#/dashboard').replace(/^#\//,'').split('/')[0])||'dashboard'; }
+function curSub(){ const p=(location.hash||'').replace(/^#\//,'').split('/'); return p.length>1?decodeURIComponent(p.slice(1).join('/')):''; }
 function route(){
   const v=curView();
   $('side').querySelectorAll('a').forEach(a=>a.classList.toggle('active',a.getAttribute('data-view')===v));
   if(!PID){ $('main').innerHTML='<p class="muted">Выберите или создайте проект.</p>'; return; }
+  window._deepGid=curSub()||null;
   (views[v]||views.dashboard)();
 }
 
@@ -209,6 +213,7 @@ views.requirements=async()=>{
   if(!window._rlibExp) window._rlibExp=new Set();
   if(window._reqSecSel===undefined) window._reqSecSel='';
   renderReqTree(); renderReqItems();
+  if(window._deepGid){ const g=window._deepGid; window._deepGid=null; openReqByGid(g); }
 };
 function rlibChildren(pid){ return (window._rlib.secs||[]).filter(s=>(s.parentId||'')===(pid||'')); }
 function rlibCount(secId){ let n=(window._rlib.reqs||[]).filter(r=>(r.sectionId||'')===secId).length; for(const ch of rlibChildren(secId)) n+=rlibCount(ch.id); return n; }
@@ -254,8 +259,9 @@ function reqForm(){
   fillSec('req','rSec',window._reqSecSel||'');
   $('rSave').onclick=async()=>{ try{ await api(`/projects/${PID}/requirements`,{method:'POST',body:JSON.stringify({title:$('rT').value,description:$('rD').value,priority:$('rP').value,type:$('rTy').value,status:$('rS').value,sectionId:$('rSec').value||undefined})}); closeModal(); views.requirements(); }catch(e){ $('rErr').textContent=e.message; } };
 }
+window.openReqByGid=(gid)=>{ const r=((window._rlib&&window._rlib.reqs)||[]).find(x=>x.globalId===gid); if(r) reqDetail(r.id); };
 window.reqDetail=async(id)=>{
-  try{ const r=await api(`/requirements/${id}`); const c=r.coverage||{};
+  try{ const r=await api(`/requirements/${id}`); const c=r.coverage||{}; setModalUrl('requirements',r.globalId);
     const tcRows=(r.linkedTestCases||[]).map(t=>`<tr><td class="gid">${esc(t.globalId)}</td><td>${esc(t.title)}${t.isDeleted?' <span class="pill warn">deleted</span>':''}</td><td>${pct(t.automationCoveragePercent)}</td></tr>`).join('');
     const atRows=(r.linkedAutomatedTests||[]).map(a=>`<tr><td class="gid">${esc(a.globalId)}</td><td>${esc(a.name)}${a.isDeleted?' <span class="pill warn">deleted</span>':''}</td><td class="muted">${esc(a.framework||'')} · ${esc(a.lastRunStatus||'—')}</td></tr>`).join('');
     const runRows=(r.recentRuns||[]).map(x=>`<tr><td>${esc(x.titleSnapshot||'')}</td><td><span class="pill">${esc(x.status)}</span></td><td class="muted">${x.executedAt?new Date(x.executedAt).toLocaleString():''}</td></tr>`).join('');
@@ -325,6 +331,7 @@ views.testcases=async()=>{
   if(!window._libExp) window._libExp=new Set();
   if(window._tcSec===undefined) window._tcSec='';
   renderTree(); renderItems();
+  if(window._deepGid){ const g=window._deepGid; window._deepGid=null; const t=tcs.find(x=>x.globalId===g); const cl=cls.find(x=>x.globalId===g); if(t) tcDetail(t.id); else if(cl) clDetail(cl.id); }
 };
 function libChildren(pid){ return (window._lib.secs||[]).filter(s=>(s.parentId||'')===(pid||'')); }
 function libCount(secId){ const {tcs,cls}=window._lib; let n=tcs.filter(t=>(t.sectionId||'')===secId).length+cls.filter(c=>(c.sectionId||'')===secId).length; for(const ch of libChildren(secId)) n+=libCount(ch.id); return n; }
@@ -364,7 +371,7 @@ function renderItems(){
   if(!cInSec.length&&!clInSec.length) h+='<tr><td colspan=5 class="muted">пусто — добавьте тест-кейс/чек-лист, выберите секцию или перетащите сюда</td></tr>';
   $('qitems').innerHTML=h+'</tbody></table>';
 }
-window.clDetail=async(id)=>{ try{ const c=await api(`/checklists/${id}`); openModal(`<h3>${esc(c.globalId)} · ${esc(c.title)}</h3><div class="bar"><span class="pill">${esc(c.type)}</span><button class="pri" onclick="clEdit('${id}')">✏️ Редактировать</button><button class="ghost" onclick="clExpand('${id}')">→ разложить на тест-кейсы</button><button class="ghost" onclick="showVersions('checklists','${id}')">🕓 Версии</button><button class="ghost" onclick="qaDelete('checklists','${id}','чек-лист')">🗑 Удалить</button></div><h2>Items (${(c.items||[]).length})</h2><div class="muted">${(c.items||[]).map((it,i)=>`${i+1}. ${esc(it.title)}`).join('<br>')||'—'}</div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`); }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); } };
+window.clDetail=async(id)=>{ try{ const c=await api(`/checklists/${id}`); setModalUrl('testcases',c.globalId); openModal(`<h3>${esc(c.globalId)} · ${esc(c.title)}</h3><div class="bar"><span class="pill">${esc(c.type)}</span><button class="pri" onclick="clEdit('${id}')">✏️ Редактировать</button><button class="ghost" onclick="clExpand('${id}')">→ разложить на тест-кейсы</button><button class="ghost" onclick="showVersions('checklists','${id}')">🕓 Версии</button><button class="ghost" onclick="qaDelete('checklists','${id}','чек-лист')">🗑 Удалить</button></div><h2>Items (${(c.items||[]).length})</h2><div class="muted">${(c.items||[]).map((it,i)=>`${i+1}. ${esc(it.title)}`).join('<br>')||'—'}</div><div class="bar" style="margin-top:10px"><button class="ghost" onclick="closeModal()">Закрыть</button></div>`); }catch(e){ openModal('<p class="err">'+esc(e.message)+'</p>'); } };
 function qaseImport(){
   openModal(`<h3>⬇️ Импорт из Qase</h3><p class="muted">Импортирует сьюты Qase → секции, и кейсы со шагами → тест-кейсы. Нужен <b>Qase API token</b> (Qase → Settings → API tokens) в env сервера (<code>QASE_API_TOKEN</code>). Логин/пароль для API не подходят.</p>
   <label class="fld">Код проекта Qase</label><input type="text" id="qProj" value="MA">
@@ -405,7 +412,7 @@ window.tcEdit=async(id)=>{ try{ const t=await api('/test-cases/'+id); tcForm(t);
 function renderSteps(){ $('stepsBox').innerHTML=tcSteps.map((s,i)=>`<div class="steprow"><input type="text" placeholder="Action" value="${esc(s.action)}" data-a="${i}"><input type="text" placeholder="Expected" value="${esc(s.expectedResult)}" data-e="${i}"></div>`).join(''); }
 function collectSteps(){ document.querySelectorAll('[data-a]').forEach(el=>tcSteps[+el.dataset.a].action=el.value); document.querySelectorAll('[data-e]').forEach(el=>tcSteps[+el.dataset.e].expectedResult=el.value); }
 window.tcDetail=async(id)=>{
-  try{ const t=await api(`/test-cases/${id}`); const c=t.coverage||{};
+  try{ const t=await api(`/test-cases/${id}`); const c=t.coverage||{}; setModalUrl('testcases',t.globalId);
     const stepOpts=(t.steps||[]).map((s,i)=>`<option value="${s.id}">шаг ${i+1}: ${esc(s.action).slice(0,40)}</option>`).join('');
     openModal(`<h3>${esc(t.globalId)} · ${esc(t.title)}</h3>
     <div class="bar">${pri(t.priority)}<span class="pill">${esc(t.type)}</span>${pct(c.automationCoveragePercent)}<span class="pill">${esc(c.coveragePrecision)}</span><button class="pri" onclick="tcEdit('${id}')">✏️ Редактировать</button><button class="ghost" onclick="showVersions('test-cases','${id}')">🕓 Версии</button><button class="ghost" onclick="qaDelete('test-cases','${id}','тест-кейс')">🗑 Удалить</button></div>
@@ -500,11 +507,12 @@ window.tpRun=async(id,title)=>{ try{ const run=await api(`/test-plans/${id}/runs
 // ---- Test Runs ----
 views.testruns=async()=>{
   $('main').innerHTML='<h1>▶️ Test Runs</h1><div id="trList"><span class="spin"></span></div>';
-  const items=await loadList(`/projects/${PID}/test-runs`);
+  const items=await loadList(`/projects/${PID}/test-runs`); window._runs=items;
   $('trList').innerHTML=`<table><thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Source</th></tr></thead><tbody>${items.map(r=>`<tr style="cursor:pointer" onclick="trDetail('${r.id}')"><td class="gid">${esc(r.globalId)}</td><td>${esc(r.title)}</td><td><span class="pill">${esc(r.status)}</span></td><td class="muted">${esc(r.source)}</td></tr>`).join('')||'<tr><td colspan=4 class="muted">пусто</td></tr>'}</tbody></table>`;
+  if(window._deepGid){ const g=window._deepGid; window._deepGid=null; const r=items.find(x=>x.globalId===g); if(r) trDetail(r.id); }
 };
 window.trDetail=async(id)=>{
-  try{ const r=await api(`/test-runs/${id}`);
+  try{ const r=await api(`/test-runs/${id}`); setModalUrl('testruns',r.globalId);
     const stPill=s=>`<span class="pill${s==='Passed'?' ok':(s==='Failed'?' crit':(s==='Blocked'||s==='Skipped'?' warn':''))}">${esc(s)}</span>`;
     const hang=it=>it.hangingStatus&&it.hangingStatus!=='Normal'?` <span class="pill warn">${esc(it.hangingStatus)}</span>`:'';
     openModal(`<h3>${esc(r.globalId)} · ${esc(r.title)}</h3><div class="bar">${stPill(r.status)}<span class="muted">${esc(r.source||'')}</span><button class="ghost" onclick="trFinish('${id}')">Finish</button></div>

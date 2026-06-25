@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from './db.js';
 import { requireAuth } from './auth.js';
+import { runRolePrompt } from './llm.js';
 
 // ---------------------------------------------------------------------------
 // QA PLATFORM (TMS + RMS + Automation Coverage + Traceability) — внутренний
@@ -382,6 +383,41 @@ export async function registerQaApi(app: FastifyInstance) {
   };
   app.patch('/api/qa/requirements/:id', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; try { return reply.send(await reqUpdate(req.params.id, req.body || {}, u)); } catch { return reply.code(404).send({ error: 'not found' }); } });
   app.post('/api/qa/requirements/bulk-update', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const items = req.body?.items || []; return reply.send(await runBulk(items, async (it: any) => { const r = await reqUpdate(it.id, it, u); return { id: r.id, globalId: r.globalId }; })); });
+  // Deep analysis: translate the requirement to ENGLISH and expand it into detailed,
+  // atomic acceptance criteria (the "sub-requirements"). Single Claude role-prompt.
+  app.post('/api/qa/requirements/:id/deep-analyze', async (req: any, reply) => {
+    const u = await A(req, reply); if (!u) return;
+    const id = req.params.id;
+    const r = await prisma.qaRequirement.findUnique({ where: { id } });
+    if (!r) return reply.code(404).send({ error: 'not found' });
+    const srcs = await prisma.qaRequirementSource.findMany({ where: { requirementId: id, isDeleted: false } });
+    const srcTxt = srcs.map((s) => `${s.type}: ${s.title || s.url || s.externalId || ''}`).join('; ');
+    const prompt = `You are a senior business analyst and QA lead for Shiptify, a logistics TMS (transport management system).
+Analyse the following product requirement DEEPLY and rewrite everything in ENGLISH.
+
+REQUIREMENT (title may be in Russian): ${r.title}
+CONTEXT / DESCRIPTION: ${(r.description || '').slice(0, 2500)}
+SOURCES: ${srcTxt || '(none)'}
+
+A shallow one-line requirement is not enough. Decompose it into every distinct, testable behaviour. Consider: default behaviour and default values; all configurable options/values; each user action; navigation and URL state (deep-linking); persistence across page reloads; interaction with filters, search and sorting; pagination (page size options, next/prev/first/last, jump-to-page, total count recalculation after filtering, page kept on reload); permissions and role differences; validation rules; empty / loading / error states; back-end/API behaviour and side effects. Enumerate EACH behaviour as its own atomic acceptance criterion (aim for 5-15 specific, independently testable criteria).
+
+Return STRICT JSON only (no markdown, no commentary):
+{"title":"<concise English requirement title — keep the leading REQ-ID code if the input had one>","description":"<1-3 sentence English summary>","acceptanceCriteria":["<atomic testable criterion in English>","..."]}`;
+    const out = await runRolePrompt('qa.analyst', prompt);
+    let parsed: any = null;
+    try { const m = (out.text || '').match(/\{[\s\S]*\}/); parsed = m ? JSON.parse(m[0]) : null; } catch { parsed = null; }
+    if (!parsed || !parsed.title) return reply.code(502).send({ error: 'analysis failed', diag: out.diag, raw: (out.text || '').slice(0, 300) });
+    let title = String(parsed.title).replace(/\s+/g, ' ').trim().slice(0, 250);
+    const origCode = (r.title.match(/^((?:REQ-)?[A-Z]{2,6}-\d{1,4})/) || [])[1];
+    if (origCode && !title.includes(origCode)) title = `${origCode} · ${title}`.slice(0, 250);
+    const data: any = { title, description: String(parsed.description || '').slice(0, 4000), updatedBy: u.name || u.email || u.id, currentVersionNumber: (r.currentVersionNumber || 1) + 1 };
+    const updated = await prisma.qaRequirement.update({ where: { id }, data });
+    await prisma.qaAcceptanceCriterion.updateMany({ where: { requirementId: id, isDeleted: false }, data: { isDeleted: true } });
+    const acs = Array.isArray(parsed.acceptanceCriteria) ? parsed.acceptanceCriteria.slice(0, 40) : [];
+    let o = 0; for (const t of acs) { const txt = String(t || '').replace(/\s+/g, ' ').trim().slice(0, 1000); if (txt) await prisma.qaAcceptanceCriterion.create({ data: { projectId: r.projectId, requirementId: id, text: txt, order: o++ } }); }
+    await snapshot('Requirement', updated, u.name, 'deep analysis (EN + acceptance criteria)');
+    return reply.send({ id, globalId: r.globalId, title, acceptanceCriteria: acs.filter(Boolean).length, engine: out.engine });
+  });
   // requirement sources
   app.post('/api/qa/requirements/:id/sources', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const r = await prisma.qaRequirement.findUnique({ where: { id: req.params.id } }); if (!r) return reply.code(404).send({ error: 'not found' }); const s = req.body || {}; const row = await prisma.qaRequirementSource.create({ data: { projectId: r.projectId, requirementId: r.id, type: s.type || 'Other', title: s.title || null, url: s.url || null, externalId: s.externalId || null, description: s.description || null, createdBy: u.name || null } }); return reply.code(201).send(row); });
   app.post('/api/qa/requirements/:id/sources/bulk', async (req: any, reply) => { const u = await A(req, reply); if (!u) return; const r = await prisma.qaRequirement.findUnique({ where: { id: req.params.id } }); if (!r) return reply.code(404).send({ error: 'not found' }); return reply.send(await runBulk(req.body?.items || [], async (s: any) => { const row = await prisma.qaRequirementSource.create({ data: { projectId: r.projectId, requirementId: r.id, type: s.type || 'Other', title: s.title || null, url: s.url || null, externalId: s.externalId || null, description: s.description || null, createdBy: u.name || null } }); return { id: row.id }; })); });
