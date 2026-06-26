@@ -370,7 +370,19 @@ export async function registerQaApi(app: FastifyInstance) {
       atIds.length ? prisma.qaAutomatedTest.findMany({ where: { id: { in: atIds } }, select: { id: true, globalId: true, name: true, framework: true, lastRunStatus: true, isDeleted: true } }) : [],
       tcIds.length ? prisma.qaTestRunItem.findMany({ where: { projectId: row.projectId, sourceType: 'TestCase', sourceId: { in: tcIds }, isDeleted: false, status: { not: 'NotRun' } }, orderBy: { executedAt: 'desc' }, take: 20, select: { titleSnapshot: true, status: true, executedAt: true, testRunId: true } }) : [],
     ]);
-    return reply.send({ ...row, sources, acceptanceCriteria, coverage, linkedTestCases, linkedChecklists, linkedAutomatedTests, recentRuns });
+    // cross-references: Requirement↔Requirement links for navigation (linkType = relates/affects/depends-on/…; coverageType carries an optional short note)
+    const reqLinks = await prisma.qaEntityLink.findMany({ where: { projectId: row.projectId, isDeleted: false, OR: [{ sourceType: 'Requirement', sourceId: row.id, targetType: 'Requirement' }, { targetType: 'Requirement', targetId: row.id, sourceType: 'Requirement' }] } });
+    const relMap = new Map<string, { dir: string; linkType: string; note: string | null }>();
+    for (const l of reqLinks) {
+      const outgoing = l.sourceId === row.id;
+      const otherId = outgoing ? l.targetId : l.sourceId;
+      if (otherId === row.id) continue;
+      if (!relMap.has(otherId)) relMap.set(otherId, { dir: outgoing ? 'out' : 'in', linkType: l.linkType, note: l.coverageType || null });
+    }
+    const relIds = [...relMap.keys()];
+    const relRows = relIds.length ? await prisma.qaRequirement.findMany({ where: { id: { in: relIds } }, select: { id: true, globalId: true, title: true, isDeleted: true } }) : [];
+    const linkedRequirements = relRows.map((r) => ({ ...r, ...relMap.get(r.id) }));
+    return reply.send({ ...row, sources, acceptanceCriteria, coverage, linkedTestCases, linkedChecklists, linkedAutomatedTests, linkedRequirements, recentRuns });
   });
   const reqUpdate = async (id: string, b: any, u: U) => {
     const cur = await prisma.qaRequirement.findUnique({ where: { id } }); if (!cur) throw new Error('not found');
